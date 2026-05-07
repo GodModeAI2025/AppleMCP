@@ -1,0 +1,250 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AppleMCP — Local Apple Data for AI Assistants</title>
+    <meta name="description" content="Native macOS MCP server giving AI assistants secure, local access to Mail, Calendar, Contacts, Notes, Photos, Reminders, and Apple Intelligence.">
+    <style>
+        :root {
+            --bg: #0d1117;
+            --fg: #e6edf3;
+            --muted: #8b949e;
+            --accent: #58a6ff;
+            --card: #161b22;
+            --border: #30363d;
+        }
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Helvetica Neue', sans-serif;
+            background: var(--bg);
+            color: var(--fg);
+            line-height: 1.6;
+        }
+        .container { max-width: 860px; margin: 0 auto; padding: 0 24px; }
+        header {
+            padding: 80px 0 48px;
+            text-align: center;
+        }
+        header h1 {
+            font-size: 2.8rem;
+            font-weight: 700;
+            letter-spacing: -0.02em;
+            margin-bottom: 16px;
+        }
+        header p {
+            font-size: 1.2rem;
+            color: var(--muted);
+            max-width: 600px;
+            margin: 0 auto;
+        }
+        .badge-row {
+            display: flex;
+            gap: 8px;
+            justify-content: center;
+            margin-top: 24px;
+            flex-wrap: wrap;
+        }
+        .badge {
+            display: inline-block;
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-size: 0.8rem;
+            font-weight: 500;
+            border: 1px solid var(--border);
+            color: var(--muted);
+        }
+        .badge.blue { border-color: var(--accent); color: var(--accent); }
+        section { padding: 48px 0; }
+        section h2 {
+            font-size: 1.5rem;
+            font-weight: 600;
+            margin-bottom: 24px;
+            padding-bottom: 8px;
+            border-bottom: 1px solid var(--border);
+        }
+        .grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+            gap: 16px;
+        }
+        .card {
+            background: var(--card);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 20px;
+        }
+        .card h3 {
+            font-size: 1rem;
+            margin-bottom: 8px;
+        }
+        .card p {
+            font-size: 0.9rem;
+            color: var(--muted);
+        }
+        pre {
+            background: var(--card);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 16px 20px;
+            overflow-x: auto;
+            font-size: 0.85rem;
+            line-height: 1.5;
+            margin: 16px 0;
+        }
+        code { font-family: 'SF Mono', 'Menlo', monospace; }
+        .arch {
+            font-family: 'SF Mono', 'Menlo', monospace;
+            font-size: 0.85rem;
+            color: var(--muted);
+            text-align: center;
+            padding: 24px;
+            background: var(--card);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            white-space: pre;
+            overflow-x: auto;
+        }
+        .cta {
+            text-align: center;
+            padding: 48px 0 80px;
+        }
+        .cta a {
+            display: inline-block;
+            padding: 12px 32px;
+            background: var(--accent);
+            color: var(--bg);
+            text-decoration: none;
+            border-radius: 8px;
+            font-weight: 600;
+            font-size: 1rem;
+        }
+        .cta a:hover { opacity: 0.9; }
+        footer {
+            text-align: center;
+            padding: 24px 0;
+            color: var(--muted);
+            font-size: 0.8rem;
+            border-top: 1px solid var(--border);
+        }
+        @media (prefers-color-scheme: light) {
+            :root {
+                --bg: #ffffff;
+                --fg: #1f2328;
+                --muted: #656d76;
+                --accent: #0969da;
+                --card: #f6f8fa;
+                --border: #d0d7de;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>AppleMCP</h1>
+            <p>Native macOS MCP server that gives AI assistants secure, local access to your Apple data and Apple Intelligence.</p>
+            <div class="badge-row">
+                <span class="badge blue">macOS 15+</span>
+                <span class="badge blue">Swift</span>
+                <span class="badge">MCP Protocol</span>
+                <span class="badge">Local-first</span>
+                <span class="badge">Privacy-safe</span>
+            </div>
+        </header>
+
+        <section>
+            <h2>Data Sources</h2>
+            <div class="grid">
+                <div class="card">
+                    <h3>Mail</h3>
+                    <p>Search and read emails from the local Mail index. Full body, sender, recipients, dates. AppleScript fallback when Full Disk Access is unavailable.</p>
+                </div>
+                <div class="card">
+                    <h3>Calendar</h3>
+                    <p>Search events via EventKit. Titles, locations, times, notes, all-day status, and calendar membership.</p>
+                </div>
+                <div class="card">
+                    <h3>Contacts</h3>
+                    <p>Search your address book via Contacts.framework. Names, emails, phone numbers, addresses.</p>
+                </div>
+                <div class="card">
+                    <h3>Notes</h3>
+                    <p>Search and read Apple Notes via Automation. Full note content, folder structure, modification dates.</p>
+                </div>
+                <div class="card">
+                    <h3>Reminders</h3>
+                    <p>Search reminders via EventKit. Filter by completion status, due dates, priorities.</p>
+                </div>
+                <div class="card">
+                    <h3>Photos</h3>
+                    <p>Search Photos library metadata via Photos.framework. Albums, media types, dimensions, dates.</p>
+                </div>
+            </div>
+        </section>
+
+        <section>
+            <h2>Apple Intelligence</h2>
+            <div class="grid">
+                <div class="card">
+                    <h3>Writing Tools</h3>
+                    <p>Summarize, rewrite, proofread, or change tone using Apple's on-device writing tools.</p>
+                </div>
+                <div class="card">
+                    <h3>Translation</h3>
+                    <p>Translate text between languages using the system translation service.</p>
+                </div>
+                <div class="card">
+                    <h3>Image Playground</h3>
+                    <p>Generate images from text via the native ImagePlayground API. No app launch, pure API.</p>
+                </div>
+            </div>
+        </section>
+
+        <section>
+            <h2>Architecture</h2>
+            <div class="arch">Claude / AI Assistant
+        |
+   stdio (MCP protocol)
+        |
+   M3MCPBridge (lightweight CLI)
+        |
+   HTTP 127.0.0.1:47651
+        |
+   M3MCPApp (SwiftUI, holds TCC permissions)
+        |
+   EventKit / Contacts / Photos / Mail Index / AppleScript</div>
+        </section>
+
+        <section>
+            <h2>Setup</h2>
+<pre><code># Build
+swift build
+
+# Run the app
+./script/build_and_run.sh
+
+# Add to Claude Desktop (~/.config/claude/claude_desktop_config.json)
+{
+  "mcpServers": {
+    "applemcp": {
+      "command": "/path/to/AppleMCP/.build/debug/M3MCPBridge"
+    }
+  }
+}
+
+# Or add to Claude Code
+claude mcp add applemcp /path/to/AppleMCP/.build/debug/M3MCPBridge</code></pre>
+        </section>
+
+        <div class="cta">
+            <a href="https://github.com/GodModeAI2025/AppleMCP">View on GitHub</a>
+        </div>
+
+        <footer>
+            <p>AppleMCP is open source under the MIT license. All data stays on your device.</p>
+            <p style="margin-top: 8px;"><a href="https://godmodeai2025.github.io/MarkZimmermann/" style="color: var(--muted); text-decoration: none;">Impressum</a></p>
+        </footer>
+    </div>
+</body>
+</html>

@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>CFBundleIdentifier</key>
+  <string>de.markzimmermann.m3mcp</string>
+  <key>CFBundleName</key>
+  <string>M3MCP</string>
+  <key>CFBundleExecutable</key>
+  <string>M3MCPApp</string>
+  <key>CFBundlePackageType</key>
+  <string>APPL</string>
+  <key>LSMinimumSystemVersion</key>
+  <string>15.0</string>
+  <key>NSPrincipalClass</key>
+  <string>NSApplication</string>
+  <key>NSAppleEventsUsageDescription</key>
+  <string>M3MCP nutzt lokale Apple-Apps, um erlaubte Lesedaten und Apple-Intelligence-Funktionen fuer den lokalen MCP-Server bereitzustellen.</string>
+  <key>NSAppDataUsageDescription</key>
+  <string>M3MCP liest den lokalen Apple-Mail-Index fuer MCP-Mail-Abfragen, ohne Mail.app per AppleScript zu durchsuchen.</string>
+  <key>NSCalendarsUsageDescription</key>
+  <string>M3MCP liest lokale Kalenderdaten fuer MCP-Abfragen.</string>
+  <key>NSCalendarsFullAccessUsageDescription</key>
+  <string>M3MCP liest lokale Kalenderdaten fuer MCP-Abfragen.</string>
+  <key>NSContactsUsageDescription</key>
+  <string>M3MCP liest lokale Kontakte fuer MCP-Abfragen.</string>
+  <key>NSRemindersUsageDescription</key>
+  <string>M3MCP liest lokale Erinnerungen fuer MCP-Abfragen.</string>
+  <key>NSRemindersFullAccessUsageDescription</key>
+  <string>M3MCP liest lokale Erinnerungen fuer MCP-Abfragen.</string>
+  <key>NSPhotoLibraryUsageDescription</key>
+  <string>M3MCP liest Metadaten aus der lokalen Fotos-Mediathek fuer MCP-Abfragen.</string>
+</dict>
+</plist>
