@@ -25,7 +25,11 @@ let package = Package(
                     "-Xlinker", "-sectcreate",
                     "-Xlinker", "__TEXT",
                     "-Xlinker", "__info_plist",
-                    "-Xlinker", "Sources/M3MCPApp/Resources/Info.plist"
+                    "-Xlinker", "Sources/M3MCPApp/Resources/Info.plist",
+                    // FoundationModels ships with macOS 26. Weak-linking keeps the app launchable on
+                    // macOS 15, where a hard dependency would abort at load time.
+                    "-Xlinker", "-weak_framework",
+                    "-Xlinker", "FoundationModels"
                 ])
             ]
         ),
