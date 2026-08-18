@@ -102,11 +102,39 @@ enum ToolCatalog {
             description: "List all albums in Apple Photos.app with photo counts.",
             schema: querySchema()
         ),
+        MCPTool(
+            name: "voicememos_search",
+            description: "Read/search Apple Voice Memos synced to this Mac, newest first. Returns title, date, and duration without transcribing. Titles are often the reverse-geocoded location where the memo was recorded. Memos in Recently Deleted are excluded. Requires Full Disk Access.",
+            schema: querySchema(extra: [
+                "since_hours": ["type": "integer", "description": "Only return memos recorded within the last N hours, e.g. 24."],
+                "since_minutes": ["type": "integer", "description": "Only return memos recorded within the last N minutes. Takes precedence over since_hours. Use this when polling on a short interval, e.g. 10 for a 5-minute loop."]
+            ])
+        ),
+        MCPTool(
+            name: "voicememos_read",
+            description: "Read one voice memo by its id (returned from voicememos_search) and transcribe it with Apple's on-device speech model. Transcripts are cached, so repeat reads are instant. Transcription requires macOS 26.",
+            schema: objectSchema(properties: [
+                "id": ["type": "string", "description": "Memo id returned by voicememos_search."],
+                "transcribe": ["type": "boolean", "description": "When false, return metadata only and skip transcription. Default true."],
+                "locale": ["type": "string", "description": "Locale for transcription, e.g. de-DE or en-US. Defaults to the system locale."]
+            ], required: ["id"])
+        ),
 
         // MARK: - Apple Intelligence
         MCPTool(
+            name: "ai_summarize",
+            description: "Summarize text and extract action items with Apple's on-device foundation model. Runs locally, needs no Shortcut, and pairs with voicememos_read for voice-memo triage. Requires macOS 26 with Apple Intelligence active; check source_status for availability.",
+            schema: objectSchema(properties: [
+                "text": ["type": "string", "description": "The text to summarize, e.g. a voice memo transcript."],
+                "style": [
+                    "type": "string",
+                    "description": "One of summary_and_actions (default), summary, actions."
+                ]
+            ], required: ["text"])
+        ),
+        MCPTool(
             name: "ai_writing_tools",
-            description: "Use Apple Intelligence Writing Tools to summarize, rewrite, proofread, or change the tone of text.",
+            description: "Use Apple Intelligence Writing Tools to summarize, rewrite, proofread, or change the tone of text. Requires a user-created Shortcut named \"Writing Tools\"; prefer ai_summarize for summarization.",
             schema: objectSchema(properties: [
                 "text": ["type": "string", "description": "The text to process."],
                 "action": [

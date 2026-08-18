@@ -14,7 +14,9 @@ AppleMCP consists of a SwiftUI app that bridges macOS privacy-controlled APIs an
 | **Reminders** | EventKit | Reminders Access |
 | **Notes** | Notes.app AppleScript Automation | Automation Permission |
 | **Photos** | Photos.framework | Photos Access |
+| **Voice Memos** | Local Core Data store (SQLite) + on-device transcription via `SpeechAnalyzer` | Full Disk Access |
 | **Apple Intelligence** | Native APIs (ImagePlayground, Translation, Writing Tools) | None |
+| **Foundation Models** | `FoundationModels` on-device language model (macOS 26) | Apple Intelligence active |
 
 ## Quick Start
 
@@ -71,12 +73,15 @@ The M3MCP UI app must be running for MCP calls to work. The bridge communicates 
 | `notes_read` | Read a single note by ID |
 | `photos_search` | Search Apple Photos library metadata |
 | `photos_albums` | List photo albums with counts |
+| `voicememos_search` | Search voice memos synced from iPhone (title, date, duration) |
+| `voicememos_read` | Read one memo and transcribe it with Apple's on-device speech model |
 
 ### Apple Intelligence
 
 | Tool | Description |
 |---|---|
-| `ai_writing_tools` | Summarize, rewrite, proofread, or change tone of text |
+| `ai_summarize` | Summarize text and extract action items with the on-device foundation model (macOS 26) |
+| `ai_writing_tools` | Summarize, rewrite, proofread, or change tone of text (needs a "Writing Tools" Shortcut) |
 | `ai_translate` | Translate text using Apple system translation |
 | `ai_image_playground` | Generate images from text descriptions (macOS 15.4+) |
 
@@ -96,6 +101,49 @@ MCP Client (Claude) <--stdio--> M3MCPBridge <--HTTP 127.0.0.1:47651--> M3MCPApp 
                                                                             |
                                                       EventKit / Contacts / Photos / Mail Index / AppleScript
 ```
+
+### Voice Memos
+
+Voice Memos has no supported read API on macOS — it is not AppleScript-scriptable, its framework is
+private, and its App Intents surface can start a recording but cannot enumerate or read one back.
+AppleMCP therefore reads the Core Data store directly:
+
+```
+~/Library/Group Containers/group.com.apple.VoiceMemos.shared/Recordings/CloudRecordings.db
+```
+
+The store is WAL-mode and the write-ahead log routinely dwarfs the main database, so it is snapshotted
+to a temporary directory before reading — the live store is never opened for writing.
+
+Voice Memos does not persist transcripts anywhere on disk; it computes them lazily inside the app.
+AppleMCP transcribes the audio itself with `SpeechAnalyzer` / `SpeechTranscriber`, the on-device Apple
+Intelligence speech models (macOS 26+). Results are cached and keyed on the recording's SHA-256, so
+repeat reads are instant. On macOS 15 the metadata tools work and transcription reports that it needs
+macOS 26.
+
+Memo titles are the reverse-geocoded location where the recording was made. No coordinates are stored
+anywhere — not in the database, not in the audio file's metadata — so the title is the whole location
+signal.
+
+#### Polling for new memos
+
+`voicememos_search` accepts `since_minutes` alongside `since_hours` so a short polling loop does not
+re-fetch the same window every pass — with hour granularity, a 5-minute loop would return the same
+memos twelve times. `since_minutes` wins when both are given. Pair it with `ai_summarize` to triage
+new recordings:
+
+```
+voicememos_search since_minutes=10  ->  voicememos_read <id>  ->  ai_summarize <transcript>
+```
+
+Two schema notes worth knowing, both established by probing a live store rather than from docs:
+
+- **`ZEVICTIONDATE` is the deletion timestamp, not an iCloud audio-eviction marker.** Deleting a memo
+  sets it to "now" while `ZFLAGS` stays unchanged, `ZFOLDER` stays NULL, and the audio file remains on
+  disk. It marks the start of the ~30 day Recently Deleted window. `voicememos_search` therefore
+  excludes rows where it is set; `voicememos_read` still resolves them by id but labels them clearly.
+- **Rows with an empty `ZPATH` are placeholders, not recordings.** They have no audio file, `ZFLAGS = 0`,
+  and every BLOB column NULL, and they do not appear in Voice Memos.app. They are filtered out.
 
 - **M3MCPApp** — SwiftUI app with macOS TCC permissions, provides the actual data access
 - **M3MCPBridge** — Lightweight `stdio` MCP server that translates MCP protocol to HTTP calls

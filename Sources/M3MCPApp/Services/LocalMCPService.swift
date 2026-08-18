@@ -8,7 +8,9 @@ final class LocalMCPService {
     private let remindersProvider = RemindersProvider()
     private let notesProvider = NotesProvider()
     private let photosProvider = PhotosProvider()
+    private let voiceMemosProvider = VoiceMemosProvider()
     private let appleIntelligenceProvider = AppleIntelligenceProvider()
+    private let foundationModelsProvider = FoundationModelsProvider()
     private let permissionProvider = PermissionProvider()
 
     var services: [ServiceHealth] {
@@ -20,7 +22,16 @@ final class LocalMCPService {
             ServiceHealth(name: "Reminders", endpoint: "eventkit://reminders", mode: "EventKit", state: "on-demand"),
             ServiceHealth(name: "Notes", endpoint: "macos://Notes.app", mode: "AppleScript", state: "on-demand"),
             ServiceHealth(name: "Photos", endpoint: "photos://library", mode: "Photos.framework", state: "on-demand"),
-            ServiceHealth(name: "Apple Intelligence", endpoint: "macos://intelligence", mode: "AppleScript/Shortcuts/URL scheme", state: "on-demand")
+            ServiceHealth(name: "Voice Memos", endpoint: "voicememos://local-store", mode: "Core Data store + on-device transcription", state: "on-demand"),
+            ServiceHealth(name: "Apple Intelligence", endpoint: "macos://intelligence", mode: "AppleScript/Shortcuts/URL scheme", state: "on-demand"),
+            ServiceHealth(
+                name: "Foundation Models",
+                endpoint: "macos://foundationmodels",
+                mode: "On-device Apple language model",
+                // Reported live rather than as "on-demand": when the model is unavailable the reason
+                // is the useful part, and source_status is where a caller looks for it.
+                state: foundationModelsProvider.statusDescription
+            )
         ]
     }
 
@@ -67,6 +78,12 @@ final class LocalMCPService {
             response = await photosProvider.search(input: input)
         case "photos_albums":
             response = await photosProvider.getAlbums(input: input)
+        case "voicememos_search":
+            response = await voiceMemosProvider.search(input: input)
+        case "voicememos_read":
+            response = await voiceMemosProvider.read(input: input)
+        case "ai_summarize":
+            response = await foundationModelsProvider.summarize(input: input)
         case "ai_writing_tools":
             response = await appleIntelligenceProvider.writingTool(input: input)
         case "ai_translate":
