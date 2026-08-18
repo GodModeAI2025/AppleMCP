@@ -12,6 +12,12 @@ final class LocalAppClient {
         let configuration = URLSessionConfiguration.ephemeral
         configuration.urlCache = nil
         configuration.requestCachePolicy = .reloadIgnoringLocalCacheData
+        // The default 60s would cut off long-running local work — transcribing a multi-minute
+        // voice memo, or downloading a speech model on first use. The app is on loopback, so a
+        // generous ceiling costs nothing and avoids a confusing failure: the app-side work
+        // completes and caches, making the retry instant, so a timeout reads as random flakiness.
+        configuration.timeoutIntervalForRequest = 600
+        configuration.timeoutIntervalForResource = 600
         self.session = URLSession(configuration: configuration)
     }
 

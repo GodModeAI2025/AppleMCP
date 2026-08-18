@@ -17,8 +17,9 @@ final class PermissionProvider {
         let mail = mailLocalStoreStatusItem()
         let notes = await notesAutomationStatusItem(prompt: false)
         let photos = photosStatusItem()
+        let voiceMemos = voiceMemosStoreStatusItem()
 
-        return ToolResponse(ok: true, source: "Permissions", items: [calendar, contacts, reminders, mail, notes, photos])
+        return ToolResponse(ok: true, source: "Permissions", items: [calendar, contacts, reminders, mail, notes, photos, voiceMemos])
     }
 
     func requestAll() async -> ToolResponse {
@@ -28,8 +29,11 @@ final class PermissionProvider {
         let mail = mailLocalStoreStatusItem()
         let notes = await notesAutomationStatusItem(prompt: true)
         let photos = await requestPhotos()
+        // Full Disk Access cannot be requested programmatically, so this reports state the same way
+        // `mail` does. Listing it keeps requestAll in step with status().
+        let voiceMemos = voiceMemosStoreStatusItem()
 
-        let items = [calendar, contacts, reminders, mail, notes, photos]
+        let items = [calendar, contacts, reminders, mail, notes, photos, voiceMemos]
         let required = items.filter { $0.metadata["required"] == "true" }
         let ok = required.allSatisfy { $0.metadata["state"] == "authorized" }
 
@@ -53,7 +57,7 @@ final class PermissionProvider {
             urlString = "x-apple.systempreferences:com.apple.preference.security?Privacy_Contacts"
         case "automation", "notes":
             urlString = "x-apple.systempreferences:com.apple.preference.security?Privacy_Automation"
-        case "mail", "files", "full_disk_access":
+        case "mail", "files", "full_disk_access", "voicememos":
             urlString = "x-apple.systempreferences:com.apple.preference.security?Privacy_AllFiles"
         case "reminders":
             urlString = "x-apple.systempreferences:com.apple.preference.security?Privacy_Reminders"
@@ -254,6 +258,18 @@ final class PermissionProvider {
             id: "mail_local_store",
             title: "Mail Local Store",
             endpoint: "mail://local-index",
+            state: status.state,
+            required: true,
+            preview: status.message
+        )
+    }
+
+    private func voiceMemosStoreStatusItem() -> DataItem {
+        let status = VoiceMemosProvider().accessStatus()
+        return permissionItem(
+            id: "voicememos_local_store",
+            title: "Voice Memos Local Store",
+            endpoint: "voicememos://local-store",
             state: status.state,
             required: true,
             preview: status.message

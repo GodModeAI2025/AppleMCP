@@ -30,5 +30,7 @@
   <string>M3MCP liest lokale Erinnerungen fuer MCP-Abfragen.</string>
   <key>NSPhotoLibraryUsageDescription</key>
   <string>M3MCP liest Metadaten aus der lokalen Fotos-Mediathek fuer MCP-Abfragen.</string>
+  <key>NSSpeechRecognitionUsageDescription</key>
+  <string>M3MCP transkribiert lokale Sprachmemos mit dem geraeteinternen Apple-Sprachmodell. Es werden keine Daten an Server gesendet.</string>
 </dict>
 </plist>
