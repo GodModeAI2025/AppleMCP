@@ -23,6 +23,7 @@ AppleMCP consists of a SwiftUI app that bridges macOS privacy-controlled APIs an
 
 ```bash
 swift build
+swift test   # parser tests for the Voice Memos transcript format
 ```
 
 ### 2. Run the App

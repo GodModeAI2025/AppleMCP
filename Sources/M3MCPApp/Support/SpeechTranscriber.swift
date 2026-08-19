@@ -1,4 +1,5 @@
 import Foundation
+import M3MCPCore
 import Speech
 
 /// On-device speech recognition for recordings that carry no stored transcript.

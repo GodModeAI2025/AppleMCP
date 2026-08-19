@@ -33,6 +33,11 @@ let package = Package(
             name: "M3MCPBridge",
             dependencies: ["M3MCPCore"],
             path: "Sources/M3MCPBridge"
+        ),
+        .testTarget(
+            name: "M3MCPCoreTests",
+            dependencies: ["M3MCPCore"],
+            path: "Tests/M3MCPCoreTests"
         )
     ]
 )

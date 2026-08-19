@@ -94,6 +94,32 @@ Memos so macOS downloads it.
 **Transcript search feels slow** — `search_transcripts` opens recordings until `max_candidates`
 (default 300) is reached. Narrow the range with `since_days`, or lower `max_candidates`.
 
+## Differences From The Upstream Parser
+
+The Swift parser was checked against the TypeScript implementation of
+[apple-voice-memo-mcp](https://github.com/jwulff/apple-voice-memo-mcp) on byte-identical synthetic
+recordings. Ordinary recordings produce identical text, locale, and segments. Four cases differ on
+purpose:
+
+| Case | Upstream | AppleMCP |
+|---|---|---|
+| Transcript in a track other than the first | No transcript found | All tracks are searched |
+| 64 bit atom sizes (`size == 1`) | Parsing stops | Atom is read via its 64 bit largesize |
+| `timeRange` stored as `[start, duration]` | `end` lands before `start` | `end` is normalized to `start + duration` |
+| `tsrp` atom that decodes to no text | Reported as a transcript | Reported as no transcript |
+
+The last one keeps `voicememos_search` and `voicememos_transcript` in agreement: a recording is only
+advertised with `has_transcript: true` when the transcript can actually be returned.
+
+Reading a recording also avoids loading the audio: the file is memory mapped and only the MPEG-4
+atom headers are walked, while the upstream parser reads the whole file into memory.
+
+## Tests
+
+`swift test` runs `Tests/M3MCPCoreTests/VoiceMemoTranscriptTests.swift`, which builds recordings with
+`tsrp` atoms in code — no binary fixtures — and covers the atom walk, the payload prefix, 64 bit
+atoms, empty transcripts, duration-style time ranges, and timestamp rendering.
+
 ## Attribution
 
 The store layout, the `tsrp` atom format, and the tool surface follow

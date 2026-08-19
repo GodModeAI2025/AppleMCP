@@ -1,16 +1,28 @@
 import Foundation
 
 /// Transcript that Voice Memos stores inside a recording.
-struct VoiceMemoTranscript {
-    struct Segment {
-        let text: String
-        let start: Double
-        let end: Double
+public struct VoiceMemoTranscript: Sendable, Equatable {
+    public struct Segment: Sendable, Equatable {
+        public let text: String
+        public let start: Double
+        public let end: Double
+
+        public init(text: String, start: Double, end: Double) {
+            self.text = text
+            self.start = start
+            self.end = end
+        }
     }
 
-    let text: String
-    let segments: [Segment]
-    let locale: String
+    public let text: String
+    public let segments: [Segment]
+    public let locale: String
+
+    public init(text: String, segments: [Segment], locale: String) {
+        self.text = text
+        self.segments = segments
+        self.locale = locale
+    }
 }
 
 /// Reads the transcript that Voice Memos writes into the `.m4a` recording itself.
@@ -18,24 +30,27 @@ struct VoiceMemoTranscript {
 /// macOS keeps the transcript in a private MPEG-4 atom named `tsrp` below `moov/trak/udta`.
 /// There is no sidecar file, so the recording has to be parsed. Atom headers are walked
 /// lazily on a memory mapped file, which keeps large recordings cheap to inspect.
-enum VoiceMemoTranscriptReader {
+public enum VoiceMemoTranscriptReader {
     private static let maximumPayloadBytes = 8 * 1024 * 1024
 
     /// Returns the stored transcript, or `nil` when the recording carries none.
-    static func read(at url: URL) -> VoiceMemoTranscript? {
+    public static func read(at url: URL) -> VoiceMemoTranscript? {
         guard let payload = transcriptPayload(at: url) else {
             return nil
         }
         return parse(payload)
     }
 
-    /// Reports whether the recording carries a stored transcript without decoding it.
-    static func hasTranscript(at url: URL) -> Bool {
-        transcriptPayload(at: url) != nil
+    /// Reports whether the recording carries a usable transcript.
+    ///
+    /// macOS also writes a `tsrp` atom when recognition produced nothing, so the payload has to be
+    /// decoded. Otherwise a search result would advertise a transcript that `read` cannot return.
+    public static func hasTranscript(at url: URL) -> Bool {
+        read(at: url) != nil
     }
 
     /// Renders a transcript as timestamped lines, grouped into readable chunks.
-    static func timestampedText(_ transcript: VoiceMemoTranscript, chunkSeconds: Double = 15) -> String {
+    public static func timestampedText(_ transcript: VoiceMemoTranscript, chunkSeconds: Double = 15) -> String {
         guard !transcript.segments.isEmpty else {
             return transcript.text
         }
@@ -68,7 +83,7 @@ enum VoiceMemoTranscriptReader {
     }
 
     /// Formats seconds as `m:ss` or `h:mm:ss`.
-    static func timecode(_ seconds: Double) -> String {
+    public static func timecode(_ seconds: Double) -> String {
         let total = max(0, Int(seconds.rounded()))
         let hours = total / 3_600
         let minutes = (total % 3_600) / 60
