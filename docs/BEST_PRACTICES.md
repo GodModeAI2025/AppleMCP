@@ -30,6 +30,20 @@ Relevant Apple docs:
 - Apple Events usage description: https://developer.apple.com/documentation/bundleresources/information-property-list/nsappleeventsusagedescription
 - Other app data usage description: https://developer.apple.com/documentation/BundleResources/Information-Property-List/NSAppDataUsageDescription
 
+## Local Endpoint
+
+- Expose the endpoint on a Unix domain socket, not a loopback TCP port. The app holds Full Disk Access, so anything that reaches the endpoint borrows that privilege — including sandboxed apps that macOS specifically prevents from reading `~/Library/Mail` themselves. A TCP port on `127.0.0.1` is open to every process on the machine; a socket file is governed by filesystem permissions.
+- Keep the socket directory `0700` and the socket `0600`, and create the socket under a tightened `umask` rather than widening it afterwards.
+- Unlink a stale socket before binding. A crash leaves the file behind, and `bind` then fails with `EADDRINUSE`.
+- Set `SO_NOSIGPIPE` on accepted sockets. Without it a client that hangs up mid-response terminates the app.
+- Keep the listening socket non-blocking and drain the backlog per readiness event, so the accept loop never blocks on an empty accept.
+- Give the bridge a generous socket timeout. Speech recognition and transcript searches run for minutes, and a short timeout reports the app as unreachable while it is still working.
+
+Relevant references:
+
+- `unix(4)` domain protocol family: https://developer.apple.com/library/archive/documentation/System/Conceptual/ManPages_iPhoneOS/man4/unix.4.html
+- Sandbox file access: https://developer.apple.com/documentation/security/app-sandbox
+
 ## MCP UX And Safety
 
 - Keep MCP `stdout` pure JSON-RPC. Send diagnostics to `stderr` or the app UI.

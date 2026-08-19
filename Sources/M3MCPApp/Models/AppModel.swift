@@ -26,7 +26,7 @@ final class AppModel: ObservableObject {
 
         let localService = service
         let server = LocalHTTPServer(
-            port: m3mcpDefaultPort,
+            socketURL: M3MCPEndpoint.socketURL,
             toolHandler: { [weak self] tool, input in
                 let started = Date()
                 let response = await localService.handle(tool: tool, input: input)
@@ -38,7 +38,13 @@ final class AppModel: ObservableObject {
             },
             statusHandler: { [weak self] in
                 await MainActor.run {
-                    self?.statusResponse() ?? StatusResponse(ok: false, version: m3mcpVersion, port: m3mcpDefaultPort, services: [], recentActivity: [])
+                    self?.statusResponse() ?? StatusResponse(
+                        ok: false,
+                        version: m3mcpVersion,
+                        endpoint: M3MCPEndpoint.socketURL.path,
+                        services: [],
+                        recentActivity: []
+                    )
                 }
             }
         )
@@ -47,11 +53,11 @@ final class AppModel: ObservableObject {
             try server.start()
             self.server = server
             serverState = "running"
-            AppLogger.log("Local server listening on 127.0.0.1:\(m3mcpDefaultPort)")
+            AppLogger.log("Local server listening on \(M3MCPEndpoint.socketURL.path)")
             services = service.services
             record(
                 tool: "server_start",
-                response: ToolResponse(ok: true, source: "M3MCP Server", message: "Listening on 127.0.0.1:\(m3mcpDefaultPort)"),
+                response: ToolResponse(ok: true, source: "M3MCP Server", message: "Listening on \(M3MCPEndpoint.displayPath)"),
                 durationMilliseconds: 0
             )
         } catch {
@@ -114,7 +120,7 @@ final class AppModel: ObservableObject {
         StatusResponse(
             ok: serverState == "running",
             version: m3mcpVersion,
-            port: m3mcpDefaultPort,
+            endpoint: M3MCPEndpoint.socketURL.path,
             services: services,
             recentActivity: Array(activity.prefix(30))
         )
@@ -164,7 +170,7 @@ final class AppModel: ObservableObject {
             return "voicememos://local-store"
         case "ai_writing_tools", "ai_translate", "ai_image_playground": return "macos://intelligence"
         case "source_status": return "m3mcp://status"
-        default: return "http://127.0.0.1:\(m3mcpDefaultPort)/tools/\(tool)"
+        default: return "m3mcp://tools/\(tool)"
         }
     }
 

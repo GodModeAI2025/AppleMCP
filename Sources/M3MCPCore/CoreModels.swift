@@ -1,6 +1,5 @@
 import Foundation
 
-public let m3mcpDefaultPort: UInt16 = 47651
 public let m3mcpVersion = "0.1.0"
 
 public enum JSONValue: Codable, Equatable, Sendable {
@@ -197,14 +196,15 @@ public struct ActivityEntry: Codable, Identifiable, Sendable {
 public struct StatusResponse: Codable, Sendable {
     public let ok: Bool
     public let version: String
-    public let port: UInt16
+    /// Filesystem path of the local socket the bridge connects to.
+    public let endpoint: String
     public let services: [ServiceHealth]
     public let recentActivity: [ActivityEntry]
 
-    public init(ok: Bool, version: String, port: UInt16, services: [ServiceHealth], recentActivity: [ActivityEntry]) {
+    public init(ok: Bool, version: String, endpoint: String, services: [ServiceHealth], recentActivity: [ActivityEntry]) {
         self.ok = ok
         self.version = version
-        self.port = port
+        self.endpoint = endpoint
         self.services = services
         self.recentActivity = recentActivity
     }
