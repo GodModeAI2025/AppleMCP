@@ -2,11 +2,15 @@ import Foundation
 import M3MCPCore
 import Speech
 
-/// On-device speech recognition for recordings that carry no stored transcript.
+/// `SFSpeechRecognizer` transcription, used where the macOS 26 speech stack is unavailable.
 ///
-/// The recognition request runs inside M3MCPApp so macOS attributes the Speech Recognition
-/// permission to the signed app bundle instead of the MCP bridge process.
-enum SpeechTranscriber {
+/// `SpeechTranscription` is the preferred path: it drives `SpeechAnalyzer`, the same engine Voice
+/// Memos itself uses. This one keeps transcription working on macOS 15 to 25, where that stack does
+/// not exist. Both run inside M3MCPApp, so macOS attributes the Speech Recognition permission to the
+/// signed app bundle rather than to the MCP bridge process.
+///
+/// Named to stay clear of `Speech.SpeechTranscriber`, the macOS 26 type the other path uses.
+enum LegacySpeechRecognizer {
     struct Result {
         let text: String
         let segments: [VoiceMemoTranscript.Segment]

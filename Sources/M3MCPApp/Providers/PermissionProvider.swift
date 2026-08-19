@@ -337,7 +337,7 @@ final class PermissionProvider {
     }
 
     private func speechRecognitionStatusItem(prompt: Bool) async -> DataItem {
-        let state = await SpeechTranscriber.authorizationState(prompt: prompt)
+        let state = await LegacySpeechRecognizer.authorizationState(prompt: prompt)
         let hint = state == "authorized"
             ? nil
             : "Only needed for voicememos_transcribe. Stored Voice Memos transcripts are read without it."

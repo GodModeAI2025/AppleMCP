@@ -276,7 +276,7 @@ final class VoiceMemosProvider {
 
         let requestedLanguage = input.string("language").trimmingCharacters(in: .whitespacesAndNewlines)
         let language = requestedLanguage.isEmpty ? Locale.current.identifier : requestedLanguage
-        let timeout = TimeInterval(max(10, min(input.int("timeout_seconds", default: Int(SpeechTranscriber.defaultTimeout)), 1_800)))
+        let timeout = TimeInterval(max(10, min(input.int("timeout_seconds", default: Int(LegacySpeechRecognizer.defaultTimeout)), 1_800)))
         let preferStored = input.bool("prefer_stored", default: true)
 
         do {
@@ -313,7 +313,7 @@ final class VoiceMemosProvider {
                 )
             }
 
-            let result = try await SpeechTranscriber.transcribe(url: fileURL, languageCode: language, timeout: timeout)
+            let result = try await LegacySpeechRecognizer.transcribe(url: fileURL, languageCode: language, timeout: timeout)
 
             var metadata = baseMetadata(row)
             metadata["locale"] = result.locale
@@ -334,7 +334,7 @@ final class VoiceMemosProvider {
                 metadata: metadata
             )
             return ToolResponse(ok: true, source: sourceName, items: [item])
-        } catch let failure as SpeechTranscriber.Failure {
+        } catch let failure as LegacySpeechRecognizer.Failure {
             return ToolResponse(ok: false, source: sourceName, message: failure.message)
         } catch let failure as VoiceMemoStoreFailure {
             return ToolResponse(ok: false, source: sourceName, message: failure.message)
