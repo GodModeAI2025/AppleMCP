@@ -22,7 +22,14 @@ final class LocalMCPService {
             ServiceHealth(name: "Reminders", endpoint: "eventkit://reminders", mode: "EventKit", state: "on-demand"),
             ServiceHealth(name: "Notes", endpoint: "macos://Notes.app", mode: "AppleScript", state: "on-demand"),
             ServiceHealth(name: "Photos", endpoint: "photos://library", mode: "Photos.framework", state: "on-demand"),
-            ServiceHealth(name: "Voice Memos", endpoint: "voicememos://local-store", mode: "CloudRecordings store + Speech", state: "on-demand"),
+            ServiceHealth(
+                name: "Voice Memos",
+                endpoint: "voicememos://local-store",
+                mode: "CloudRecordings store + on-device transcription",
+                // Reported live rather than as "on-demand": when transcription is unavailable the
+                // reason is the useful part, and source_status is where a caller looks for it.
+                state: SpeechTranscription.statusDescription
+            ),
             ServiceHealth(name: "Apple Intelligence", endpoint: "macos://intelligence", mode: "AppleScript/Shortcuts/URL scheme", state: "on-demand"),
             ServiceHealth(
                 name: "Foundation Models",

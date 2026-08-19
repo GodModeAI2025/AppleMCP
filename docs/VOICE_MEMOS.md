@@ -78,20 +78,37 @@ file, so checking whether a recording carries a transcript does not read the aud
 - `timestamped` — `[m:ss]` lines, grouped at sentence ends or every ~15 seconds
 - `json` — plain text plus a `segments_json` metadata field with `text`, `start`, and `end`
 
-## Speech Recognition
+## Transcription
 
-`voicememos_transcribe` is the fallback for recordings without a stored transcript, for example on
-macOS Sequoia when the memo was never opened in Voice Memos. It runs `SFSpeechRecognizer` inside
-M3MCPApp, so macOS attributes the Speech Recognition permission to the signed app bundle rather than
-to the MCP bridge process.
+A memo recorded on iPhone and synced through iCloud arrives on the Mac with no transcript at all, so
+reading the `tsrp` atom is not enough. `voicememos_transcribe` works through four sources, cheapest
+first:
 
-- On-device recognition is requested whenever the locale supports it, so audio stays on the Mac.
+1. **The stored transcript** in the recording — free, no recognition run, works on macOS 15.
+2. **An earlier cached run**, keyed on `ZAUDIODIGEST`, the SHA-256 Voice Memos already maintains.
+   Keying on the digest rather than a modification date means the cache survives file touches and
+   iCloud evict/restore cycles. Empty transcripts are never cached, so a recording with no speech is
+   not pinned to an empty result forever.
+3. **`SpeechAnalyzer` / `SpeechTranscriber`** on macOS 26 — the same engine Voice Memos uses for its
+   own transcripts. First use of a locale downloads its model. Recordings that `AVAudioFile` cannot
+   open directly, such as edited `.qta` files, are transcoded through `AVAssetReader` first.
+4. **`SFSpeechRecognizer`** below macOS 26, so transcription still works on macOS 15 to 25. Bounded
+   by `timeout_seconds` (default 300); the task is cancelled when it expires.
+
+Everything runs inside M3MCPApp, so macOS attributes the Speech Recognition permission to the signed
+app bundle rather than to the MCP bridge process, and recognition stays on device.
+
 - The locale defaults to the system locale. Pass `language` (for example `de-DE`) to override it.
-- Recognition is bounded by `timeout_seconds` (default 300) and the task is cancelled on timeout.
-- An existing macOS transcript is returned first. Pass `prefer_stored: false` to force recognition.
+- Pass `prefer_stored: false` to skip steps 1 and 2 and force fresh recognition.
+- Missing language packs surface as a clear error. Install them under
+  System Settings > Accessibility > Voice Control.
 
-Missing language packs surface as a clear error. Install them under
-System Settings > Accessibility > Voice Control.
+Steps 3 and 4 write their result to the cache, so `voicememos_transcript` can return it afterwards —
+without timestamps, which only stored transcripts carry.
+
+The macOS 26 engine, the digest cache, and the `.qta` fallback come from
+[PR #1](https://github.com/GodModeAI2025/AppleMCP/pull/1) by
+[@aheusingfeld](https://github.com/aheusingfeld).
 
 ## Permissions
 

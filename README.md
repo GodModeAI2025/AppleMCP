@@ -14,7 +14,7 @@ AppleMCP consists of a SwiftUI app that bridges macOS privacy-controlled APIs an
 | **Reminders** | EventKit | Reminders Access |
 | **Notes** | Notes.app AppleScript Automation | Automation Permission |
 | **Photos** | Photos.framework | Photos Access |
-| **Voice Memos** | Local `CloudRecordings.db` + in-file transcripts, Speech.framework for on-device recognition | Full Disk Access, Speech Recognition (only for `voicememos_transcribe`) |
+| **Voice Memos** | Local `CloudRecordings.db` + in-file transcripts, SpeechAnalyzer / SFSpeechRecognizer for recordings without one | Full Disk Access, Speech Recognition (only for `voicememos_transcribe`) |
 | **Apple Intelligence** | Native APIs (ImagePlayground, Translation, Writing Tools) | None |
 | **Foundation Models** | On-device language model via FoundationModels (macOS 26, weak-linked) | None |
 
@@ -84,7 +84,7 @@ The M3MCP UI app must be running for MCP calls to work. The bridge talks to the 
 | `voicememos_read` | Read one recording including its stored transcript |
 | `voicememos_transcript` | Return a stored transcript as text, timestamped text, or JSON segments |
 | `voicememos_audio` | Return the recording as a local path or base64 audio |
-| `voicememos_transcribe` | Transcribe a recording with on-device speech recognition |
+| `voicememos_transcribe` | Transcribe on device: stored transcript, cache, SpeechAnalyzer (macOS 26), then SFSpeechRecognizer |
 
 ### Apple Intelligence
 
