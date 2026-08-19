@@ -130,6 +130,18 @@ final class VoiceMemosProvider {
         do {
             let row = try loadRecording(id: id)
             guard let transcript = row.transcript() else {
+                // No atom in the recording, but this app may have transcribed it before.
+                if let cached = row.cachedTranscript() {
+                    return transcriptResponse(
+                        row: row,
+                        text: cached,
+                        origin: "cache",
+                        locale: nil,
+                        segments: [],
+                        message: "This transcript was produced by voicememos_transcribe; macOS stored none in the recording, so there are no timestamps."
+                    )
+                }
+
                 return ToolResponse(
                     ok: false,
                     source: sourceName,
@@ -268,6 +280,12 @@ final class VoiceMemosProvider {
         }
     }
 
+    /// Produces a transcript, cheapest source first.
+    ///
+    /// 1. the transcript macOS stored inside the recording — free, and the only option before macOS 26
+    /// 2. a transcript this app produced earlier, keyed on the recording's digest
+    /// 3. `SpeechAnalyzer` on macOS 26, the engine Voice Memos itself uses
+    /// 4. `SFSpeechRecognizer` below that, so macOS 15 to 25 can still transcribe
     func transcribe(input: [String: JSONValue]) async -> ToolResponse {
         let id = input.string("id")
         guard !id.isEmpty else {
@@ -276,33 +294,34 @@ final class VoiceMemosProvider {
 
         let requestedLanguage = input.string("language").trimmingCharacters(in: .whitespacesAndNewlines)
         let language = requestedLanguage.isEmpty ? Locale.current.identifier : requestedLanguage
-        let timeout = TimeInterval(max(10, min(input.int("timeout_seconds", default: Int(SpeechTranscriber.defaultTimeout)), 1_800)))
+        let timeout = TimeInterval(max(10, min(input.int("timeout_seconds", default: Int(LegacySpeechRecognizer.defaultTimeout)), 1_800)))
         let preferStored = input.bool("prefer_stored", default: true)
 
         do {
             let row = try loadRecording(id: id)
 
-            if preferStored, let stored = row.transcript() {
-                var metadata = baseMetadata(row)
-                metadata["locale"] = stored.locale
-                metadata["segment_count"] = String(stored.segments.count)
-                metadata["origin"] = "stored"
+            if preferStored {
+                if let stored = row.transcript() {
+                    return transcriptResponse(
+                        row: row,
+                        text: stored.text,
+                        origin: "stored",
+                        locale: stored.locale,
+                        segments: stored.segments,
+                        message: "Returned the transcript macOS already stored in the recording. Set prefer_stored to false to re-run speech recognition."
+                    )
+                }
 
-                let item = DataItem(
-                    id: row.id,
-                    title: row.title,
-                    subtitle: row.subtitle.isEmpty ? nil : row.subtitle,
-                    kind: "voice_memo_transcript",
-                    source: sourceName,
-                    preview: stored.text,
-                    metadata: metadata
-                )
-                return ToolResponse(
-                    ok: true,
-                    source: sourceName,
-                    items: [item],
-                    message: "Returned the transcript macOS already stored in the recording. Set prefer_stored to false to re-run speech recognition."
-                )
+                if let cached = row.cachedTranscript() {
+                    return transcriptResponse(
+                        row: row,
+                        text: cached,
+                        origin: "cache",
+                        locale: nil,
+                        segments: [],
+                        message: "Returned a transcript this app produced earlier. Set prefer_stored to false to re-run speech recognition."
+                    )
+                }
             }
 
             guard let fileURL = row.fileURL else {
@@ -313,34 +332,79 @@ final class VoiceMemosProvider {
                 )
             }
 
-            let result = try await SpeechTranscriber.transcribe(url: fileURL, languageCode: language, timeout: timeout)
-
-            var metadata = baseMetadata(row)
-            metadata["locale"] = result.locale
-            metadata["segment_count"] = String(result.segments.count)
-            metadata["on_device"] = String(result.onDevice)
-            metadata["origin"] = "speech_recognition"
-            if let encoded = encodeSegments(result.segments) {
-                metadata["segments_json"] = encoded
+            if SpeechTranscription.isSupported {
+                do {
+                    let text = try await SpeechTranscription.transcribe(url: fileURL, locale: Locale(identifier: language))
+                    TranscriptCache.write(text, digest: row.digest)
+                    return transcriptResponse(
+                        row: row,
+                        text: text,
+                        origin: "speech_analyzer",
+                        locale: language,
+                        segments: [],
+                        message: nil
+                    )
+                } catch let failure as TranscriptionFailure {
+                    // Fall through to the older recognizer rather than failing outright: the model may
+                    // simply be missing for this locale, which SFSpeechRecognizer can still cover.
+                    AppLogger.log("SpeechAnalyzer unavailable, falling back: \(failure.localizedDescription)")
+                }
             }
 
-            let item = DataItem(
-                id: row.id,
-                title: row.title,
-                subtitle: row.subtitle.isEmpty ? nil : row.subtitle,
-                kind: "voice_memo_transcript",
-                source: sourceName,
-                preview: result.text,
-                metadata: metadata
+            let result = try await LegacySpeechRecognizer.transcribe(url: fileURL, languageCode: language, timeout: timeout)
+            TranscriptCache.write(result.text, digest: row.digest)
+            return transcriptResponse(
+                row: row,
+                text: result.text,
+                origin: "speech_recognition",
+                locale: result.locale,
+                segments: result.segments,
+                onDevice: result.onDevice,
+                message: nil
             )
-            return ToolResponse(ok: true, source: sourceName, items: [item])
-        } catch let failure as SpeechTranscriber.Failure {
+        } catch let failure as LegacySpeechRecognizer.Failure {
             return ToolResponse(ok: false, source: sourceName, message: failure.message)
+        } catch let failure as TranscriptionFailure {
+            return ToolResponse(ok: false, source: sourceName, message: failure.localizedDescription)
         } catch let failure as VoiceMemoStoreFailure {
             return ToolResponse(ok: false, source: sourceName, message: failure.message)
         } catch {
             return ToolResponse(ok: false, source: sourceName, message: error.localizedDescription)
         }
+    }
+
+    private func transcriptResponse(
+        row: RecordingRow,
+        text: String,
+        origin: String,
+        locale: String?,
+        segments: [VoiceMemoTranscript.Segment],
+        onDevice: Bool? = nil,
+        message: String?
+    ) -> ToolResponse {
+        var metadata = baseMetadata(row)
+        metadata["origin"] = origin
+        metadata["segment_count"] = String(segments.count)
+        if let locale {
+            metadata["locale"] = locale
+        }
+        if let onDevice {
+            metadata["on_device"] = String(onDevice)
+        }
+        if !segments.isEmpty, let encoded = encodeSegments(segments) {
+            metadata["segments_json"] = encoded
+        }
+
+        let item = DataItem(
+            id: row.id,
+            title: row.title,
+            subtitle: row.subtitle.isEmpty ? nil : row.subtitle,
+            kind: "voice_memo_transcript",
+            source: sourceName,
+            preview: text,
+            metadata: metadata
+        )
+        return ToolResponse(ok: true, source: sourceName, items: [item], message: message)
     }
 
     /// Reports whether the local Voice Memos store is readable, mirroring the Mail index preflight.
@@ -377,6 +441,8 @@ final class VoiceMemosProvider {
         let filename: String
         let fileURL: URL?
         let deletedAt: Date?
+        /// `ZAUDIODIGEST`, used as the transcript cache key.
+        let digest: String?
 
         var subtitle: String {
             var parts: [String] = []
@@ -389,14 +455,22 @@ final class VoiceMemosProvider {
             return parts.joined(separator: " · ")
         }
 
+        /// Transcript stored inside the recording by macOS, if any.
         func transcript() -> VoiceMemoTranscript? {
             guard let fileURL else { return nil }
             return VoiceMemoTranscriptReader.read(at: fileURL)
         }
 
+        /// Transcript this app produced earlier, keyed on the recording's digest.
+        func cachedTranscript() -> String? {
+            TranscriptCache.read(digest: digest)
+        }
+
         func hasTranscript() -> Bool {
-            guard let fileURL else { return false }
-            return VoiceMemoTranscriptReader.hasTranscript(at: fileURL)
+            if let fileURL, VoiceMemoTranscriptReader.hasTranscript(at: fileURL) {
+                return true
+            }
+            return TranscriptCache.has(digest: digest)
         }
 
         static let displayFormatter: DateFormatter = {
@@ -701,6 +775,7 @@ final class VoiceMemosProvider {
         let date = dateValue(statement, column: 4)
         let duration = doubleValue(statement, column: 5) ?? 0
         let deletedAt = dateValue(statement, column: 6)
+        let digest = blobHexValue(statement, column: 7) ?? textValue(statement, column: 7)
 
         let filename = path.isEmpty ? "" : URL(fileURLWithPath: path).lastPathComponent
         let fileURL = resolveRecording(path: path, store: store)
@@ -721,7 +796,8 @@ final class VoiceMemosProvider {
             duration: duration,
             filename: filename,
             fileURL: fileURL,
-            deletedAt: deletedAt
+            deletedAt: deletedAt,
+            digest: digest
         )
     }
 
@@ -750,6 +826,7 @@ final class VoiceMemosProvider {
         let date: String?
         let duration: String?
         let evictionDate: String?
+        let digest: String?
     }
 
     private func selectClause(for schema: RecordingSchema) -> String {
@@ -760,7 +837,8 @@ final class VoiceMemosProvider {
             schema.title.map(quote) ?? "NULL",
             schema.date.map(quote) ?? "NULL",
             schema.duration.map(quote) ?? "NULL",
-            schema.evictionDate.map(quote) ?? "NULL"
+            schema.evictionDate.map(quote) ?? "NULL",
+            schema.digest.map(quote) ?? "NULL"
         ].joined(separator: ", ")
     }
 
@@ -776,7 +854,8 @@ final class VoiceMemosProvider {
             title: pick(columns, ["ZENCRYPTEDTITLE", "ZTITLE"]),
             date: pick(columns, ["ZDATE", "ZCREATIONDATE"]),
             duration: pick(columns, ["ZDURATION"]),
-            evictionDate: pick(columns, ["ZEVICTIONDATE"])
+            evictionDate: pick(columns, ["ZEVICTIONDATE"]),
+            digest: pick(columns, ["ZAUDIODIGEST"])
         )
     }
 
@@ -882,6 +961,21 @@ final class VoiceMemosProvider {
             return nil
         }
         return String(cString: value)
+    }
+
+    /// `ZAUDIODIGEST` is a BLOB; its hex form is stable and makes a usable cache key.
+    private func blobHexValue(_ statement: OpaquePointer, column: Int32) -> String? {
+        guard sqlite3_column_type(statement, column) == SQLITE_BLOB,
+              let bytes = sqlite3_column_blob(statement, column)
+        else {
+            return nil
+        }
+
+        let count = Int(sqlite3_column_bytes(statement, column))
+        guard count > 0 else { return nil }
+        return UnsafeRawBufferPointer(start: bytes, count: count)
+            .map { String(format: "%02x", $0) }
+            .joined()
     }
 
     private func doubleValue(_ statement: OpaquePointer, column: Int32) -> Double? {

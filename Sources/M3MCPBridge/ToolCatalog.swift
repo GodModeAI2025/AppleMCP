@@ -123,7 +123,7 @@ enum ToolCatalog {
         ),
         MCPTool(
             name: "voicememos_transcript",
-            description: "Return the transcript macOS stored inside a Voice Memos recording. Requires macOS Sequoia or later, or a transcript created by voicememos_transcribe.",
+            description: "Return a recording's transcript: the one macOS stored inside the file, or one voicememos_transcribe produced earlier. Timestamps exist only for stored transcripts.",
             schema: objectSchema(properties: [
                 "id": ["type": "string", "description": "Recording id returned by voicememos_search."],
                 "format": [
@@ -143,7 +143,7 @@ enum ToolCatalog {
         ),
         MCPTool(
             name: "voicememos_transcribe",
-            description: "Transcribe a Voice Memos recording with on-device speech recognition. Returns the stored transcript first unless prefer_stored is false. Requires Speech Recognition permission.",
+            description: "Transcribe a Voice Memos recording on device. Uses the cheapest source first: the transcript macOS stored in the recording, then an earlier cached run, then SpeechAnalyzer on macOS 26, then SFSpeechRecognizer below that. Set prefer_stored to false to force fresh recognition. Requires Speech Recognition permission.",
             schema: objectSchema(properties: [
                 "id": ["type": "string", "description": "Recording id returned by voicememos_search."],
                 "language": ["type": "string", "description": "Recognition locale, e.g. de-DE or en-US. Defaults to the system locale."],
