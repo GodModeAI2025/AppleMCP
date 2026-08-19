@@ -61,6 +61,7 @@ struct SidebarView: View {
         case "Photos": return "photo"
         case "Voice Memos": return "waveform"
         case "Apple Intelligence": return "sparkles"
+        case "Foundation Models": return "brain"
         default: return "circle"
         }
     }

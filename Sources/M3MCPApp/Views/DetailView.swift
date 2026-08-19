@@ -135,6 +135,7 @@ private struct EndpointListView: View {
         ("voicememos_transcript", "/tools/voicememos_transcript"),
         ("voicememos_audio", "/tools/voicememos_audio"),
         ("voicememos_transcribe", "/tools/voicememos_transcribe"),
+        ("ai_summarize", "/tools/ai_summarize"),
         ("ai_writing_tools", "/tools/ai_writing_tools"),
         ("ai_translate", "/tools/ai_translate"),
         ("ai_image_playground", "/tools/ai_image_playground")

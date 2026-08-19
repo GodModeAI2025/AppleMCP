@@ -169,6 +169,7 @@ final class AppModel: ObservableObject {
         case "voicememos_search", "voicememos_read", "voicememos_transcript", "voicememos_audio", "voicememos_transcribe":
             return "voicememos://local-store"
         case "ai_writing_tools", "ai_translate", "ai_image_playground": return "macos://intelligence"
+        case "ai_summarize": return "macos://foundationmodels"
         case "source_status": return "m3mcp://status"
         default: return "m3mcp://tools/\(tool)"
         }

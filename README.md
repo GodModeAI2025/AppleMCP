@@ -16,6 +16,7 @@ AppleMCP consists of a SwiftUI app that bridges macOS privacy-controlled APIs an
 | **Photos** | Photos.framework | Photos Access |
 | **Voice Memos** | Local `CloudRecordings.db` + in-file transcripts, Speech.framework for on-device recognition | Full Disk Access, Speech Recognition (only for `voicememos_transcribe`) |
 | **Apple Intelligence** | Native APIs (ImagePlayground, Translation, Writing Tools) | None |
+| **Foundation Models** | On-device language model via FoundationModels (macOS 26, weak-linked) | None |
 
 ## Quick Start
 
@@ -89,7 +90,8 @@ The M3MCP UI app must be running for MCP calls to work. The bridge talks to the 
 
 | Tool | Description |
 |---|---|
-| `ai_writing_tools` | Summarize, rewrite, proofread, or change tone of text |
+| `ai_summarize` | Summarize text and extract action items with the on-device foundation model (macOS 26) |
+| `ai_writing_tools` | Summarize, rewrite, proofread, or change tone of text (needs a "Writing Tools" Shortcut) |
 | `ai_translate` | Translate text using Apple system translation |
 | `ai_image_playground` | Generate images from text descriptions (macOS 15.4+) |
 
