@@ -17,12 +17,12 @@ enum ToolCatalog {
         ),
         MCPTool(
             name: "permissions_status",
-            description: "Report macOS permission state for Calendar, Contacts, Reminders, local Mail index, Notes, and Photos.",
+            description: "Report macOS permission state for Calendar, Contacts, Reminders, local Mail index, Notes, Photos, the Voice Memos store, and Speech Recognition.",
             schema: objectSchema(properties: [:])
         ),
         MCPTool(
             name: "permissions_request",
-            description: "Ask macOS for required M3MCP permissions before using Calendar, Contacts, Reminders, Notes, and Photos tools; reports manual Full Disk Access need for Mail.",
+            description: "Ask macOS for required M3MCP permissions before using Calendar, Contacts, Reminders, Notes, Photos, and Voice Memos transcription tools; reports manual Full Disk Access need for Mail and Voice Memos.",
             schema: objectSchema(properties: [:])
         ),
         MCPTool(
@@ -31,7 +31,7 @@ enum ToolCatalog {
             schema: objectSchema(properties: [
                 "pane": [
                     "type": "string",
-                    "description": "One of calendar, contacts, reminders, automation, mail, photos, privacy."
+                    "description": "One of calendar, contacts, reminders, automation, mail, photos, voice_memos, speech, privacy."
                 ]
             ])
         ),
@@ -101,6 +101,55 @@ enum ToolCatalog {
             name: "photos_albums",
             description: "List all albums in Apple Photos.app with photo counts.",
             schema: querySchema()
+        ),
+        MCPTool(
+            name: "voicememos_search",
+            description: "Read/search local Apple Voice Memos recordings from the CloudRecordings store. Returns title, date, duration, and transcript availability.",
+            schema: querySchema(extra: [
+                "offset": ["type": "integer", "description": "Number of matches to skip for pagination. Default 0."],
+                "since_days": ["type": "integer", "description": "Only return recordings from the last N days."],
+                "transcribed_only": ["type": "boolean", "description": "When true, only return recordings that already carry a transcript. Default false."],
+                "search_transcripts": ["type": "boolean", "description": "When true, match the query against transcript text instead of titles. Default false."],
+                "include_transcript": ["type": "boolean", "description": "When true, include a transcript snippet per recording. Default false."],
+                "max_candidates": ["type": "integer", "description": "Maximum recordings to inspect when a transcript filter is active. Default 300."]
+            ])
+        ),
+        MCPTool(
+            name: "voicememos_read",
+            description: "Read one Apple Voice Memos recording by the id returned from voicememos_search, including its stored transcript when macOS created one.",
+            schema: objectSchema(properties: [
+                "id": ["type": "string", "description": "Recording id returned by voicememos_search."]
+            ], required: ["id"])
+        ),
+        MCPTool(
+            name: "voicememos_transcript",
+            description: "Return the transcript macOS stored inside a Voice Memos recording. Requires macOS Sequoia or later, or a transcript created by voicememos_transcribe.",
+            schema: objectSchema(properties: [
+                "id": ["type": "string", "description": "Recording id returned by voicememos_search."],
+                "format": [
+                    "type": "string",
+                    "description": "Output format: text, timestamped, or json. Default: text."
+                ]
+            ], required: ["id"])
+        ),
+        MCPTool(
+            name: "voicememos_audio",
+            description: "Return the audio file of a Voice Memos recording as a local path, or as base64 data for small recordings.",
+            schema: objectSchema(properties: [
+                "id": ["type": "string", "description": "Recording id returned by voicememos_search."],
+                "format": ["type": "string", "description": "Either path or base64. Default: path."],
+                "max_bytes": ["type": "integer", "description": "Maximum size for base64 output. Default 8000000."]
+            ], required: ["id"])
+        ),
+        MCPTool(
+            name: "voicememos_transcribe",
+            description: "Transcribe a Voice Memos recording with on-device speech recognition. Returns the stored transcript first unless prefer_stored is false. Requires Speech Recognition permission.",
+            schema: objectSchema(properties: [
+                "id": ["type": "string", "description": "Recording id returned by voicememos_search."],
+                "language": ["type": "string", "description": "Recognition locale, e.g. de-DE or en-US. Defaults to the system locale."],
+                "prefer_stored": ["type": "boolean", "description": "When true, return an existing macOS transcript instead of re-running recognition. Default true."],
+                "timeout_seconds": ["type": "integer", "description": "Abort recognition after N seconds. Default 300."]
+            ], required: ["id"])
         ),
 
         // MARK: - Apple Intelligence

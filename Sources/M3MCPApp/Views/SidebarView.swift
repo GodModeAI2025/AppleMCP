@@ -59,6 +59,7 @@ struct SidebarView: View {
         case "Reminders": return "checklist"
         case "Notes": return "note.text"
         case "Photos": return "photo"
+        case "Voice Memos": return "waveform"
         case "Apple Intelligence": return "sparkles"
         default: return "circle"
         }

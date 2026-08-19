@@ -8,6 +8,7 @@ final class LocalMCPService {
     private let remindersProvider = RemindersProvider()
     private let notesProvider = NotesProvider()
     private let photosProvider = PhotosProvider()
+    private let voiceMemosProvider = VoiceMemosProvider()
     private let appleIntelligenceProvider = AppleIntelligenceProvider()
     private let permissionProvider = PermissionProvider()
 
@@ -20,6 +21,7 @@ final class LocalMCPService {
             ServiceHealth(name: "Reminders", endpoint: "eventkit://reminders", mode: "EventKit", state: "on-demand"),
             ServiceHealth(name: "Notes", endpoint: "macos://Notes.app", mode: "AppleScript", state: "on-demand"),
             ServiceHealth(name: "Photos", endpoint: "photos://library", mode: "Photos.framework", state: "on-demand"),
+            ServiceHealth(name: "Voice Memos", endpoint: "voicememos://local-store", mode: "CloudRecordings store + Speech", state: "on-demand"),
             ServiceHealth(name: "Apple Intelligence", endpoint: "macos://intelligence", mode: "AppleScript/Shortcuts/URL scheme", state: "on-demand")
         ]
     }
@@ -67,6 +69,16 @@ final class LocalMCPService {
             response = await photosProvider.search(input: input)
         case "photos_albums":
             response = await photosProvider.getAlbums(input: input)
+        case "voicememos_search":
+            response = await voiceMemosProvider.search(input: input)
+        case "voicememos_read":
+            response = await voiceMemosProvider.read(input: input)
+        case "voicememos_transcript":
+            response = await voiceMemosProvider.transcript(input: input)
+        case "voicememos_audio":
+            response = await voiceMemosProvider.audio(input: input)
+        case "voicememos_transcribe":
+            response = await voiceMemosProvider.transcribe(input: input)
         case "ai_writing_tools":
             response = await appleIntelligenceProvider.writingTool(input: input)
         case "ai_translate":

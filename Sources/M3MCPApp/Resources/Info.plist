@@ -28,6 +28,8 @@
   <string>M3MCP liest lokale Erinnerungen fuer MCP-Abfragen.</string>
   <key>NSRemindersFullAccessUsageDescription</key>
   <string>M3MCP liest lokale Erinnerungen fuer MCP-Abfragen.</string>
+  <key>NSSpeechRecognitionUsageDescription</key>
+  <string>M3MCP transkribiert lokale Sprachmemos auf Wunsch mit der Spracherkennung von macOS.</string>
   <key>NSPhotoLibraryUsageDescription</key>
   <string>M3MCP liest Metadaten aus der lokalen Fotos-Mediathek fuer MCP-Abfragen.</string>
 </dict>
