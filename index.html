@@ -202,6 +202,10 @@
                     <h3>Image Playground</h3>
                     <p>Generate images from text via the native ImagePlayground API. No app launch, pure API.</p>
                 </div>
+                <div class="card">
+                    <h3>On-Device Summaries</h3>
+                    <p>Summarize text and extract action items with the Apple Intelligence language model. Runs locally, needs no Shortcut, pairs with voice-memo transcripts. macOS 26.</p>
+                </div>
             </div>
         </section>
 
@@ -217,13 +221,15 @@
         |
    M3MCPApp (SwiftUI, holds TCC permissions)
         |
-   EventKit / Contacts / Photos / Mail Index / Voice Memos Store / Speech / AppleScript</div>
+   EventKit / Contacts / Photos / Mail Index / Voice Memos Store
+   Speech / FoundationModels / AppleScript</div>
         </section>
 
         <section>
             <h2>Setup</h2>
 <pre><code># Build
 swift build
+swift test
 
 # Run the app
 ./script/build_and_run.sh
@@ -238,7 +244,11 @@ swift build
 }
 
 # Or add to Claude Code
-claude mcp add applemcp /path/to/AppleMCP/.build/debug/M3MCPBridge</code></pre>
+claude mcp add applemcp /path/to/AppleMCP/.build/debug/M3MCPBridge
+
+# Check the endpoint
+curl --unix-socket ~/Library/Application\ Support/M3MCP/mcp.sock \
+  http://localhost/health</code></pre>
         </section>
 
         <div class="cta">
@@ -246,7 +256,7 @@ claude mcp add applemcp /path/to/AppleMCP/.build/debug/M3MCPBridge</code></pre>
         </div>
 
         <footer>
-            <p>AppleMCP is open source under the MIT license. All data stays on your device.</p>
+            <p>AppleMCP is open source under the Apache 2.0 license. All data stays on your device.</p>
             <p style="margin-top: 8px;"><a href="https://godmodeai2025.github.io/MarkZimmermann/" style="color: var(--muted); text-decoration: none;">Impressum</a></p>
         </footer>
     </div>

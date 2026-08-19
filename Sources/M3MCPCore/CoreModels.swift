@@ -1,6 +1,6 @@
 import Foundation
 
-public let m3mcpVersion = "0.1.0"
+public let m3mcpVersion = "0.2.0"
 
 public enum JSONValue: Codable, Equatable, Sendable {
     case string(String)
