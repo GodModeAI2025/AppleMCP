@@ -139,6 +139,10 @@ Because the app holds Full Disk Access, anything that can reach the endpoint inh
 - Swift 5.9+
 - Apple Intelligence features require macOS 15.4+ with Apple Silicon
 
+## Changelog
+
+See [CHANGELOG.md](CHANGELOG.md). Note for 0.1.0 users: the endpoint moved to a Unix domain socket, so the app and the bridge have to be rebuilt together.
+
 ## Credits
 
 The Voice Memos support is a native Swift port of [jwulff/apple-voice-memo-mcp](https://github.com/jwulff/apple-voice-memo-mcp) (MIT). See [docs/THIRD_PARTY.md](docs/THIRD_PARTY.md).
