@@ -160,6 +160,8 @@ final class AppModel: ObservableObject {
         case "reminders_search": return "eventkit://reminders"
         case "notes_search", "notes_read": return "macos://Notes.app"
         case "photos_search", "photos_albums": return "photos://library"
+        case "voicememos_search", "voicememos_read", "voicememos_transcript", "voicememos_audio", "voicememos_transcribe":
+            return "voicememos://local-store"
         case "ai_writing_tools", "ai_translate", "ai_image_playground": return "macos://intelligence"
         case "source_status": return "m3mcp://status"
         default: return "http://127.0.0.1:\(m3mcpDefaultPort)/tools/\(tool)"

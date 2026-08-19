@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>AppleMCP — Local Apple Data for AI Assistants</title>
-    <meta name="description" content="Native macOS MCP server giving AI assistants secure, local access to Mail, Calendar, Contacts, Notes, Photos, Reminders, and Apple Intelligence.">
+    <meta name="description" content="Native macOS MCP server giving AI assistants secure, local access to Mail, Calendar, Contacts, Notes, Photos, Reminders, Voice Memos, and Apple Intelligence.">
     <style>
         :root {
             --bg: #0d1117;
@@ -180,6 +180,10 @@
                     <h3>Photos</h3>
                     <p>Search Photos library metadata via Photos.framework. Albums, media types, dimensions, dates.</p>
                 </div>
+                <div class="card">
+                    <h3>Voice Memos</h3>
+                    <p>Search recordings in the local CloudRecordings store, read the transcript macOS stores inside each <code>.m4a</code>, or transcribe on device with Speech.framework.</p>
+                </div>
             </div>
         </section>
 
@@ -213,7 +217,7 @@
         |
    M3MCPApp (SwiftUI, holds TCC permissions)
         |
-   EventKit / Contacts / Photos / Mail Index / AppleScript</div>
+   EventKit / Contacts / Photos / Mail Index / Voice Memos Store / Speech / AppleScript</div>
         </section>
 
         <section>

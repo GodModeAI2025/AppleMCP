@@ -130,6 +130,11 @@ private struct EndpointListView: View {
         ("notes_read", "/tools/notes_read"),
         ("photos_search", "/tools/photos_search"),
         ("photos_albums", "/tools/photos_albums"),
+        ("voicememos_search", "/tools/voicememos_search"),
+        ("voicememos_read", "/tools/voicememos_read"),
+        ("voicememos_transcript", "/tools/voicememos_transcript"),
+        ("voicememos_audio", "/tools/voicememos_audio"),
+        ("voicememos_transcribe", "/tools/voicememos_transcribe"),
         ("ai_writing_tools", "/tools/ai_writing_tools"),
         ("ai_translate", "/tools/ai_translate"),
         ("ai_image_playground", "/tools/ai_image_playground")
@@ -306,6 +311,10 @@ private struct PermissionRowView: View {
             return "photos"
         case "notes_automation":
             return "automation"
+        case "voice_memos_store":
+            return "voice_memos"
+        case "speech_recognition":
+            return "speech"
         default:
             return nil
         }

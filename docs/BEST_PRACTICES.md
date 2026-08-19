@@ -12,6 +12,11 @@ M3MCP is a local macOS app that exposes Apple data sources and Apple Intelligenc
 - Treat Mail local index access as Full Disk Access remediation when macOS blocks `~/Library/Mail`.
 - Prefer native frameworks where Apple exposes them: EventKit, Contacts.framework, and Photos.framework.
 - Use AppleEvents only where there is no equivalent public read API and the target is not known to hang under enumeration. Currently this is Notes.app.
+- Read Voice Memos from the local `CloudRecordings.db` store and from the recordings themselves. Voice Memos.app has no useful AppleEvent read interface, and its transcripts live inside the `.m4a` files, not in a sidecar.
+- Resolve store columns through `PRAGMA table_info` instead of hard-coding them. Core Data schemas of system apps change between macOS releases.
+- Memory map recordings and walk only the MPEG-4 atom headers when checking for a transcript. A voice memo library can hold gigabytes of audio.
+- Run `SFSpeechRecognizer` inside `M3MCPApp` so Speech Recognition is granted to the signed bundle, and prefer on-device recognition so audio never leaves the Mac.
+- Bound speech recognition with a timeout and cancel the recognition task when it expires, the same way AppleEvent calls are bounded.
 - Do not auto-prompt on launch. Show current state first, then let the user request permissions intentionally.
 - Bound all AppleEvent calls with timeouts. If an authorized app does not answer, return a clear diagnostic instead of hanging the MCP client.
 
@@ -20,6 +25,8 @@ Relevant Apple docs:
 - EventKit: https://developer.apple.com/documentation/eventkit
 - Contacts: https://developer.apple.com/documentation/contacts
 - Photos: https://developer.apple.com/documentation/photokit
+- Speech: https://developer.apple.com/documentation/speech
+- Speech recognition usage description: https://developer.apple.com/documentation/bundleresources/information-property-list/nsspeechrecognitionusagedescription
 - Apple Events usage description: https://developer.apple.com/documentation/bundleresources/information-property-list/nsappleeventsusagedescription
 - Other app data usage description: https://developer.apple.com/documentation/BundleResources/Information-Property-List/NSAppDataUsageDescription
 

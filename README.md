@@ -14,6 +14,7 @@ AppleMCP consists of a SwiftUI app that bridges macOS privacy-controlled APIs an
 | **Reminders** | EventKit | Reminders Access |
 | **Notes** | Notes.app AppleScript Automation | Automation Permission |
 | **Photos** | Photos.framework | Photos Access |
+| **Voice Memos** | Local `CloudRecordings.db` + in-file transcripts, Speech.framework for on-device recognition | Full Disk Access, Speech Recognition (only for `voicememos_transcribe`) |
 | **Apple Intelligence** | Native APIs (ImagePlayground, Translation, Writing Tools) | None |
 
 ## Quick Start
@@ -71,6 +72,11 @@ The M3MCP UI app must be running for MCP calls to work. The bridge communicates 
 | `notes_read` | Read a single note by ID |
 | `photos_search` | Search Apple Photos library metadata |
 | `photos_albums` | List photo albums with counts |
+| `voicememos_search` | Search voice memos by title, date range, or transcript text |
+| `voicememos_read` | Read one recording including its stored transcript |
+| `voicememos_transcript` | Return a stored transcript as text, timestamped text, or JSON segments |
+| `voicememos_audio` | Return the recording as a local path or base64 audio |
+| `voicememos_transcribe` | Transcribe a recording with on-device speech recognition |
 
 ### Apple Intelligence
 
@@ -94,16 +100,27 @@ The M3MCP UI app must be running for MCP calls to work. The bridge communicates 
 ```
 MCP Client (Claude) <--stdio--> M3MCPBridge <--HTTP 127.0.0.1:47651--> M3MCPApp (SwiftUI)
                                                                             |
-                                                      EventKit / Contacts / Photos / Mail Index / AppleScript
+                                       EventKit / Contacts / Photos / Mail Index / Voice Memos Store / Speech / AppleScript
 ```
 
 - **M3MCPApp** — SwiftUI app with macOS TCC permissions, provides the actual data access
 - **M3MCPBridge** — Lightweight `stdio` MCP server that translates MCP protocol to HTTP calls
 - **M3MCPCore** — Shared models and types
 
+## Voice Memos
+
+Voice Memos are read straight from the local Core Data store (`~/Library/Group Containers/group.com.apple.VoiceMemos.shared/Recordings/CloudRecordings.db`) — Voice Memos.app is never driven through AppleEvents. Transcripts have no sidecar file: macOS writes them into a private `tsrp` atom inside each `.m4a`, so AppleMCP parses the recording itself.
+
+- Open Voice Memos once so macOS creates the store, and grant Full Disk Access if the folder is protected.
+- On macOS Sequoia and later, opening a memo in Voice Memos makes macOS transcribe it. `voicememos_transcript` then returns that transcript without any recognition run.
+- `voicememos_transcribe` falls back to Speech.framework and prefers on-device recognition, so audio stays on the Mac. It returns an existing transcript first unless you pass `prefer_stored: false`.
+- `voicememos_search` matches titles by default. Pass `search_transcripts: true` to search spoken content instead; `max_candidates` bounds how many recordings are opened.
+
+See [docs/VOICE_MEMOS.md](docs/VOICE_MEMOS.md) for the store layout, the transcript format, and troubleshooting.
+
 ## Privacy
 
-All data stays local. The app uses macOS TCC (Transparency, Consent, and Control) for every data source. No network requests are made except to `127.0.0.1`. Mail reads the local SQLite index directly — it never sends emails or modifies any data.
+All data stays local. The app uses macOS TCC (Transparency, Consent, and Control) for every data source. No network requests are made except to `127.0.0.1`. Mail reads the local SQLite index directly — it never sends emails or modifies any data. Voice Memos are opened read-only, and speech recognition runs on device whenever the locale supports it, so recordings never leave the Mac.
 
 ## Requirements
 
@@ -111,6 +128,10 @@ All data stays local. The app uses macOS TCC (Transparency, Consent, and Control
 - Swift 5.9+
 - Apple Intelligence features require macOS 15.4+ with Apple Silicon
 
+## Credits
+
+The Voice Memos support is a native Swift port of [jwulff/apple-voice-memo-mcp](https://github.com/jwulff/apple-voice-memo-mcp) (MIT). See [docs/THIRD_PARTY.md](docs/THIRD_PARTY.md).
+
 ## License
 
-MIT
+Apache License 2.0 — see [LICENSE](LICENSE).

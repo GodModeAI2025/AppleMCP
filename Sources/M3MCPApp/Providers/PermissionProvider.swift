@@ -4,6 +4,7 @@ import EventKit
 import Foundation
 import M3MCPCore
 import Photos
+import Speech
 
 final class PermissionProvider {
     private let eventStore = EKEventStore()
@@ -17,8 +18,14 @@ final class PermissionProvider {
         let mail = mailLocalStoreStatusItem()
         let notes = await notesAutomationStatusItem(prompt: false)
         let photos = photosStatusItem()
+        let voiceMemos = voiceMemosStoreStatusItem()
+        let speech = await speechRecognitionStatusItem(prompt: false)
 
-        return ToolResponse(ok: true, source: "Permissions", items: [calendar, contacts, reminders, mail, notes, photos])
+        return ToolResponse(
+            ok: true,
+            source: "Permissions",
+            items: [calendar, contacts, reminders, mail, notes, photos, voiceMemos, speech]
+        )
     }
 
     func requestAll() async -> ToolResponse {
@@ -28,8 +35,10 @@ final class PermissionProvider {
         let mail = mailLocalStoreStatusItem()
         let notes = await notesAutomationStatusItem(prompt: true)
         let photos = await requestPhotos()
+        let voiceMemos = voiceMemosStoreStatusItem()
+        let speech = await requestSpeechRecognition()
 
-        let items = [calendar, contacts, reminders, mail, notes, photos]
+        let items = [calendar, contacts, reminders, mail, notes, photos, voiceMemos, speech]
         let required = items.filter { $0.metadata["required"] == "true" }
         let ok = required.allSatisfy { $0.metadata["state"] == "authorized" }
 
@@ -59,6 +68,10 @@ final class PermissionProvider {
             urlString = "x-apple.systempreferences:com.apple.preference.security?Privacy_Reminders"
         case "photos":
             urlString = "x-apple.systempreferences:com.apple.preference.security?Privacy_Photos"
+        case "voice_memos", "voicememos":
+            urlString = "x-apple.systempreferences:com.apple.preference.security?Privacy_AllFiles"
+        case "speech", "speech_recognition":
+            urlString = "x-apple.systempreferences:com.apple.preference.security?Privacy_SpeechRecognition"
         default:
             urlString = "x-apple.systempreferences:com.apple.preference.security"
         }
@@ -310,6 +323,40 @@ final class PermissionProvider {
     }
 
 
+
+    private func voiceMemosStoreStatusItem() -> DataItem {
+        let status = VoiceMemosProvider().accessStatus()
+        return permissionItem(
+            id: "voice_memos_store",
+            title: "Voice Memos Store",
+            endpoint: "voicememos://local-store",
+            state: status.state,
+            required: false,
+            preview: status.message
+        )
+    }
+
+    private func speechRecognitionStatusItem(prompt: Bool) async -> DataItem {
+        let state = await SpeechTranscriber.authorizationState(prompt: prompt)
+        let hint = state == "authorized"
+            ? nil
+            : "Only needed for voicememos_transcribe. Stored Voice Memos transcripts are read without it."
+        return permissionItem(
+            id: "speech_recognition",
+            title: "Speech Recognition",
+            endpoint: "speech://recognizer",
+            state: state,
+            required: false,
+            preview: hint
+        )
+    }
+
+    @MainActor
+    private func requestSpeechRecognition() async -> DataItem {
+        NSApp.setActivationPolicy(.regular)
+        NSApp.activate(ignoringOtherApps: true)
+        return await speechRecognitionStatusItem(prompt: true)
+    }
 
     private func permissionItem(
         id: String,
