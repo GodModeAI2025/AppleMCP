@@ -76,6 +76,56 @@ final class LocalHTTPServer {
         let method: String
         let path: String
         let body: Data
+        /// Header names lowercased, so lookups do not depend on client casing.
+        let headers: [String: String]
+    }
+
+    /// Rejects requests a browser could have made.
+    ///
+    /// The endpoint is loopback-only, which stops remote hosts but not web pages: a page can POST to
+    /// 127.0.0.1. With `Content-Type: text/plain` that is a CORS "simple request", so it is sent with
+    /// no preflight and the tool runs. Responses are not readable cross-origin, but the side effects
+    /// happen — and absent Host validation, DNS rebinding makes an attacker domain resolve to
+    /// 127.0.0.1, become same-origin, and read every response.
+    ///
+    /// `M3MCPBridge` uses URLSession against a literal loopback address, so it sends none of the
+    /// browser-only headers and always sends `application/json`. These checks are therefore invisible
+    /// to legitimate callers.
+    private enum RequestGuard {
+        /// Present only on browser-issued requests. URLSession never sets them.
+        static let browserOnlyHeaders = ["origin", "referer", "sec-fetch-site", "sec-fetch-mode"]
+
+        static let allowedHosts: Set<String> = ["127.0.0.1", "localhost", "[::1]", "::1"]
+
+        /// Returns a rejection reason, or nil when the request is acceptable.
+        static func rejection(for request: HTTPRequest) -> String? {
+            for header in browserOnlyHeaders where request.headers[header] != nil {
+                return "Requests carrying '\(header)' are refused: this endpoint is not reachable from a browser."
+            }
+
+            if let host = request.headers["host"] {
+                // Strip the port, keeping IPv6 brackets intact.
+                let hostname: String
+                if host.hasPrefix("["), let close = host.firstIndex(of: "]") {
+                    hostname = String(host[...close])
+                } else {
+                    hostname = host.split(separator: ":").first.map(String.init) ?? host
+                }
+                guard allowedHosts.contains(hostname.lowercased()) else {
+                    return "Unexpected Host '\(host)'. Only loopback names are accepted, which blocks DNS rebinding."
+                }
+            }
+
+            // Enforced on tool calls only, so /health stays trivially checkable.
+            if request.method == "POST", request.path.hasPrefix("/tools/") {
+                let contentType = request.headers["content-type"] ?? ""
+                guard contentType.lowercased().contains("application/json") else {
+                    return "Tool calls require Content-Type: application/json."
+                }
+            }
+
+            return nil
+        }
     }
 
     private func parseRequest(_ data: Data) -> HTTPRequest? {
@@ -98,13 +148,13 @@ final class LocalHTTPServer {
             return nil
         }
 
-        var contentLength = 0
+        var headers: [String: String] = [:]
         for line in lines.dropFirst() {
             let pair = line.split(separator: ":", maxSplits: 1).map(String.init)
-            if pair.count == 2, pair[0].lowercased() == "content-length" {
-                contentLength = Int(pair[1].trimmingCharacters(in: .whitespacesAndNewlines)) ?? 0
-            }
+            guard pair.count == 2 else { continue }
+            headers[pair[0].lowercased()] = pair[1].trimmingCharacters(in: .whitespacesAndNewlines)
         }
+        let contentLength = Int(headers["content-length"] ?? "") ?? 0
 
         let bodyStart = headerEnd.upperBound
         guard data.count >= bodyStart + contentLength else {
@@ -112,10 +162,20 @@ final class LocalHTTPServer {
         }
 
         let body = data[bodyStart..<(bodyStart + contentLength)]
-        return HTTPRequest(method: String(parts[0]), path: String(parts[1]), body: Data(body))
+        return HTTPRequest(
+            method: String(parts[0]),
+            path: String(parts[1]),
+            body: Data(body),
+            headers: headers
+        )
     }
 
     private func respond(to request: HTTPRequest, on connection: NWConnection) async {
+        if let reason = RequestGuard.rejection(for: request) {
+            send(status: 403, body: ["error": reason], on: connection)
+            return
+        }
+
         if request.method == "GET", request.path == "/health" || request.path == "/status" {
             let status = await statusHandler()
             send(status: 200, codable: status, on: connection)
@@ -155,6 +215,7 @@ final class LocalHTTPServer {
         switch status {
         case 200: reason = "OK"
         case 400: reason = "Bad Request"
+        case 403: reason = "Forbidden"
         case 404: reason = "Not Found"
         case 413: reason = "Payload Too Large"
         default: reason = "Internal Server Error"
