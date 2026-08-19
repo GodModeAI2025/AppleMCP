@@ -5,6 +5,19 @@ import M3MCPCore
 
 final class AppleIntelligenceProvider {
 
+    /// Fallback strings the helper scripts emit when the backing Shortcut is missing.
+    ///
+    /// The scripts end in `|| echo '<sentinel>'`, so AppleScript exits successfully and the failure
+    /// text arrives as if it were a result. Left unchecked, the tool answers `ok: true` with an error
+    /// message as its payload — an agent chaining these calls would summarize the words
+    /// "Writing Tools shortcut not available". These constants exist so the emitted string and the
+    /// check that detects it cannot drift apart.
+    private enum Sentinel {
+        static let writingTools = "Writing Tools shortcut not available"
+        static let translationMissing = "Translation requires the Translate shortcut to be set up"
+        static let translationUnavailable = "Translation not available"
+    }
+
     // MARK: - Writing Tools
 
     func writingTool(input: [String: JSONValue]) async -> ToolResponse {
@@ -30,6 +43,15 @@ final class AppleIntelligenceProvider {
         switch result {
         case .success(let output):
             let trimmed = output.trimmingCharacters(in: .whitespacesAndNewlines)
+
+            guard trimmed != Sentinel.writingTools, !trimmed.isEmpty else {
+                return ToolResponse(
+                    ok: false,
+                    source: "Apple Intelligence",
+                    message: "Writing Tools is not reachable: this requires a Shortcut named \"Writing Tools\" in the Shortcuts app. For on-device summarization without a Shortcut, use ai_summarize instead."
+                )
+            }
+
             let item = DataItem(
                 id: UUID().uuidString,
                 title: "Writing Tools: \(action)",
@@ -64,6 +86,17 @@ final class AppleIntelligenceProvider {
         switch result {
         case .success(let output):
             let trimmed = output.trimmingCharacters(in: .whitespacesAndNewlines)
+
+            guard trimmed != Sentinel.translationMissing,
+                  trimmed != Sentinel.translationUnavailable,
+                  !trimmed.isEmpty else {
+                return ToolResponse(
+                    ok: false,
+                    source: "Apple Intelligence",
+                    message: "Translation is not reachable: this requires a Shortcut named \"Translate\" in the Shortcuts app."
+                )
+            }
+
             let item = DataItem(
                 id: UUID().uuidString,
                 title: "Translation → \(targetLanguage)",
@@ -191,7 +224,7 @@ final class AppleIntelligenceProvider {
         set _input to "\(escaped)"
         set _instruction to "\(instruction)"
         -- Writing Tools via Shortcuts app
-        set _result to do shell script "shortcuts run 'Writing Tools' <<< " & quoted form of (_instruction & ": " & _input) & " 2>/dev/null || echo 'Writing Tools shortcut not available'"
+        set _result to do shell script "shortcuts run 'Writing Tools' <<< " & quoted form of (_instruction & ": " & _input) & " 2>/dev/null || echo '\(Sentinel.writingTools)'"
         return _result
         """
     }
@@ -204,7 +237,7 @@ final class AppleIntelligenceProvider {
 
         return """
         set _text to "\(escaped)"
-        set _result to do shell script "echo " & quoted form of "\(escaped)" & " | /usr/bin/python3 -c \\"import sys, subprocess; t = sys.stdin.read().strip(); r = subprocess.run(['shortcuts', 'run', 'Translate', '--input-stdin', '--output-type', 'text'], input=t.encode(), capture_output=True); print(r.stdout.decode() or r.stderr.decode() or 'Translation requires the Translate shortcut to be set up')\\"  2>/dev/null || echo 'Translation not available'"
+        set _result to do shell script "echo " & quoted form of "\(escaped)" & " | /usr/bin/python3 -c \\"import sys, subprocess; t = sys.stdin.read().strip(); r = subprocess.run(['shortcuts', 'run', 'Translate', '--input-stdin', '--output-type', 'text'], input=t.encode(), capture_output=True); print(r.stdout.decode() or r.stderr.decode() or '\(Sentinel.translationMissing)')\\"  2>/dev/null || echo '\(Sentinel.translationUnavailable)'"
         return _result
         """
     }

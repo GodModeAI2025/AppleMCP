@@ -16,6 +16,7 @@ AppleMCP consists of a SwiftUI app that bridges macOS privacy-controlled APIs an
 | **Photos** | Photos.framework | Photos Access |
 | **Voice Memos** | Local `CloudRecordings.db` + in-file transcripts, Speech.framework for on-device recognition | Full Disk Access, Speech Recognition (only for `voicememos_transcribe`) |
 | **Apple Intelligence** | Native APIs (ImagePlayground, Translation, Writing Tools) | None |
+| **Foundation Models** | On-device language model via FoundationModels (macOS 26, weak-linked) | None |
 
 ## Quick Start
 
@@ -32,7 +33,13 @@ swift test   # parser tests for the Voice Memos transcript format
 ./script/build_and_run.sh
 ```
 
-The app opens a macOS window and starts a local HTTP endpoint on `127.0.0.1:47651`. Click **Permissions** on first launch to grant macOS access to Calendar, Contacts, Reminders, Photos, and Notes.
+The app opens a macOS window and starts a local endpoint on a Unix domain socket at `~/Library/Application Support/M3MCP/mcp.sock`. Click **Permissions** on first launch to grant macOS access to Calendar, Contacts, Reminders, Photos, and Notes.
+
+Check that it is up:
+
+```bash
+curl --unix-socket ~/Library/Application\ Support/M3MCP/mcp.sock http://localhost/health
+```
 
 ### 3. Connect Your MCP Client
 
@@ -56,7 +63,7 @@ Add to your Claude Desktop MCP config (`~/Library/Application Support/Claude/cla
 claude mcp add applemcp /path/to/AppleMCP/.build/debug/M3MCPBridge
 ```
 
-The M3MCP UI app must be running for MCP calls to work. The bridge communicates with the app over a local loopback HTTP connection.
+The M3MCP UI app must be running for MCP calls to work. The bridge talks to the app over a Unix domain socket in the user's Application Support directory.
 
 ## MCP Tools
 
@@ -83,7 +90,8 @@ The M3MCP UI app must be running for MCP calls to work. The bridge communicates 
 
 | Tool | Description |
 |---|---|
-| `ai_writing_tools` | Summarize, rewrite, proofread, or change tone of text |
+| `ai_summarize` | Summarize text and extract action items with the on-device foundation model (macOS 26) |
+| `ai_writing_tools` | Summarize, rewrite, proofread, or change tone of text (needs a "Writing Tools" Shortcut) |
 | `ai_translate` | Translate text using Apple system translation |
 | `ai_image_playground` | Generate images from text descriptions (macOS 15.4+) |
 
@@ -99,7 +107,7 @@ The M3MCP UI app must be running for MCP calls to work. The bridge communicates 
 ## Architecture
 
 ```
-MCP Client (Claude) <--stdio--> M3MCPBridge <--HTTP 127.0.0.1:47651--> M3MCPApp (SwiftUI)
+MCP Client (Claude) <--stdio--> M3MCPBridge <--HTTP over Unix socket--> M3MCPApp (SwiftUI)
                                                                             |
                                        EventKit / Contacts / Photos / Mail Index / Voice Memos Store / Speech / AppleScript
 ```
@@ -121,7 +129,9 @@ See [docs/VOICE_MEMOS.md](docs/VOICE_MEMOS.md) for the store layout, the transcr
 
 ## Privacy
 
-All data stays local. The app uses macOS TCC (Transparency, Consent, and Control) for every data source. No network requests are made except to `127.0.0.1`. Mail reads the local SQLite index directly — it never sends emails or modifies any data. Voice Memos are opened read-only, and speech recognition runs on device whenever the locale supports it, so recordings never leave the Mac.
+All data stays local. The app uses macOS TCC (Transparency, Consent, and Control) for every data source. No network requests are made at all: the endpoint is a Unix domain socket, not a TCP port.
+
+Because the app holds Full Disk Access, anything that can reach the endpoint inherits that reach. The socket lives in a `0700` directory and is itself `0600`, so a sandboxed app — the case macOS TCC exists to stop — cannot connect, and a web page cannot reach it under any circumstances. Mail reads the local SQLite index directly — it never sends emails or modifies any data. Voice Memos are opened read-only, and speech recognition runs on device whenever the locale supports it, so recordings never leave the Mac.
 
 ## Requirements
 

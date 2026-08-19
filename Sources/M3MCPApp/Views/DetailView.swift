@@ -50,7 +50,7 @@ struct DetailView: View {
             VStack(alignment: .leading, spacing: 2) {
                 Text("Local MCP")
                     .font(.title3.weight(.semibold))
-                Text("127.0.0.1 / ::1 : \(m3mcpDefaultPort)  \(serverState)")
+                Text("\(M3MCPEndpoint.displayPath)  \(serverState)")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
@@ -135,6 +135,7 @@ private struct EndpointListView: View {
         ("voicememos_transcript", "/tools/voicememos_transcript"),
         ("voicememos_audio", "/tools/voicememos_audio"),
         ("voicememos_transcribe", "/tools/voicememos_transcribe"),
+        ("ai_summarize", "/tools/ai_summarize"),
         ("ai_writing_tools", "/tools/ai_writing_tools"),
         ("ai_translate", "/tools/ai_translate"),
         ("ai_image_playground", "/tools/ai_image_playground")
@@ -144,12 +145,17 @@ private struct EndpointListView: View {
         VStack(alignment: .leading, spacing: 8) {
             Text("MCP Tools")
                 .font(.headline)
+
+            Text(M3MCPEndpoint.healthCommand)
+                .font(.system(.caption, design: .monospaced))
+                .foregroundStyle(.secondary)
+                .textSelection(.enabled)
             Grid(alignment: .leading, horizontalSpacing: 18, verticalSpacing: 6) {
                 ForEach(tools, id: \.0) { name, endpoint in
                     GridRow {
                         Text(name)
                             .font(.system(.body, design: .monospaced))
-                        Text("http://127.0.0.1:\(m3mcpDefaultPort)\(endpoint)")
+                        Text(endpoint)
                             .font(.system(.body, design: .monospaced))
                             .foregroundStyle(.secondary)
                             .textSelection(.enabled)

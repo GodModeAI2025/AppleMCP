@@ -376,6 +376,7 @@ final class VoiceMemosProvider {
         let duration: Double
         let filename: String
         let fileURL: URL?
+        let deletedAt: Date?
 
         var subtitle: String {
             var parts: [String] = []
@@ -481,6 +482,11 @@ final class VoiceMemosProvider {
             metadata["available_locally"] = "false"
         }
 
+        if let deletedAt = row.deletedAt {
+            metadata["deleted_at"] = ISO8601DateFormatter().string(from: deletedAt)
+            metadata["state"] = "recently_deleted"
+        }
+
         return metadata
     }
 
@@ -564,6 +570,16 @@ final class VoiceMemosProvider {
         var textBindings: [String] = []
         var dateBinding: Double?
 
+        // Rows without a file name are placeholders the Voice Memos UI does not show either.
+        if let pathColumn = schema.path {
+            conditions.append("(\(quote(pathColumn)) IS NOT NULL AND TRIM(\(quote(pathColumn))) != '')")
+        }
+
+        // ZEVICTIONDATE marks the start of the Recently Deleted window, not an iCloud eviction.
+        if let evictionColumn = schema.evictionDate {
+            conditions.append("\(quote(evictionColumn)) IS NULL")
+        }
+
         if !titleQuery.isEmpty {
             var titleConditions: [String] = []
             for column in [schema.label, schema.title, schema.path].compactMap({ $0 }) {
@@ -583,14 +599,7 @@ final class VoiceMemosProvider {
 
         let whereClause = conditions.isEmpty ? "" : "WHERE \(conditions.joined(separator: " AND "))"
         let orderColumn = schema.date ?? "Z_PK"
-        let selectList = [
-            quote("Z_PK"),
-            schema.path.map(quote) ?? "NULL",
-            schema.label.map(quote) ?? "NULL",
-            schema.title.map(quote) ?? "NULL",
-            schema.date.map(quote) ?? "NULL",
-            schema.duration.map(quote) ?? "NULL"
-        ].joined(separator: ", ")
+        let selectList = selectClause(for: schema)
 
         let total = try countRecordings(
             database: database,
@@ -665,14 +674,7 @@ final class VoiceMemosProvider {
 
     private func readRecording(database: OpaquePointer, store: RecordingStore, id: String) throws -> RecordingRow? {
         let schema = try recordingSchema(database: database)
-        let selectList = [
-            quote("Z_PK"),
-            schema.path.map(quote) ?? "NULL",
-            schema.label.map(quote) ?? "NULL",
-            schema.title.map(quote) ?? "NULL",
-            schema.date.map(quote) ?? "NULL",
-            schema.duration.map(quote) ?? "NULL"
-        ].joined(separator: ", ")
+        let selectList = selectClause(for: schema)
 
         let sql = "SELECT \(selectList) FROM ZCLOUDRECORDING WHERE Z_PK = ? LIMIT 1"
 
@@ -698,6 +700,7 @@ final class VoiceMemosProvider {
         let storedTitle = textValue(statement, column: 3)
         let date = dateValue(statement, column: 4)
         let duration = doubleValue(statement, column: 5) ?? 0
+        let deletedAt = dateValue(statement, column: 6)
 
         let filename = path.isEmpty ? "" : URL(fileURLWithPath: path).lastPathComponent
         let fileURL = resolveRecording(path: path, store: store)
@@ -717,7 +720,8 @@ final class VoiceMemosProvider {
             date: date,
             duration: duration,
             filename: filename,
-            fileURL: fileURL
+            fileURL: fileURL,
+            deletedAt: deletedAt
         )
     }
 
@@ -745,6 +749,19 @@ final class VoiceMemosProvider {
         let title: String?
         let date: String?
         let duration: String?
+        let evictionDate: String?
+    }
+
+    private func selectClause(for schema: RecordingSchema) -> String {
+        [
+            quote("Z_PK"),
+            schema.path.map(quote) ?? "NULL",
+            schema.label.map(quote) ?? "NULL",
+            schema.title.map(quote) ?? "NULL",
+            schema.date.map(quote) ?? "NULL",
+            schema.duration.map(quote) ?? "NULL",
+            schema.evictionDate.map(quote) ?? "NULL"
+        ].joined(separator: ", ")
     }
 
     private func recordingSchema(database: OpaquePointer) throws -> RecordingSchema {
@@ -758,15 +775,26 @@ final class VoiceMemosProvider {
             label: pick(columns, ["ZCUSTOMLABEL", "ZCUSTOMLABELFORSORTING"]),
             title: pick(columns, ["ZENCRYPTEDTITLE", "ZTITLE"]),
             date: pick(columns, ["ZDATE", "ZCREATIONDATE"]),
-            duration: pick(columns, ["ZDURATION"])
+            duration: pick(columns, ["ZDURATION"]),
+            evictionDate: pick(columns, ["ZEVICTIONDATE"])
         )
     }
 
     // MARK: - SQLite helpers
 
+    /// Runs `body` against a private copy of the store.
+    ///
+    /// `CloudRecordings.db` runs in WAL mode, and the log routinely holds the newest recordings.
+    /// Opening the live file read-only cannot replay that log — SQLite either fails to create the
+    /// `-shm` file or silently answers from the main database alone, which hides every memo that has
+    /// not been checkpointed yet. Copying the file set and opening the copy read-write lets SQLite
+    /// replay the log without ever writing to the user's store.
     private func withDatabase<T>(at url: URL, body: (OpaquePointer) throws -> T) throws -> T {
+        let snapshot = try makeSnapshot(of: url)
+        defer { try? fileManager.removeItem(at: snapshot.directory) }
+
         var database: OpaquePointer?
-        let status = sqlite3_open_v2(url.path, &database, SQLITE_OPEN_READONLY | SQLITE_OPEN_FULLMUTEX, nil)
+        let status = sqlite3_open_v2(snapshot.database.path, &database, SQLITE_OPEN_READWRITE | SQLITE_OPEN_FULLMUTEX, nil)
 
         guard status == SQLITE_OK, let database else {
             let message = database.map(databaseMessage) ?? "OSStatus \(status)"
@@ -779,6 +807,45 @@ final class VoiceMemosProvider {
         defer { sqlite3_close(database) }
         sqlite3_busy_timeout(database, 800)
         return try body(database)
+    }
+
+    private struct StoreSnapshot {
+        let directory: URL
+        let database: URL
+    }
+
+    /// Copies the store plus its write-ahead log into a private directory.
+    private func makeSnapshot(of url: URL) throws -> StoreSnapshot {
+        let directory = fileManager.temporaryDirectory
+            .appendingPathComponent("M3MCP-VoiceMemos-\(UUID().uuidString)", isDirectory: true)
+
+        do {
+            try fileManager.createDirectory(
+                at: directory,
+                withIntermediateDirectories: true,
+                attributes: [.posixPermissions: 0o700]
+            )
+        } catch {
+            throw VoiceMemoStoreFailure("Cannot prepare a temporary copy of the Voice Memos store: \(error.localizedDescription)")
+        }
+
+        let database = directory.appendingPathComponent(url.lastPathComponent, isDirectory: false)
+
+        do {
+            try fileManager.copyItem(at: url, to: database)
+        } catch {
+            try? fileManager.removeItem(at: directory)
+            throw VoiceMemoStoreFailure("Cannot read the Voice Memos store at \(url.path). Grant Full Disk Access to M3MCP, then restart the app. Detail: \(error.localizedDescription)")
+        }
+
+        // The sidecars are optional: they only exist while the store has uncheckpointed changes.
+        for suffix in ["-wal", "-shm"] {
+            let sidecar = URL(fileURLWithPath: url.path + suffix)
+            guard fileManager.fileExists(atPath: sidecar.path) else { continue }
+            try? fileManager.copyItem(at: sidecar, to: URL(fileURLWithPath: database.path + suffix))
+        }
+
+        return StoreSnapshot(directory: directory, database: database)
     }
 
     private func tableColumns(database: OpaquePointer, table: String) throws -> Set<String> {

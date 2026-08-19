@@ -24,8 +24,31 @@ The relevant table is `ZCLOUDRECORDING`:
 | `ZDATE` | Core Data timestamp, seconds since 2001-01-01 |
 | `ZDURATION` | Length in seconds |
 
-The store is opened read-only (`SQLITE_OPEN_READONLY`), and column names are resolved through
-`PRAGMA table_info` so a schema change in a future macOS release degrades instead of breaking.
+Column names are resolved through `PRAGMA table_info`, so a schema change in a future macOS release
+degrades instead of breaking.
+
+### Why the store is copied before reading
+
+`CloudRecordings.db` runs in WAL mode, and the write-ahead log routinely holds the newest
+recordings — it can be larger than the main database. Opening the live file read-only cannot replay
+that log: SQLite either fails to create the `-shm` file or answers from the main database alone, so
+recently recorded memos are missing from the results without any error.
+
+Each read therefore copies the database plus its `-wal` and `-shm` sidecars into a private `0700`
+directory, opens the *copy* read-write so SQLite can replay the log, and deletes the copy afterwards.
+The user's store is never opened for writing.
+
+### Rows that are not recordings
+
+Two kinds of rows are excluded from `voicememos_search`:
+
+- **Recently deleted memos.** `ZEVICTIONDATE` is the deletion timestamp — it marks the start of the
+  roughly 30 day Recently Deleted window, not an iCloud audio eviction. `voicememos_read` still
+  resolves such a memo by id, but labels it with `state: recently_deleted` and `deleted_at`.
+- **Placeholders.** Rows with an empty `ZPATH` have no audio file and do not appear in Voice Memos.
+
+Both findings come from [PR #1](https://github.com/GodModeAI2025/AppleMCP/pull/1) by
+[@aheusingfeld](https://github.com/aheusingfeld), who established them by probing a live store.
 
 ## Transcripts
 
