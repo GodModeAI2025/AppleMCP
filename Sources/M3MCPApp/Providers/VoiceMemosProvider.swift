@@ -251,6 +251,14 @@ final class VoiceMemosProvider {
             // behind and every attempt to read one fails. They must never surface as memos.
             guard let fileName, !fileName.isEmpty else { continue }
 
+            // ZPATH is a bare filename. Reject anything path-shaped: this process holds Full Disk
+            // Access, so a crafted value — values arrive via iCloud from other devices — would
+            // otherwise make it read and transcribe an arbitrary file outside the Recordings folder.
+            guard !fileName.contains("/"), !fileName.contains(".."), fileName != "." else {
+                AppLogger.log("Voice memo \(id) has a suspicious ZPATH (\(fileName)) — skipping.")
+                continue
+            }
+
             let audioURL = directory.appendingPathComponent(fileName)
             let exists = fileManager.fileExists(atPath: audioURL.path)
             let deletedAt = SQLiteSnapshot.double(statement, column: 6).map {

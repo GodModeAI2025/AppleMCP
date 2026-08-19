@@ -257,7 +257,17 @@ enum TranscriptCache {
             return nil
         }
         let directory = base.appendingPathComponent("M3MCP/transcripts", isDirectory: true)
-        try? FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        // Owner-only. The audio these transcripts come from is TCC-protected, so writing the
+        // transcribed content world-readable would hand any unprivileged local process the contents of
+        // private voice memos — including messages from third parties.
+        try? FileManager.default.createDirectory(
+            at: directory,
+            withIntermediateDirectories: true,
+            attributes: [.posixPermissions: 0o700]
+        )
+        // createDirectory only applies attributes when it creates the directory, so tighten an
+        // existing one (including caches written by earlier versions) as well.
+        try? FileManager.default.setAttributes([.posixPermissions: 0o700], ofItemAtPath: directory.path)
         return directory
     }
 
@@ -284,5 +294,8 @@ enum TranscriptCache {
         // pin the memo to an empty result forever, and the miss would look like a cache bug.
         guard !transcript.isEmpty, let digest, let url = location(forDigest: digest) else { return }
         try? transcript.write(to: url, atomically: true, encoding: .utf8)
+        // Written after the fact because `atomically` replaces the file via a temporary, which would
+        // discard permissions supplied up front.
+        try? FileManager.default.setAttributes([.posixPermissions: 0o600], ofItemAtPath: url.path)
     }
 }
