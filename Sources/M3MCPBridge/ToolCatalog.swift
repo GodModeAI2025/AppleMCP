@@ -52,17 +52,45 @@ enum ToolCatalog {
         ),
         MCPTool(
             name: "mail_search",
-            description: "Read/search messages from the local Apple Mail index without driving Mail.app. Requires Full Disk Access if the Mail store is protected.",
+            description: "Read/search messages across every mailbox in the local Apple Mail index — Sent, Archive and user folders included — without driving Mail.app. Always read the response's `meta`: `total` is how many messages match, `has_more`/`truncated` say whether this is the whole set, and `recipients_searchable` says whether recipient matching was available. Page with `offset`. Requires Full Disk Access if the Mail store is protected.",
             schema: querySchema(extra: [
-                "unread_only": ["type": "boolean", "description": "When true, only return unread inbox messages."],
-                "include_body": ["type": "boolean", "description": "When true, include message body snippets. Default false."],
-                "since_hours": ["type": "integer", "description": "Only return messages received within the last N hours, e.g. 24."],
-                "max_candidates": ["type": "integer", "description": "Maximum inbox messages to inspect. Default 500."]
+                "offset": ["type": "integer", "description": "Number of matches to skip, for paging. Default 0. Compare with meta.total to know when to stop."],
+                "mailbox": [
+                    "type": "string",
+                    "description": "Restrict the search to one mailbox, by id, full path, name, or role (inbox, sent, drafts, archive, junk, trash). A name that matches nothing is reported rather than silently ignored. Call mail_list_mailboxes to see what exists."
+                ],
+                "fields": [
+                    "type": "array",
+                    "items": ["type": "string"],
+                    "description": "Which fields to match against: subject, sender, recipients, body. Default [subject, sender, recipients]. sender and recipients match the display name AND the address, so a firstname.lastname query works. body reads message files and is bounded by max_candidates."
+                ],
+                "match": [
+                    "type": "string",
+                    "description": "How a multi-word query is applied: all (default — every term must appear somewhere in the scoped fields), any, or phrase (the whole query as one substring, which is the pre-0.3 behaviour)."
+                ],
+                "unread_only": ["type": "boolean", "description": "When true, only return unread messages."],
+                "include_junk": ["type": "boolean", "description": "When true, also search junk mailboxes and messages flagged as junk. Default false."],
+                "include_body": ["type": "boolean", "description": "When true, include a message body snippet in each item's preview. Default false."],
+                "include_recipients": ["type": "boolean", "description": "When true, include each message's recipients as metadata.to. Default false."],
+                "auto_intent": [
+                    "type": "boolean",
+                    "description": "When true (default), words like 'unread', 'ungelesen', 'today' or '24h' in the query also set the matching filter. Set false to search those words literally; meta.query_rewritten reports whether it fired."
+                ],
+                "since_hours": ["type": "integer", "description": "Only return messages received within the last N hours, e.g. 24. Applied in the query, not after the page was cut."],
+                "max_candidates": ["type": "integer", "description": "Upper bound on messages inspected when body matching is requested. Default 500. meta.scan_capped says whether the bound was reached."]
+            ])
+        ),
+        MCPTool(
+            name: "mail_list_mailboxes",
+            description: "List the mailboxes in the local Apple Mail index with their account, path, role (inbox, sent, drafts, archive, junk, trash, folder) and message counts. Call this before scoping a mail_search to a mailbox, so the name is one that exists.",
+            schema: objectSchema(properties: [
+                "query": ["type": "string", "description": "Filter on mailbox path, name or account. Empty returns all."],
+                "role": ["type": "string", "description": "Only return mailboxes with this role: inbox, sent, drafts, archive, junk, trash, folder."]
             ])
         ),
         MCPTool(
             name: "mail_read",
-            description: "Read the full content of a single email by its id (returned from mail_search). Returns subject, sender, recipients, date, and the full message body. Requires Full Disk Access.",
+            description: "Read the full content of a single email by its id (returned from mail_search). Returns subject, sender, recipients, date, mailbox, and the full message body. Requires Full Disk Access.",
             schema: objectSchema(properties: [
                 "id": ["type": "string", "description": "Message id returned by mail_search."]
             ], required: ["id"])

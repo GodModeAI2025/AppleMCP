@@ -2,38 +2,103 @@ import Foundation
 import M3MCPCore
 import SQLite3
 
+/// Read-only access to the local Apple Mail store.
+///
+/// Mail keeps an SQLite index (`Envelope Index`) beside the `.emlx` files, so this provider reads the
+/// index directly instead of driving Mail.app through AppleEvents. Every connection is opened
+/// `SQLITE_OPEN_READONLY`, and no code path here sends, files, deletes or marks anything.
 final class MailProvider {
     private let fileManager = FileManager.default
+    private let sourceName = "Mail Local Index"
+
+    /// Relocates the Mail store root the provider reads, so a synthetic index can stand in for the
+    /// real one. Reading `~/Library/Mail` needs Full Disk Access, and a TCC grant follows the
+    /// *responsible process*, so a build started from a terminal inherits that terminal's grants —
+    /// which makes a development build unable to read real mail even on the machine that owns it.
+    /// Without this seam the search behaviour cannot be tested at all.
+    ///
+    /// Same shape as `M3MCP_SOCKET_DIR`, and read-only like everything else here.
+    static let mailRootEnvironmentKey = "M3MCP_MAIL_ROOT"
+
+    // MARK: - Tools
 
     func search(input: [String: JSONValue]) async -> ToolResponse {
-        let rawQuery = input.string("query")
-        let limit = max(1, min(input.int("limit", default: 20), 50))
-        let queryIntent = parseQueryIntent(rawQuery)
-        let unreadOnly = input.bool("unread_only", default: queryIntent.unreadOnly)
-        let sinceHours = max(0, input.int("since_hours", default: queryIntent.sinceHours ?? 0))
-        let maxCandidates = max(limit, min(input.int("max_candidates", default: 500), 2_000))
+        let request = SearchRequest(input: input)
 
         do {
             let indexURL = try locateEnvelopeIndex()
-            let rows = try readMessages(
-                from: indexURL,
-                query: queryIntent.query,
-                unreadOnly: unreadOnly,
-                sinceHours: sinceHours,
-                maxCandidates: maxCandidates
-            )
-            .prefix(limit)
-
-            let items = rows.map(makeItem)
-            let message = items.isEmpty ? "No matching messages found in the local Mail index." : nil
-            return ToolResponse(ok: true, source: "Mail Local Index", items: Array(items), message: message)
+            let mailRoot = indexURL.deletingLastPathComponent().deletingLastPathComponent()
+            return try withDatabase(at: indexURL) { database in
+                try runSearch(request, database: database, mailRoot: mailRoot)
+            }
         } catch {
-            return await appleScriptSearch(
-                query: queryIntent.query,
-                unreadOnly: unreadOnly,
-                sinceHours: sinceHours,
-                limit: limit
+            return await appleScriptSearch(request: request)
+        }
+    }
+
+    func listMailboxes(input: [String: JSONValue]) async -> ToolResponse {
+        let query = StringSanitizer.lower(input.string("query"))
+        let role = StringSanitizer.lower(input.string("role"))
+
+        do {
+            let indexURL = try locateEnvelopeIndex()
+            let boxes = try withDatabase(at: indexURL) { database in
+                try readMailboxes(database: database)
+            }
+
+            let filtered = boxes.values
+                .filter { box in
+                    if !role.isEmpty, box.role != role { return false }
+                    guard !query.isEmpty else { return true }
+                    return StringSanitizer.lower(box.path).contains(query)
+                        || StringSanitizer.lower(box.name).contains(query)
+                        || StringSanitizer.lower(box.account).contains(query)
+                }
+                .sorted { lhs, rhs in
+                    if lhs.account != rhs.account { return lhs.account < rhs.account }
+                    return lhs.path.localizedLowercase < rhs.path.localizedLowercase
+                }
+
+            let items = filtered.map { box in
+                DataItem(
+                    id: box.id,
+                    title: box.path.isEmpty ? box.name : box.path,
+                    subtitle: box.account.isEmpty ? box.role : "\(box.account) · \(box.role)",
+                    kind: "mail_mailbox",
+                    source: sourceName,
+                    preview: box.role,
+                    metadata: [
+                        "mailbox_id": box.id,
+                        "role": box.role,
+                        "name": box.name,
+                        "path": box.path,
+                        "account": box.account,
+                        "url": box.url,
+                        "message_count": String(box.totalCount ?? 0),
+                        "unread_count": String(box.unreadCount ?? 0),
+                        "message_count_known": String(box.totalCount != nil)
+                    ]
+                )
+            }
+
+            return ToolResponse(
+                ok: true,
+                source: sourceName,
+                items: items,
+                message: items.isEmpty ? "No mailboxes matched." : nil,
+                meta: [
+                    "returned": String(items.count),
+                    "total": String(boxes.count),
+                    "has_more": "false",
+                    "truncated": "false",
+                    "role_filter": role,
+                    "query": query
+                ]
             )
+        } catch let failure as MailStoreFailure {
+            return ToolResponse(ok: false, source: sourceName, message: failure.message)
+        } catch {
+            return ToolResponse(ok: false, source: sourceName, message: error.localizedDescription)
         }
     }
 
@@ -81,34 +146,756 @@ final class MailProvider {
         }
     }
 
-    private func makeDetailResponse(_ detail: MailDetail) -> ToolResponse {
-        var metadata: [String: String] = [
-            "sender": detail.sender
-        ]
-        if let messageID = detail.messageID, !messageID.isEmpty {
-            metadata["message_id"] = messageID
-        }
-        if let date = detail.receivedDate {
-            metadata["received"] = ISO8601DateFormatter().string(from: date)
-        }
-        if let isRead = detail.isRead {
-            metadata["read"] = String(isRead)
-        }
-        if !detail.recipients.isEmpty {
-            metadata["to"] = detail.recipients
+    // MARK: - Request
+
+    /// Everything the caller asked for, resolved once so the SQL builder and the response metadata
+    /// cannot disagree about it.
+    private struct SearchRequest {
+        static let allFields = ["subject", "sender", "recipients", "body"]
+
+        let rawQuery: String
+        let query: String
+        let queryRewritten: Bool
+        let terms: [String]
+        let match: String
+        let fields: [String]
+        let limit: Int
+        let offset: Int
+        let unreadOnly: Bool
+        let sinceHours: Int
+        let includeJunk: Bool
+        let mailboxFilter: String
+        let includeBody: Bool
+        let includeRecipients: Bool
+        let maxCandidates: Int
+
+        init(input: [String: JSONValue]) {
+            rawQuery = input.string("query").trimmingCharacters(in: .whitespacesAndNewlines)
+
+            // The old behaviour read "unread", "heute", "24h" out of the query text and turned them
+            // into filters — silently, so `query:"heute"` searched for the literal word AND applied a
+            // 24-hour window, and returned nothing. It stays the default because callers rely on it,
+            // but it is switchable and the response says whether it fired.
+            let autoIntent = input.bool("auto_intent", default: true)
+            let intent = autoIntent ? MailProvider.parseQueryIntent(rawQuery) : (rawQuery, false, nil)
+            query = intent.0
+            queryRewritten = autoIntent && (intent.0 != rawQuery || intent.1 || intent.2 != nil)
+
+            let requested = StringSanitizer.lower(input.string("match", default: "all"))
+            match = ["all", "any", "phrase"].contains(requested) ? requested : "all"
+
+            if match == "phrase" {
+                terms = query.isEmpty ? [] : [query]
+            } else {
+                terms = query
+                    .split(whereSeparator: { $0 == " " || $0 == "\t" || $0 == "\n" })
+                    .map(String.init)
+                    .filter { !$0.isEmpty }
+            }
+
+            let asked = MailProvider.stringList(input, "fields") ?? ["subject", "sender", "recipients"]
+            let normalised = asked
+                .map { StringSanitizer.lower($0) }
+                .filter { SearchRequest.allFields.contains($0) }
+            fields = normalised.isEmpty ? ["subject", "sender", "recipients"] : normalised
+
+            // 500, not 50. The old ceiling was low enough that a week of mail did not fit in one
+            // response, and nothing said so.
+            limit = max(1, min(input.int("limit", default: 25), 500))
+            offset = max(0, input.int("offset", default: 0))
+            unreadOnly = input.bool("unread_only", default: autoIntent ? intent.1 : false)
+            sinceHours = max(0, input.int("since_hours", default: (autoIntent ? intent.2 : nil) ?? 0))
+            includeJunk = input.bool("include_junk", default: false)
+            mailboxFilter = input.string("mailbox").trimmingCharacters(in: .whitespacesAndNewlines)
+            includeBody = input.bool("include_body", default: false)
+            includeRecipients = input.bool("include_recipients", default: false)
+            maxCandidates = max(limit + offset, min(input.int("max_candidates", default: 500), 5_000))
         }
 
-        let item = DataItem(
-            id: detail.id,
-            title: detail.subject.isEmpty ? "(no subject)" : detail.subject,
-            subtitle: detail.sender,
+        var searchesBody: Bool { fields.contains("body") && !terms.isEmpty }
+    }
+
+    // MARK: - Search
+
+    private func runSearch(
+        _ request: SearchRequest,
+        database: OpaquePointer,
+        mailRoot: URL
+    ) throws -> ToolResponse {
+        let schema = try MailSchema(database: database, provider: self)
+        let mailboxes = try readMailboxes(database: database)
+
+        var selected: Set<String>?
+        var mailboxFilterMatched = 0
+        if !request.mailboxFilter.isEmpty {
+            let matches = matchMailboxes(request.mailboxFilter, in: mailboxes)
+            mailboxFilterMatched = matches.count
+            selected = Set(matches.map { $0.id })
+            if matches.isEmpty {
+                return ToolResponse(
+                    ok: true,
+                    source: sourceName,
+                    items: [],
+                    message: "No mailbox matches '\(request.mailboxFilter)'. Call mail_list_mailboxes to see the names.",
+                    meta: baseMeta(request, schema: schema, mailboxes: mailboxes, total: 0, returned: 0,
+                                  totalExact: true, hasMore: false, scanned: 0, scanCapped: false,
+                                  mailboxFilterMatched: 0)
+                )
+            }
+        }
+
+        let clause = try buildWhere(request, schema: schema, mailboxIDs: selected)
+
+        // Body matching cannot be expressed in SQL — the text is in the .emlx files. So a body search
+        // reads a bounded candidate window and filters it here, and says both things in the metadata:
+        // how many rows it looked at, and whether that window was itself cut short.
+        if request.searchesBody {
+            let candidates = try fetchRows(
+                request, schema: schema, clause: clause, database: database,
+                limit: request.maxCandidates, offset: 0
+            )
+            let scanCapped = candidates.count >= request.maxCandidates
+            let recipientText = request.fields.contains("recipients") || request.includeRecipients
+                ? try readRecipients(database: database, schema: schema, messageIDs: candidates.map { $0.id })
+                : [:]
+
+            var matched: [MailRow] = []
+            var bodies: [String: String] = [:]
+            for row in candidates {
+                let body = loadBody(row: row, mailboxes: mailboxes, mailRoot: mailRoot, database: database)
+                let hits = fieldsMatched(
+                    request, row: row, recipients: recipientText[row.id] ?? "", body: body
+                )
+                guard !hits.isEmpty else { continue }
+                matched.append(row)
+                if request.includeBody { bodies[row.id] = body }
+            }
+
+            let page = Array(matched.dropFirst(request.offset).prefix(request.limit))
+            let hasMore = matched.count > request.offset + page.count
+            let items = page.map { row in
+                makeItem(
+                    row,
+                    mailboxes: mailboxes,
+                    fieldsMatched: fieldsMatched(request, row: row, recipients: recipientText[row.id] ?? "",
+                                                 body: bodies[row.id] ?? ""),
+                    recipients: request.includeRecipients ? recipientText[row.id] : nil,
+                    bodySnippet: request.includeBody ? bodies[row.id] : nil
+                )
+            }
+
+            return ToolResponse(
+                ok: true,
+                source: sourceName,
+                items: items,
+                message: message(items: items, hasMore: hasMore, scanCapped: scanCapped, request: request),
+                meta: baseMeta(request, schema: schema, mailboxes: mailboxes, total: matched.count,
+                               returned: items.count, totalExact: !scanCapped, hasMore: hasMore,
+                               scanned: candidates.count, scanCapped: scanCapped,
+                               mailboxFilterMatched: mailboxFilterMatched)
+            )
+        }
+
+        let total = try countRows(schema: schema, clause: clause, database: database)
+        let rows = try fetchRows(
+            request, schema: schema, clause: clause, database: database,
+            limit: request.limit, offset: request.offset
+        )
+        let recipientText = request.fields.contains("recipients") || request.includeRecipients
+            ? try readRecipients(database: database, schema: schema, messageIDs: rows.map { $0.id })
+            : [:]
+
+        let items = rows.map { row -> DataItem in
+            var body = ""
+            if request.includeBody {
+                body = loadBody(row: row, mailboxes: mailboxes, mailRoot: mailRoot, database: database)
+            }
+            return makeItem(
+                row,
+                mailboxes: mailboxes,
+                fieldsMatched: fieldsMatched(request, row: row, recipients: recipientText[row.id] ?? "", body: body),
+                recipients: request.includeRecipients ? recipientText[row.id] : nil,
+                bodySnippet: request.includeBody ? body : nil
+            )
+        }
+
+        let hasMore = total > request.offset + items.count
+        return ToolResponse(
+            ok: true,
+            source: sourceName,
+            items: items,
+            message: message(items: items, hasMore: hasMore, scanCapped: false, request: request),
+            meta: baseMeta(request, schema: schema, mailboxes: mailboxes, total: total, returned: items.count,
+                           totalExact: true, hasMore: hasMore, scanned: total, scanCapped: false,
+                           mailboxFilterMatched: mailboxFilterMatched)
+        )
+    }
+
+    /// The response fields a caller branches on. `message` is prose and gets ignored; a capped result
+    /// and a complete one were previously indistinguishable, which is how a scan of a week could
+    /// report three days and look like a success.
+    private func baseMeta(
+        _ request: SearchRequest,
+        schema: MailSchema,
+        mailboxes: [String: MailboxRow],
+        total: Int,
+        returned: Int,
+        totalExact: Bool,
+        hasMore: Bool,
+        scanned: Int,
+        scanCapped: Bool,
+        mailboxFilterMatched: Int
+    ) -> [String: String] {
+        [
+            "returned": String(returned),
+            "offset": String(request.offset),
+            "limit": String(request.limit),
+            "total": String(total),
+            "total_exact": String(totalExact),
+            "has_more": String(hasMore),
+            "truncated": String(hasMore || scanCapped),
+            "scanned": String(scanned),
+            "scan_capped": String(scanCapped),
+            "fields": request.fields.joined(separator: ","),
+            "match": request.match,
+            "query": request.query,
+            "query_rewritten": String(request.queryRewritten),
+            "unread_only": String(request.unreadOnly),
+            "since_hours": String(request.sinceHours),
+            "include_junk": String(request.includeJunk),
+            "mailbox_filter": request.mailboxFilter,
+            "mailbox_filter_matched": String(mailboxFilterMatched),
+            "mailboxes_known": String(mailboxes.count),
+            "recipients_searchable": String(schema.canSearchRecipients),
+            "body_searchable": "true"
+        ]
+    }
+
+    private func message(items: [DataItem], hasMore: Bool, scanCapped: Bool, request: SearchRequest) -> String? {
+        if items.isEmpty {
+            if request.offset > 0 {
+                return "No messages at offset \(request.offset). Lower offset, or read meta.total."
+            }
+            return "No matching messages found in the local Mail index."
+        }
+        if scanCapped {
+            return "Body search inspected \(request.maxCandidates) candidate messages; meta.scan_capped is true and meta.total is a lower bound. Raise max_candidates to search further back."
+        }
+        if hasMore {
+            return "meta.has_more is true: this is not the whole result set. Page with offset."
+        }
+        return nil
+    }
+
+    // MARK: - SQL
+
+    /// Column and table names resolved once against whatever schema this machine's Mail happens to
+    /// have. Nothing here assumes a column exists.
+    private struct MailSchema {
+        let subject: String?
+        let sender: String?
+        let messageID: String?
+        let date: String?
+        let read: String?
+        let deleted: String?
+        let junk: String?
+        let mailbox: String?
+
+        let hasSubjectsLookup: Bool
+        let hasAddressesLookup: Bool
+        let addressComment: String?
+
+        let recipientsMessageColumn: String?
+        let recipientsAddressColumn: String?
+
+        init(database: OpaquePointer, provider: MailProvider) throws {
+            let columns = try provider.tableColumns(database: database, table: "messages")
+            guard !columns.isEmpty else {
+                throw MailStoreFailure("Mail index is readable, but the messages table was not found.")
+            }
+
+            subject = provider.pick(columns, ["subject"])
+            sender = provider.pick(columns, ["sender"])
+            messageID = provider.pick(columns, ["message_id", "messageid"])
+            date = provider.pick(columns, ["date_received", "dateReceived", "date_sent", "dateSent", "date_created"])
+            read = provider.pick(columns, ["read", "is_read", "isRead"])
+            deleted = provider.pick(columns, ["deleted", "is_deleted", "isDeleted"])
+            junk = provider.pick(columns, ["junk", "is_junk", "isJunk"])
+            mailbox = provider.pick(columns, ["mailbox"])
+
+            let subjects = try provider.tableColumns(database: database, table: "subjects")
+            let addresses = try provider.tableColumns(database: database, table: "addresses")
+            hasSubjectsLookup = subjects.contains("subject") && subject != nil
+            hasAddressesLookup = addresses.contains("address") && sender != nil
+            addressComment = hasAddressesLookup && addresses.contains("comment") ? "comment" : nil
+
+            let recipients = try provider.tableColumns(database: database, table: "recipients")
+            if recipients.isEmpty || !addresses.contains("address") {
+                recipientsMessageColumn = nil
+                recipientsAddressColumn = nil
+            } else {
+                recipientsMessageColumn = provider.pick(recipients, ["message"])
+                recipientsAddressColumn = provider.pick(recipients, ["address"])
+            }
+        }
+
+        var canSearchRecipients: Bool {
+            recipientsMessageColumn != nil && recipientsAddressColumn != nil
+        }
+
+        /// What to *show* as the sender: a display name when there is one.
+        var senderDisplayExpression: String {
+            guard hasAddressesLookup else {
+                return sender.map { "messages.\(MailProvider.quoted($0))" } ?? "''"
+            }
+            if let comment = addressComment {
+                return "COALESCE(addresses.\(MailProvider.quoted(comment)), addresses.\(MailProvider.quoted("address")), '')"
+            }
+            return "COALESCE(addresses.\(MailProvider.quoted("address")), '')"
+        }
+
+        /// What to *match* the sender against: the display name AND the address.
+        ///
+        /// Using one expression for both was the bug. `COALESCE(comment, address)` shows the better
+        /// string and searches the worse one: any address behind a display name became unsearchable,
+        /// which is why a `firstname.lastname` query found nothing unless the address happened to
+        /// appear in a subject line.
+        var senderMatchExpression: String {
+            guard hasAddressesLookup else { return senderDisplayExpression }
+            guard let comment = addressComment else {
+                return "COALESCE(addresses.\(MailProvider.quoted("address")), '')"
+            }
+            return "(COALESCE(addresses.\(MailProvider.quoted(comment)), '') || ' ' || COALESCE(addresses.\(MailProvider.quoted("address")), ''))"
+        }
+
+        var subjectExpression: String {
+            if hasSubjectsLookup { return "subjects.\(MailProvider.quoted("subject"))" }
+            return subject.map { "messages.\(MailProvider.quoted($0))" } ?? "''"
+        }
+
+        var joins: [String] {
+            var out: [String] = []
+            if hasSubjectsLookup, let subject {
+                out.append("LEFT JOIN subjects ON messages.\(MailProvider.quoted(subject)) = subjects.ROWID")
+            }
+            if hasAddressesLookup, let sender {
+                out.append("LEFT JOIN addresses ON messages.\(MailProvider.quoted(sender)) = addresses.ROWID")
+            }
+            return out
+        }
+    }
+
+    private struct WhereClause {
+        let sql: String
+        let bindings: [String]
+    }
+
+    private func buildWhere(
+        _ request: SearchRequest,
+        schema: MailSchema,
+        mailboxIDs: Set<String>?
+    ) throws -> WhereClause {
+        var predicates: [String] = []
+        var bindings: [String] = []
+
+        if let deleted = schema.deleted {
+            predicates.append("(messages.\(Self.quoted(deleted)) = 0 OR messages.\(Self.quoted(deleted)) IS NULL)")
+        }
+
+        if !request.includeJunk, let junk = schema.junk {
+            predicates.append("(messages.\(Self.quoted(junk)) = 0 OR messages.\(Self.quoted(junk)) IS NULL)")
+        }
+
+        if request.unreadOnly {
+            guard let read = schema.read else {
+                throw MailStoreFailure("Unread filtering is not available in this Mail index schema.")
+            }
+            predicates.append("messages.\(Self.quoted(read)) = 0")
+        }
+
+        // In SQL, not after the LIMIT. Filtering a already-truncated page in memory is only correct
+        // while the ORDER BY happens to be the same column, and silently wrong the moment it is not.
+        if request.sinceHours > 0, let date = schema.date {
+            let cutoff = Date().addingTimeInterval(-Double(request.sinceHours) * 3_600)
+            let epoch = cutoff.timeIntervalSince1970
+            let reference = cutoff.timeIntervalSinceReferenceDate
+            predicates.append(
+                "((messages.\(Self.quoted(date)) > 1000000000 AND messages.\(Self.quoted(date)) >= \(epoch))"
+                + " OR (messages.\(Self.quoted(date)) <= 1000000000 AND messages.\(Self.quoted(date)) >= \(reference)))"
+            )
+        }
+
+        if let mailboxIDs, let mailbox = schema.mailbox {
+            let list = mailboxIDs.sorted().map { _ in "?" }.joined(separator: ",")
+            predicates.append("messages.\(Self.quoted(mailbox)) IN (\(list))")
+            bindings.append(contentsOf: mailboxIDs.sorted())
+        }
+
+        // One clause per term, ORed across the requested fields and ANDed across the terms — so
+        // "Graph API" means both words somewhere in the scoped fields rather than that exact string,
+        // which returned nothing.
+        if !request.terms.isEmpty {
+            var termClauses: [String] = []
+            for term in request.terms {
+                var fieldClauses: [String] = []
+                let pattern = "%\(term.localizedLowercase)%"
+
+                if request.fields.contains("subject") {
+                    fieldClauses.append("lower(\(schema.subjectExpression)) LIKE ?")
+                    bindings.append(pattern)
+                }
+                if request.fields.contains("sender") {
+                    fieldClauses.append("lower(\(schema.senderMatchExpression)) LIKE ?")
+                    bindings.append(pattern)
+                }
+                if request.fields.contains("recipients"), schema.canSearchRecipients,
+                   let messageColumn = schema.recipientsMessageColumn,
+                   let addressColumn = schema.recipientsAddressColumn {
+                    fieldClauses.append("""
+                    EXISTS (
+                      SELECT 1 FROM recipients AS r
+                      JOIN addresses AS ra ON r.\(Self.quoted(addressColumn)) = ra.ROWID
+                      WHERE r.\(Self.quoted(messageColumn)) = messages.ROWID
+                        AND lower(COALESCE(ra.\(Self.quoted("comment")), '') || ' ' || COALESCE(ra.\(Self.quoted("address")), '')) LIKE ?
+                    )
+                    """)
+                    bindings.append(pattern)
+                }
+
+                if fieldClauses.isEmpty { continue }
+                termClauses.append("(" + fieldClauses.joined(separator: " OR ") + ")")
+            }
+
+            if !termClauses.isEmpty {
+                let joiner = request.match == "any" ? " OR " : " AND "
+                predicates.append("(" + termClauses.joined(separator: joiner) + ")")
+            } else if !request.searchesBody {
+                // Every requested field is unavailable in this schema. Returning everything would be
+                // a silent lie about what was searched.
+                predicates.append("0 = 1")
+            }
+        }
+
+        let sql = predicates.isEmpty ? "" : " WHERE " + predicates.joined(separator: " AND ")
+        return WhereClause(sql: sql, bindings: bindings)
+    }
+
+    private func countRows(schema: MailSchema, clause: WhereClause, database: OpaquePointer) throws -> Int {
+        var sql = "SELECT count(*) FROM messages"
+        for join in schema.joins { sql += " " + join }
+        sql += clause.sql
+
+        var statement: OpaquePointer?
+        guard sqlite3_prepare_v2(database, sql, -1, &statement, nil) == SQLITE_OK, let statement else {
+            throw MailStoreFailure("Could not count Mail index rows: \(databaseMessage(database))")
+        }
+        defer { sqlite3_finalize(statement) }
+
+        bind(clause.bindings, to: statement, from: 1)
+        guard sqlite3_step(statement) == SQLITE_ROW else { return 0 }
+        return Int(sqlite3_column_int64(statement, 0))
+    }
+
+    private func fetchRows(
+        _ request: SearchRequest,
+        schema: MailSchema,
+        clause: WhereClause,
+        database: OpaquePointer,
+        limit: Int,
+        offset: Int
+    ) throws -> [MailRow] {
+        let dateExpr = schema.date.map { "messages.\(Self.quoted($0))" }
+        let messageIDExpr = schema.messageID.map { "messages.\(Self.quoted($0))" } ?? "NULL"
+        let readExpr = schema.read.map { "messages.\(Self.quoted($0))" } ?? "NULL"
+        let mailboxExpr = schema.mailbox.map { "messages.\(Self.quoted($0))" } ?? "NULL"
+
+        var sql = """
+        SELECT
+          messages.ROWID,
+          \(messageIDExpr),
+          \(schema.subjectExpression),
+          \(schema.senderDisplayExpression),
+          \(dateExpr ?? "NULL"),
+          \(readExpr),
+          \(mailboxExpr),
+          \(schema.senderMatchExpression)
+        FROM messages
+        """
+        for join in schema.joins { sql += " " + join }
+        sql += clause.sql
+        // ROWID breaks ties. Without it two messages sharing a timestamp can swap places between two
+        // pages, so a paged walk both repeats and misses rows.
+        sql += " ORDER BY \(dateExpr ?? "messages.ROWID") DESC, messages.ROWID DESC LIMIT ? OFFSET ?"
+
+        var statement: OpaquePointer?
+        guard sqlite3_prepare_v2(database, sql, -1, &statement, nil) == SQLITE_OK, let statement else {
+            throw MailStoreFailure("Could not query Mail index: \(databaseMessage(database))")
+        }
+        defer { sqlite3_finalize(statement) }
+
+        var index = bind(clause.bindings, to: statement, from: 1)
+        sqlite3_bind_int(statement, index, Int32(limit)); index += 1
+        sqlite3_bind_int(statement, index, Int32(offset))
+
+        var rows: [MailRow] = []
+        while sqlite3_step(statement) == SQLITE_ROW {
+            rows.append(
+                MailRow(
+                    id: textValue(statement, column: 0) ?? UUID().uuidString,
+                    messageID: textValue(statement, column: 1),
+                    subject: textValue(statement, column: 2) ?? "(no subject)",
+                    sender: textValue(statement, column: 3) ?? "",
+                    receivedDate: dateValue(statement, column: 4),
+                    isRead: boolValue(statement, column: 5),
+                    mailboxID: textValue(statement, column: 6),
+                    senderHaystack: textValue(statement, column: 7) ?? ""
+                )
+            )
+        }
+        return rows
+    }
+
+    /// One query for the whole page, so `fields_matched` is measured rather than inferred.
+    private func readRecipients(
+        database: OpaquePointer,
+        schema: MailSchema,
+        messageIDs: [String]
+    ) throws -> [String: String] {
+        guard schema.canSearchRecipients,
+              let messageColumn = schema.recipientsMessageColumn,
+              let addressColumn = schema.recipientsAddressColumn,
+              !messageIDs.isEmpty
+        else { return [:] }
+
+        let placeholders = messageIDs.map { _ in "?" }.joined(separator: ",")
+        let sql = """
+        SELECT r.\(Self.quoted(messageColumn)),
+               COALESCE(ra.\(Self.quoted("comment")), '') || ' ' || COALESCE(ra.\(Self.quoted("address")), '')
+        FROM recipients AS r
+        JOIN addresses AS ra ON r.\(Self.quoted(addressColumn)) = ra.ROWID
+        WHERE r.\(Self.quoted(messageColumn)) IN (\(placeholders))
+        """
+
+        var statement: OpaquePointer?
+        guard sqlite3_prepare_v2(database, sql, -1, &statement, nil) == SQLITE_OK, let statement else {
+            return [:]
+        }
+        defer { sqlite3_finalize(statement) }
+        bind(messageIDs, to: statement, from: 1)
+
+        var out: [String: String] = [:]
+        while sqlite3_step(statement) == SQLITE_ROW {
+            guard let key = textValue(statement, column: 0) else { continue }
+            let value = (textValue(statement, column: 1) ?? "").trimmingCharacters(in: .whitespaces)
+            guard !value.isEmpty else { continue }
+            out[key] = out[key].map { "\($0), \(value)" } ?? value
+        }
+        return out
+    }
+
+    /// Which of the requested fields actually carried the match, per item. The point is that a caller
+    /// can tell an address hit from a subject coincidence — the distinction the old response lost.
+    private func fieldsMatched(
+        _ request: SearchRequest,
+        row: MailRow,
+        recipients: String,
+        body: String
+    ) -> [String] {
+        guard !request.terms.isEmpty else { return [] }
+
+        let haystacks: [(String, String)] = [
+            ("subject", StringSanitizer.lower(row.subject)),
+            ("sender", StringSanitizer.lower(row.senderHaystack.isEmpty ? row.sender : row.senderHaystack)),
+            ("recipients", StringSanitizer.lower(recipients)),
+            ("body", StringSanitizer.lower(body))
+        ]
+        let lowered = request.terms.map { StringSanitizer.lower($0) }
+
+        var hits: [String] = []
+        for (name, haystack) in haystacks where request.fields.contains(name) {
+            let matched: Bool
+            switch request.match {
+            case "any", "phrase":
+                matched = lowered.contains { !$0.isEmpty && haystack.contains($0) }
+            default:
+                matched = lowered.allSatisfy { !$0.isEmpty && haystack.contains($0) }
+            }
+            if matched { hits.append(name) }
+        }
+        return hits
+    }
+
+    // MARK: - Mailboxes
+
+    private struct MailboxRow {
+        let id: String
+        let url: String
+        let name: String
+        let path: String
+        let account: String
+        let role: String
+        let totalCount: Int?
+        let unreadCount: Int?
+    }
+
+    private func readMailboxes(database: OpaquePointer) throws -> [String: MailboxRow] {
+        let columns = try tableColumns(database: database, table: "mailboxes")
+        guard let urlColumn = pick(columns, ["url"]) else { return [:] }
+
+        let totalColumn = pick(columns, ["total_count", "totalCount", "message_count"])
+        let unreadColumn = pick(columns, ["unread_count", "unreadCount", "unread"])
+
+        let sql = """
+        SELECT ROWID, \(Self.quoted(urlColumn)),
+               \(totalColumn.map { Self.quoted($0) } ?? "NULL"),
+               \(unreadColumn.map { Self.quoted($0) } ?? "NULL")
+        FROM mailboxes
+        """
+
+        var statement: OpaquePointer?
+        guard sqlite3_prepare_v2(database, sql, -1, &statement, nil) == SQLITE_OK, let statement else {
+            return [:]
+        }
+        defer { sqlite3_finalize(statement) }
+
+        var out: [String: MailboxRow] = [:]
+        while sqlite3_step(statement) == SQLITE_ROW {
+            guard let id = textValue(statement, column: 0) else { continue }
+            let raw = textValue(statement, column: 1) ?? ""
+            let parts = Self.describeMailbox(url: raw)
+            out[id] = MailboxRow(
+                id: id,
+                url: raw,
+                name: parts.name,
+                path: parts.path,
+                account: parts.account,
+                role: parts.role,
+                totalCount: intValue(statement, column: 2),
+                unreadCount: intValue(statement, column: 3)
+            )
+        }
+        return out
+    }
+
+    /// Mailbox urls look like `imap://user@host/Sent%20Messages` or a plain path for a local store, so
+    /// the role has to come out of the last component rather than a column — the index has no role
+    /// field. Unknown names are `folder`, never guessed into a role.
+    static func describeMailbox(url raw: String) -> (name: String, path: String, account: String, role: String) {
+        var account = ""
+        var path = raw
+
+        if let parsed = URL(string: raw), let scheme = parsed.scheme, !scheme.isEmpty, scheme != "file" {
+            let user = parsed.user.map { "\($0)@" } ?? ""
+            account = "\(user)\(parsed.host ?? "")"
+            path = parsed.path
+        } else if raw.hasPrefix("file://"), let parsed = URL(string: raw) {
+            path = parsed.path
+        }
+
+        let decoded = (path.removingPercentEncoding ?? path)
+            .trimmingCharacters(in: CharacterSet(charactersIn: "/"))
+        let name = decoded.split(separator: "/").last.map(String.init) ?? decoded
+
+        let roles: [(String, [String])] = [
+            ("inbox", ["inbox", "eingang", "posteingang"]),
+            ("sent", ["sent", "sent messages", "sent items", "gesendet", "gesendete objekte", "gesendete elemente"]),
+            ("drafts", ["drafts", "entwürfe", "entwuerfe"]),
+            ("archive", ["archive", "archiv", "all mail", "alle nachrichten"]),
+            ("junk", ["junk", "junk email", "junk e-mail", "spam", "werbung"]),
+            ("trash", ["trash", "deleted messages", "deleted items", "papierkorb", "gelöschte objekte"])
+        ]
+        let needle = StringSanitizer.lower(name)
+        let role = roles.first { $0.1.contains(needle) }?.0 ?? "folder"
+
+        return (name: name, path: decoded, account: account, role: role)
+    }
+
+    /// Matches on id, whole path, name, or a case-insensitive substring of either — in that order of
+    /// specificity, so `mailbox:"Archive"` does not silently also pull in "Archive/2019/Invoices"
+    /// when an exact "Archive" exists.
+    private func matchMailboxes(_ filter: String, in boxes: [String: MailboxRow]) -> [MailboxRow] {
+        let needle = StringSanitizer.lower(filter)
+        let all = Array(boxes.values)
+
+        if let exactID = boxes[filter] { return [exactID] }
+
+        let exactPath = all.filter { StringSanitizer.lower($0.path) == needle }
+        if !exactPath.isEmpty { return exactPath }
+
+        let exactName = all.filter { StringSanitizer.lower($0.name) == needle }
+        if !exactName.isEmpty { return exactName }
+
+        let byRole = all.filter { $0.role == needle }
+        if !byRole.isEmpty { return byRole }
+
+        return all.filter {
+            StringSanitizer.lower($0.path).contains(needle) || StringSanitizer.lower($0.name).contains(needle)
+        }
+    }
+
+    // MARK: - Items
+
+    private func makeItem(
+        _ row: MailRow,
+        mailboxes: [String: MailboxRow],
+        fieldsMatched: [String],
+        recipients: String?,
+        bodySnippet: String?
+    ) -> DataItem {
+        var metadata: [String: String] = ["sender": row.sender]
+
+        if let messageID = row.messageID, !messageID.isEmpty {
+            metadata["message_id"] = messageID
+        }
+        if let receivedDate = row.receivedDate {
+            metadata["received"] = ISO8601DateFormatter().string(from: receivedDate)
+        }
+        if let isRead = row.isRead {
+            metadata["read"] = String(isRead)
+        }
+        if let mailboxID = row.mailboxID, let box = mailboxes[mailboxID] {
+            metadata["mailbox_id"] = box.id
+            metadata["mailbox"] = box.path.isEmpty ? box.name : box.path
+            metadata["mailbox_role"] = box.role
+            if !box.account.isEmpty { metadata["account"] = box.account }
+        } else {
+            metadata["mailbox_role"] = "unknown"
+        }
+        if !fieldsMatched.isEmpty {
+            metadata["fields_matched"] = fieldsMatched.joined(separator: ",")
+        }
+        if let recipients, !recipients.isEmpty {
+            metadata["to"] = recipients
+        }
+
+        var preview: String?
+        if let bodySnippet, !bodySnippet.isEmpty {
+            preview = String(bodySnippet.prefix(400))
+        }
+
+        return DataItem(
+            id: row.id,
+            title: row.subject.isEmpty ? "(no subject)" : row.subject,
+            subtitle: row.sender,
             kind: "mail_message",
-            source: detail.body.isEmpty ? "Mail.app" : "Mail Local Index",
-            preview: detail.body,
+            source: sourceName,
+            preview: preview,
             metadata: metadata
         )
-        return ToolResponse(ok: true, source: item.source, items: [item])
     }
+
+    private func loadBody(
+        row: MailRow,
+        mailboxes: [String: MailboxRow],
+        mailRoot: URL,
+        database: OpaquePointer
+    ) -> String {
+        guard let mailboxID = row.mailboxID, let box = mailboxes[mailboxID] else { return "" }
+        guard let url = emlxURL(mailboxURL: box.url, mailRoot: mailRoot, messageROWID: row.id) else { return "" }
+        return parseEmlx(at: url).body
+    }
+
+    // MARK: - Models
 
     private struct MailDetail {
         let id: String
@@ -119,6 +906,8 @@ final class MailProvider {
         let receivedDate: Date?
         let isRead: Bool?
         let body: String
+        var mailbox: String?
+        var mailboxRole: String?
     }
 
     private struct MailRow {
@@ -128,6 +917,8 @@ final class MailProvider {
         let sender: String
         let receivedDate: Date?
         let isRead: Bool?
+        let mailboxID: String?
+        let senderHaystack: String
     }
 
     private struct MailStoreFailure: Error {
@@ -138,7 +929,9 @@ final class MailProvider {
         }
     }
 
-    private func parseQueryIntent(_ rawQuery: String) -> (query: String, unreadOnly: Bool, sinceHours: Int?) {
+    // MARK: - Query intent
+
+    private static func parseQueryIntent(_ rawQuery: String) -> (String, Bool, Int?) {
         let lower = StringSanitizer.lower(rawQuery)
         let unreadTerms = ["unread", "ungelesen", "ungelesene", "ungelesener", "unread mail", "unread mails"]
         let unreadOnly = unreadTerms.contains { lower.contains($0) }
@@ -160,7 +953,7 @@ final class MailProvider {
         return (cleaned, unreadOnly, sinceHours)
     }
 
-    private func parseSinceHours(_ lowerQuery: String) -> Int? {
+    private static func parseSinceHours(_ lowerQuery: String) -> Int? {
         if lowerQuery.contains("last 24") || lowerQuery.contains("24h") || lowerQuery.contains("24 stunden") {
             return 24
         }
@@ -172,9 +965,182 @@ final class MailProvider {
         return nil
     }
 
+    private static func stringList(_ input: [String: JSONValue], _ key: String) -> [String]? {
+        switch input[key] {
+        case .array(let values):
+            let list = values.compactMap { $0.stringValue }
+            return list.isEmpty ? nil : list
+        case .string(let value):
+            let list = value
+                .split(whereSeparator: { $0 == "," || $0 == " " })
+                .map { String($0).trimmingCharacters(in: .whitespaces) }
+                .filter { !$0.isEmpty }
+            return list.isEmpty ? nil : list
+        default:
+            return nil
+        }
+    }
+
+    // MARK: - Single message
+
+    private func makeDetailResponse(_ detail: MailDetail) -> ToolResponse {
+        var metadata: [String: String] = [
+            "sender": detail.sender
+        ]
+        if let messageID = detail.messageID, !messageID.isEmpty {
+            metadata["message_id"] = messageID
+        }
+        if let date = detail.receivedDate {
+            metadata["received"] = ISO8601DateFormatter().string(from: date)
+        }
+        if let isRead = detail.isRead {
+            metadata["read"] = String(isRead)
+        }
+        if !detail.recipients.isEmpty {
+            metadata["to"] = detail.recipients
+        }
+        if let mailbox = detail.mailbox, !mailbox.isEmpty {
+            metadata["mailbox"] = mailbox
+        }
+        if let role = detail.mailboxRole, !role.isEmpty {
+            metadata["mailbox_role"] = role
+        }
+
+        let item = DataItem(
+            id: detail.id,
+            title: detail.subject.isEmpty ? "(no subject)" : detail.subject,
+            subtitle: detail.sender,
+            kind: "mail_message",
+            source: detail.body.isEmpty ? "Mail.app" : sourceName,
+            preview: detail.body,
+            metadata: metadata
+        )
+        return ToolResponse(ok: true, source: item.source, items: [item])
+    }
+
+    private func readMessageDetail(database: OpaquePointer, rowID: String, mailRoot: URL) throws -> MailDetail {
+        let schema = try MailSchema(database: database, provider: self)
+        let mailboxes = try readMailboxes(database: database)
+
+        let dateExpr = schema.date.map { "messages.\(Self.quoted($0))" } ?? "NULL"
+        let messageIDExpr = schema.messageID.map { "messages.\(Self.quoted($0))" } ?? "NULL"
+        let readExpr = schema.read.map { "messages.\(Self.quoted($0))" } ?? "NULL"
+        let mailboxExpr = schema.mailbox.map { "messages.\(Self.quoted($0))" } ?? "NULL"
+
+        var sql = """
+        SELECT
+          messages.ROWID,
+          \(messageIDExpr),
+          \(schema.subjectExpression),
+          \(schema.senderDisplayExpression),
+          \(dateExpr),
+          \(readExpr),
+          \(mailboxExpr)
+        FROM messages
+        """
+        for join in schema.joins { sql += " " + join }
+        sql += " WHERE messages.ROWID = ?"
+
+        var statement: OpaquePointer?
+        guard sqlite3_prepare_v2(database, sql, -1, &statement, nil) == SQLITE_OK, let statement else {
+            throw MailStoreFailure("Could not query Mail index: \(databaseMessage(database))")
+        }
+        defer { sqlite3_finalize(statement) }
+
+        sqlite3_bind_text(statement, 1, rowID, -1, transientDestructor())
+
+        guard sqlite3_step(statement) == SQLITE_ROW else {
+            throw MailStoreFailure("Message with id \(rowID) not found.")
+        }
+
+        let subject = textValue(statement, column: 2) ?? "(no subject)"
+        let sender = textValue(statement, column: 3) ?? ""
+        let date = dateValue(statement, column: 4)
+        let isRead = boolValue(statement, column: 5)
+        let mailboxID = textValue(statement, column: 6)
+
+        var body = ""
+        var recipients = ""
+
+        if let mailboxID, let box = mailboxes[mailboxID],
+           let emlxURL = emlxURL(mailboxURL: box.url, mailRoot: mailRoot, messageROWID: rowID) {
+            let parsed = parseEmlx(at: emlxURL)
+            body = parsed.body
+            recipients = parsed.to
+        }
+
+        if body.isEmpty, let found = try findEmlxBySearch(mailRoot: mailRoot, messageROWID: rowID) {
+            let parsed = parseEmlx(at: found)
+            body = parsed.body
+            if recipients.isEmpty { recipients = parsed.to }
+        }
+
+        if recipients.isEmpty {
+            recipients = (try readRecipients(database: database, schema: schema, messageIDs: [rowID]))[rowID] ?? ""
+        }
+
+        let box = mailboxID.flatMap { mailboxes[$0] }
+        return MailDetail(
+            id: rowID,
+            messageID: textValue(statement, column: 1),
+            subject: subject,
+            sender: sender,
+            recipients: recipients,
+            receivedDate: date,
+            isRead: isRead,
+            body: body.isEmpty ? "(body not available — .emlx file not found)" : body,
+            mailbox: box.map { $0.path.isEmpty ? $0.name : $0.path },
+            mailboxRole: box?.role
+        )
+    }
+
+    private func emlxURL(mailboxURL raw: String, mailRoot: URL, messageROWID: String) -> URL? {
+        let mailboxPath: URL
+        if raw.hasPrefix("file://") {
+            guard let parsed = URL(string: raw) else { return nil }
+            mailboxPath = parsed
+        } else if raw.hasPrefix("/") {
+            mailboxPath = URL(fileURLWithPath: raw)
+        } else if let parsed = URL(string: raw), let scheme = parsed.scheme, !scheme.isEmpty {
+            // A remote mailbox url is not a filesystem path; the cached files live under the store.
+            _ = parsed
+            return nil
+        } else {
+            mailboxPath = mailRoot.appendingPathComponent(raw, isDirectory: true)
+        }
+
+        let candidates = [
+            mailboxPath.appendingPathComponent("Messages/\(messageROWID).emlx"),
+            mailboxPath.appendingPathComponent("Messages/\(messageROWID).partial.emlx"),
+            mailboxPath.appendingPathComponent("\(messageROWID).emlx")
+        ]
+        return candidates.first { fileManager.fileExists(atPath: $0.path) }
+    }
+
+    private func findEmlxBySearch(mailRoot: URL, messageROWID: String) throws -> URL? {
+        let enumerator = fileManager.enumerator(
+            at: mailRoot,
+            includingPropertiesForKeys: [.isRegularFileKey],
+            options: [.skipsHiddenFiles]
+        )
+
+        let targetNames = Set(["\(messageROWID).emlx", "\(messageROWID).partial.emlx"])
+        while let url = enumerator?.nextObject() as? URL {
+            if targetNames.contains(url.lastPathComponent) {
+                return url
+            }
+        }
+        return nil
+    }
+
+    // MARK: - Store location
+
     private func locateEnvelopeIndex() throws -> URL {
-        let mailRoot = fileManager.homeDirectoryForCurrentUser
-            .appendingPathComponent("Library/Mail", isDirectory: true)
+        let override = ProcessInfo.processInfo.environment[Self.mailRootEnvironmentKey]?
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        let mailRoot = (override.flatMap { $0.isEmpty ? nil : URL(fileURLWithPath: $0, isDirectory: true) })
+            ?? fileManager.homeDirectoryForCurrentUser
+                .appendingPathComponent("Library/Mail", isDirectory: true)
 
         guard fileManager.fileExists(atPath: mailRoot.path) else {
             throw MailStoreFailure("Local Mail store was not found at \(mailRoot.path).")
@@ -212,355 +1178,7 @@ final class MailProvider {
         Int(name.dropFirst()) ?? 0
     }
 
-    private func readMessages(
-        from indexURL: URL,
-        query: String,
-        unreadOnly: Bool,
-        sinceHours: Int,
-        maxCandidates: Int
-    ) throws -> [MailRow] {
-        try withDatabase(at: indexURL) { database in
-            let columns = try tableColumns(database: database, table: "messages")
-            guard !columns.isEmpty else {
-                throw MailStoreFailure("Mail index is readable, but the messages table was not found.")
-            }
-
-            let subjectColumn = pick(columns, ["subject"])
-            let senderColumn = pick(columns, ["sender"])
-            let messageIDColumn = pick(columns, ["message_id", "messageid"])
-            let dateColumn = pick(columns, ["date_received", "dateReceived", "date_sent", "dateSent", "date_created"])
-            let readColumn = pick(columns, ["read", "is_read", "isRead"])
-            let deletedColumn = pick(columns, ["deleted", "is_deleted", "isDeleted"])
-            let junkColumn = pick(columns, ["junk", "is_junk", "isJunk"])
-
-            let subjectsTable = try tableColumns(database: database, table: "subjects")
-            let addressesTable = try tableColumns(database: database, table: "addresses")
-
-            let hasSubjectsLookup = !subjectsTable.isEmpty && subjectsTable.contains("subject") && subjectColumn != nil
-            let hasAddressesLookup = !addressesTable.isEmpty && addressesTable.contains("address") && senderColumn != nil
-            let addressCommentColumn = hasAddressesLookup && addressesTable.contains("comment") ? "comment" : nil
-
-            guard !unreadOnly || readColumn != nil else {
-                throw MailStoreFailure("Unread filtering is not available in this Mail index schema.")
-            }
-
-            var joins: [String] = []
-
-            let subjectExpr: String
-            if hasSubjectsLookup {
-                joins.append("LEFT JOIN subjects ON messages.\(quote(subjectColumn!)) = subjects.ROWID")
-                subjectExpr = "subjects.\(quote("subject"))"
-            } else {
-                subjectExpr = subjectColumn.map { "messages.\(quote($0))" } ?? "''"
-            }
-
-            let senderExpr: String
-            if hasAddressesLookup {
-                joins.append("LEFT JOIN addresses ON messages.\(quote(senderColumn!)) = addresses.ROWID")
-                if let commentCol = addressCommentColumn {
-                    senderExpr = "COALESCE(addresses.\(quote(commentCol)), addresses.\(quote("address")), '')"
-                } else {
-                    senderExpr = "COALESCE(addresses.\(quote("address")), '')"
-                }
-            } else {
-                senderExpr = senderColumn.map { "messages.\(quote($0))" } ?? "''"
-            }
-
-            var predicates: [String] = []
-            var bindings: [String] = []
-
-            if let deletedColumn {
-                predicates.append("(messages.\(quote(deletedColumn)) = 0 OR messages.\(quote(deletedColumn)) IS NULL)")
-            }
-
-            if let junkColumn {
-                predicates.append("(messages.\(quote(junkColumn)) = 0 OR messages.\(quote(junkColumn)) IS NULL)")
-            }
-
-            if unreadOnly, let readColumn {
-                predicates.append("messages.\(quote(readColumn)) = 0")
-            }
-
-            if !query.isEmpty {
-                var searchClauses: [String] = []
-                if hasSubjectsLookup {
-                    searchClauses.append("lower(\(subjectExpr)) LIKE ?")
-                } else if subjectColumn != nil {
-                    searchClauses.append("lower(messages.\(quote(subjectColumn!))) LIKE ?")
-                }
-                if hasAddressesLookup {
-                    searchClauses.append("lower(\(senderExpr)) LIKE ?")
-                } else if senderColumn != nil {
-                    searchClauses.append("lower(messages.\(quote(senderColumn!))) LIKE ?")
-                }
-                if !searchClauses.isEmpty {
-                    predicates.append("(" + searchClauses.joined(separator: " OR ") + ")")
-                    bindings.append(contentsOf: Array(repeating: "%\(query.localizedLowercase)%", count: searchClauses.count))
-                }
-            }
-
-            let dateExpr = dateColumn.map { "messages.\(quote($0))" }
-            let messageIDExpr = messageIDColumn.map { "messages.\(quote($0))" } ?? "NULL"
-            let readExpr = readColumn.map { "messages.\(quote($0))" } ?? "NULL"
-
-            var sql = """
-            SELECT
-              messages.ROWID,
-              \(messageIDExpr),
-              \(subjectExpr),
-              \(senderExpr),
-              \(dateExpr ?? "NULL"),
-              \(readExpr)
-            FROM messages
-            """
-
-            for join in joins {
-                sql += " " + join
-            }
-
-            if !predicates.isEmpty {
-                sql += " WHERE " + predicates.joined(separator: " AND ")
-            }
-
-            sql += " ORDER BY \(dateExpr ?? "messages.ROWID") DESC LIMIT ?"
-
-            var statement: OpaquePointer?
-            guard sqlite3_prepare_v2(database, sql, -1, &statement, nil) == SQLITE_OK, let statement else {
-                throw MailStoreFailure("Could not query Mail index: \(databaseMessage(database))")
-            }
-            defer { sqlite3_finalize(statement) }
-
-            var bindIndex: Int32 = 1
-            for value in bindings {
-                sqlite3_bind_text(statement, bindIndex, value, -1, transientDestructor())
-                bindIndex += 1
-            }
-            sqlite3_bind_int(statement, bindIndex, Int32(maxCandidates))
-
-            var rows: [MailRow] = []
-            while sqlite3_step(statement) == SQLITE_ROW {
-                let date = dateValue(statement, column: 4)
-                if sinceHours > 0 {
-                    guard let date, date >= Date().addingTimeInterval(-Double(sinceHours) * 60 * 60) else {
-                        continue
-                    }
-                }
-
-                rows.append(
-                    MailRow(
-                        id: textValue(statement, column: 0) ?? UUID().uuidString,
-                        messageID: textValue(statement, column: 1),
-                        subject: textValue(statement, column: 2) ?? "(no subject)",
-                        sender: textValue(statement, column: 3) ?? "",
-                        receivedDate: date,
-                        isRead: boolValue(statement, column: 5)
-                    )
-                )
-            }
-
-            return rows
-        }
-    }
-
-    private func makeItem(_ row: MailRow) -> DataItem {
-        var metadata: [String: String] = [
-            "sender": row.sender
-        ]
-
-        if let messageID = row.messageID, !messageID.isEmpty {
-            metadata["message_id"] = messageID
-        }
-
-        if let receivedDate = row.receivedDate {
-            metadata["received"] = ISO8601DateFormatter().string(from: receivedDate)
-        }
-
-        if let isRead = row.isRead {
-            metadata["read"] = String(isRead)
-        }
-
-        return DataItem(
-            id: row.id,
-            title: row.subject.isEmpty ? "(no subject)" : row.subject,
-            subtitle: row.sender,
-            kind: "mail_message",
-            source: "Mail Local Index",
-            metadata: metadata
-        )
-    }
-
-    private func readMessageDetail(database: OpaquePointer, rowID: String, mailRoot: URL) throws -> MailDetail {
-        let columns = try tableColumns(database: database, table: "messages")
-        guard !columns.isEmpty else {
-            throw MailStoreFailure("Mail index is readable, but the messages table was not found.")
-        }
-
-        let subjectColumn = pick(columns, ["subject"])
-        let senderColumn = pick(columns, ["sender"])
-        let messageIDColumn = pick(columns, ["message_id", "messageid"])
-        let dateColumn = pick(columns, ["date_received", "dateReceived", "date_sent", "dateSent", "date_created"])
-        let readColumn = pick(columns, ["read", "is_read", "isRead"])
-        let mailboxColumn = pick(columns, ["mailbox"])
-
-        let subjectsTable = try tableColumns(database: database, table: "subjects")
-        let addressesTable = try tableColumns(database: database, table: "addresses")
-
-        let hasSubjectsLookup = !subjectsTable.isEmpty && subjectsTable.contains("subject") && subjectColumn != nil
-        let hasAddressesLookup = !addressesTable.isEmpty && addressesTable.contains("address") && senderColumn != nil
-        let addressCommentColumn = hasAddressesLookup && addressesTable.contains("comment") ? "comment" : nil
-
-        let subjectExpr: String
-        var joins: [String] = []
-        if hasSubjectsLookup {
-            joins.append("LEFT JOIN subjects ON messages.\(quote(subjectColumn!)) = subjects.ROWID")
-            subjectExpr = "subjects.\(quote("subject"))"
-        } else {
-            subjectExpr = subjectColumn.map { "messages.\(quote($0))" } ?? "''"
-        }
-
-        let senderExpr: String
-        if hasAddressesLookup {
-            joins.append("LEFT JOIN addresses ON messages.\(quote(senderColumn!)) = addresses.ROWID")
-            if let commentCol = addressCommentColumn {
-                senderExpr = "COALESCE(addresses.\(quote(commentCol)), addresses.\(quote("address")), '')"
-            } else {
-                senderExpr = "COALESCE(addresses.\(quote("address")), '')"
-            }
-        } else {
-            senderExpr = senderColumn.map { "messages.\(quote($0))" } ?? "''"
-        }
-
-        let dateExpr = dateColumn.map { "messages.\(quote($0))" } ?? "NULL"
-        let messageIDExpr = messageIDColumn.map { "messages.\(quote($0))" } ?? "NULL"
-        let readExpr = readColumn.map { "messages.\(quote($0))" } ?? "NULL"
-        let mailboxExpr = mailboxColumn.map { "messages.\(quote($0))" } ?? "NULL"
-
-        var sql = """
-        SELECT
-          messages.ROWID,
-          \(messageIDExpr),
-          \(subjectExpr),
-          \(senderExpr),
-          \(dateExpr),
-          \(readExpr),
-          \(mailboxExpr)
-        FROM messages
-        """
-
-        for join in joins {
-            sql += " " + join
-        }
-
-        sql += " WHERE messages.ROWID = ?"
-
-        var statement: OpaquePointer?
-        guard sqlite3_prepare_v2(database, sql, -1, &statement, nil) == SQLITE_OK, let statement else {
-            throw MailStoreFailure("Could not query Mail index: \(databaseMessage(database))")
-        }
-        defer { sqlite3_finalize(statement) }
-
-        sqlite3_bind_text(statement, 1, rowID, -1, transientDestructor())
-
-        guard sqlite3_step(statement) == SQLITE_ROW else {
-            throw MailStoreFailure("Message with id \(rowID) not found.")
-        }
-
-        let subject = textValue(statement, column: 2) ?? "(no subject)"
-        let sender = textValue(statement, column: 3) ?? ""
-        let date = dateValue(statement, column: 4)
-        let isRead = boolValue(statement, column: 5)
-        let mailboxID = textValue(statement, column: 6)
-
-        var body = ""
-        var recipients = ""
-
-        if let mailboxID {
-            let emlxURL = try resolveEmlxPath(database: database, mailRoot: mailRoot, mailboxID: mailboxID, messageROWID: rowID)
-            if let emlxURL, fileManager.fileExists(atPath: emlxURL.path) {
-                let parsed = parseEmlx(at: emlxURL)
-                body = parsed.body
-                recipients = parsed.to
-            }
-        }
-
-        if body.isEmpty {
-            let found = try findEmlxBySearch(mailRoot: mailRoot, messageROWID: rowID)
-            if let found {
-                let parsed = parseEmlx(at: found)
-                body = parsed.body
-                if recipients.isEmpty { recipients = parsed.to }
-            }
-        }
-
-        return MailDetail(
-            id: rowID,
-            messageID: textValue(statement, column: 1),
-            subject: subject,
-            sender: sender,
-            recipients: recipients,
-            receivedDate: date,
-            isRead: isRead,
-            body: body.isEmpty ? "(body not available — .emlx file not found)" : body
-        )
-    }
-
-    private func resolveEmlxPath(database: OpaquePointer, mailRoot: URL, mailboxID: String, messageROWID: String) throws -> URL? {
-        let mailboxColumns = try tableColumns(database: database, table: "mailboxes")
-        guard !mailboxColumns.isEmpty else { return nil }
-
-        let urlColumn = pick(mailboxColumns, ["url"])
-        guard let urlColumn else { return nil }
-
-        let sql = "SELECT \(quote(urlColumn)) FROM mailboxes WHERE ROWID = ?"
-        var statement: OpaquePointer?
-        guard sqlite3_prepare_v2(database, sql, -1, &statement, nil) == SQLITE_OK, let statement else {
-            return nil
-        }
-        defer { sqlite3_finalize(statement) }
-
-        sqlite3_bind_text(statement, 1, mailboxID, -1, transientDestructor())
-
-        guard sqlite3_step(statement) == SQLITE_ROW,
-              let rawURL = textValue(statement, column: 0) else {
-            return nil
-        }
-
-        let mailboxPath: URL
-        if rawURL.hasPrefix("file://") || rawURL.hasPrefix("/") {
-            if rawURL.hasPrefix("file://") {
-                guard let u = URL(string: rawURL) else { return nil }
-                mailboxPath = u
-            } else {
-                mailboxPath = URL(fileURLWithPath: rawURL)
-            }
-        } else {
-            mailboxPath = mailRoot.appendingPathComponent(rawURL, isDirectory: true)
-        }
-
-        let candidates = [
-            mailboxPath.appendingPathComponent("Messages/\(messageROWID).emlx"),
-            mailboxPath.appendingPathComponent("Messages/\(messageROWID).partial.emlx"),
-            mailboxPath.appendingPathComponent("\(messageROWID).emlx")
-        ]
-
-        return candidates.first { fileManager.fileExists(atPath: $0.path) }
-    }
-
-    private func findEmlxBySearch(mailRoot: URL, messageROWID: String) throws -> URL? {
-        let enumerator = fileManager.enumerator(
-            at: mailRoot,
-            includingPropertiesForKeys: [.isRegularFileKey],
-            options: [.skipsHiddenFiles]
-        )
-
-        let targetNames = Set(["\(messageROWID).emlx", "\(messageROWID).partial.emlx"])
-        while let url = enumerator?.nextObject() as? URL {
-            if targetNames.contains(url.lastPathComponent) {
-                return url
-            }
-        }
-        return nil
-    }
+    // MARK: - .emlx parsing
 
     private func parseEmlx(at url: URL) -> (body: String, to: String) {
         guard let data = try? Data(contentsOf: url),
@@ -698,6 +1316,9 @@ final class MailProvider {
         return result
     }
 
+    // MARK: - SQLite plumbing
+
+    /// Read-only, always. Nothing in this provider is allowed to change the user's mail.
     private func withDatabase<T>(at url: URL, body: (OpaquePointer) throws -> T) throws -> T {
         var database: OpaquePointer?
         let status = sqlite3_open_v2(url.path, &database, SQLITE_OPEN_READONLY | SQLITE_OPEN_FULLMUTEX, nil)
@@ -738,8 +1359,18 @@ final class MailProvider {
         return nil
     }
 
-    private func quote(_ identifier: String) -> String {
+    private static func quoted(_ identifier: String) -> String {
         "\"\(identifier.replacingOccurrences(of: "\"", with: "\"\""))\""
+    }
+
+    @discardableResult
+    private func bind(_ values: [String], to statement: OpaquePointer, from start: Int32) -> Int32 {
+        var index = start
+        for value in values {
+            sqlite3_bind_text(statement, index, value, -1, transientDestructor())
+            index += 1
+        }
+        return index
     }
 
     private func textValue(_ statement: OpaquePointer, column: Int32) -> String? {
@@ -756,6 +1387,13 @@ final class MailProvider {
             return nil
         }
         return sqlite3_column_int(statement, column) != 0
+    }
+
+    private func intValue(_ statement: OpaquePointer, column: Int32) -> Int? {
+        guard sqlite3_column_type(statement, column) != SQLITE_NULL else {
+            return nil
+        }
+        return Int(sqlite3_column_int64(statement, column))
     }
 
     private func dateValue(_ statement: OpaquePointer, column: Int32) -> Date? {
@@ -785,22 +1423,26 @@ final class MailProvider {
 
     // MARK: - AppleScript fallback
 
-    private func appleScriptSearch(query: String, unreadOnly: Bool, sinceHours: Int, limit: Int) async -> ToolResponse {
-        let escaped = escapeForAppleScript(query)
+    /// Used only when the index is unreadable. It covers the inbox, sent and drafts mailboxes and says
+    /// so in `meta.coverage`, because a fallback that quietly searches less than the primary path is
+    /// the same silent-truncation failure in a different costume.
+    private func appleScriptSearch(request: SearchRequest) async -> ToolResponse {
+        let escaped = escapeForAppleScript(request.query)
         let sinceClause: String
-        if sinceHours > 0 {
+        if request.sinceHours > 0 {
             sinceClause = """
-            set _cutoff to (current date) - (\(sinceHours) * 3600)
+            set _cutoff to (current date) - (\(request.sinceHours) * 3600)
             """
         } else {
             sinceClause = "set _cutoff to missing value"
         }
 
+        let wanted = request.limit + request.offset
         let script = """
         \(sinceClause)
-        set _limit to \(limit)
+        set _limit to \(wanted)
         set _query to "\(escaped)"
-        set _unreadOnly to \(unreadOnly ? "true" : "false")
+        set _unreadOnly to \(request.unreadOnly ? "true" : "false")
         set _out to ""
         set _count to 0
         tell application "Mail"
@@ -855,9 +1497,36 @@ final class MailProvider {
         let result = await AppleScriptRunner.run(script, timeout: 20)
         switch result {
         case .success(let output):
-            let items = parseAppleScriptSearchRows(output)
-            let message = items.isEmpty ? "No matching messages found via Mail.app." : nil
-            return ToolResponse(ok: true, source: "Mail.app", items: items, message: message)
+            let all = parseAppleScriptSearchRows(output)
+            let items = Array(all.dropFirst(request.offset).prefix(request.limit))
+            let capped = all.count >= wanted
+            var message: String?
+            if items.isEmpty {
+                message = "No matching messages found via Mail.app."
+            } else if capped {
+                message = "Mail.app fallback: reached its scan bound, so this may not be the whole result set."
+            }
+            return ToolResponse(
+                ok: true,
+                source: "Mail.app",
+                items: items,
+                message: message,
+                meta: [
+                    "returned": String(items.count),
+                    "offset": String(request.offset),
+                    "limit": String(request.limit),
+                    "total": String(all.count),
+                    "total_exact": "false",
+                    "has_more": String(capped),
+                    "truncated": String(capped),
+                    "coverage": "inbox,sent,drafts",
+                    "fields": "subject,sender",
+                    "match": "phrase",
+                    "recipients_searchable": "false",
+                    "body_searchable": "false",
+                    "fallback": "applescript"
+                ]
+            )
         case .failure(let error):
             return ToolResponse(
                 ok: false,
@@ -955,7 +1624,8 @@ final class MailProvider {
                 var metadata: [String: String] = [
                     "sender": sender,
                     "message_id": messageID,
-                    "read": readStr
+                    "read": readStr,
+                    "mailbox_role": "unknown"
                 ]
                 if !dateStr.isEmpty {
                     metadata["received"] = dateStr
@@ -995,7 +1665,9 @@ final class MailProvider {
             recipients: recipients,
             receivedDate: date,
             isRead: readStr == "true" ? true : readStr == "false" ? false : nil,
-            body: body
+            body: body,
+            mailbox: nil,
+            mailboxRole: nil
         )
     }
 

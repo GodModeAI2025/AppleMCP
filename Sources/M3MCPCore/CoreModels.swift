@@ -132,11 +132,27 @@ public struct ToolResponse: Codable, Sendable {
     public let items: [DataItem]
     public let message: String?
 
-    public init(ok: Bool, source: String, items: [DataItem] = [], message: String? = nil) {
+    /// Machine-readable facts about the response itself — how many items match, how many were
+    /// returned, whether the set was cut short.
+    ///
+    /// It exists because `message` is prose and a caller cannot branch on prose. A capped result and a
+    /// complete one used to be the same response, so "no more mail this week" and "the newest 50 of
+    /// some larger number" were indistinguishable, and the failure looked like success. Optional, so
+    /// every existing decoder keeps working and every provider that does not set it is unaffected.
+    public let meta: [String: String]?
+
+    public init(
+        ok: Bool,
+        source: String,
+        items: [DataItem] = [],
+        message: String? = nil,
+        meta: [String: String]? = nil
+    ) {
         self.ok = ok
         self.source = source
         self.items = items
         self.message = message
+        self.meta = meta
     }
 }
 
