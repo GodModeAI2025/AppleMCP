@@ -987,7 +987,7 @@ final class VoiceMemosProvider {
 
     /// Core Data stores timestamps as seconds since 2001-01-01, so they map onto the reference date.
     private func dateValue(_ statement: OpaquePointer, column: Int32) -> Date? {
-        guard let value = doubleValue(statement, column), value != 0 else {
+        guard let value = doubleValue(statement, column: column), value != 0 else {
             return nil
         }
 
