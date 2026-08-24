@@ -73,7 +73,9 @@ The M3MCP UI app must be running for MCP calls to work. The bridge talks to the 
 |---|---|
 | `mail_search` | Search messages in Apple Mail (subject, sender, date, read status) |
 | `mail_read` | Read full email content by ID (body, recipients, attachments metadata) |
-| `calendar_search` | Search calendar events via EventKit |
+| `calendar_search` | Search calendar events via EventKit, optionally scoped to one calendar |
+| `calendar_read_event` | Read one event by ID — use this to confirm a write, since `calendar_search` only scans a date window |
+| `calendar_list_calendars` | List calendars with their source, ID, and whether they are writable |
 | `contacts_search` | Search contacts / address book |
 | `reminders_search` | Search reminders (incomplete, completed, or all) |
 | `notes_search` | Search Apple Notes by keyword |
@@ -85,6 +87,18 @@ The M3MCP UI app must be running for MCP calls to work. The bridge talks to the 
 | `voicememos_transcript` | Return a stored transcript as text, timestamped text, or JSON segments |
 | `voicememos_audio` | Return the recording as a local path or base64 audio |
 | `voicememos_transcribe` | Transcribe on device: stored transcript, cache, SpeechAnalyzer (macOS 26), then SFSpeechRecognizer |
+
+### Calendar Writes
+
+These change the user's calendar. There is no undo.
+
+| Tool | Description |
+|---|---|
+| `calendar_create_event` | Create an event. Takes `project_slug`, stored as a `Project: <slug>` line in the notes and read back as `metadata.project_slug` |
+| `calendar_update_event` | Change an event. Only the fields passed are changed; anything omitted is left as it is |
+| `calendar_delete_event` | Delete an event by ID |
+| `calendar_create_calendar` | Create a calendar. Requires `source` unless a local ("On My Mac") source exists, so a new calendar never lands in an account by default |
+| `calendar_delete_calendar` | Delete a calendar and its events. `id` and `title` must both be given and must agree |
 
 ### Apple Intelligence
 

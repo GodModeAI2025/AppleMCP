@@ -1,6 +1,50 @@
 # Changelog
 
+## Unreleased
+
+### Added
+
+- **Calendar write support.** `calendar_create_event`, `calendar_update_event` and
+  `calendar_delete_event`, plus the three tools a caller needs to use them safely:
+  `calendar_list_calendars` (which calendar, and is it writable), `calendar_read_event` (read one
+  event back by id — `calendar_search` scans a date window, so it cannot confirm a write that moved
+  an event out of that window), and `calendar_create_calendar` / `calendar_delete_calendar`.
+- **`project_slug` on create and update.** A machine-readable project identifier, stored as a
+  `Project: <slug>` line at the top of the notes and reported back as `metadata.project_slug` by
+  every calendar read path. Notes rather than `url`, because `EKEvent.url` is dropped by some CalDAV
+  and Exchange servers while notes are plain text everywhere. Slugs are validated, so a slug carrying
+  a newline cannot plant a second marker.
+- **`calendar` on `calendar_search`**, to scope a search to one calendar. Without it a busy range can
+  push a specific event past the 100-item ceiling.
+- **`raw_state` on the permission items that can disagree with themselves.** `permissions_status`
+  promotes a `not_determined` status to `authorized` from a `UserDefaults` flag; that flag is keyed on
+  the bundle identifier, so a second build of the app inherits it and claims access it does not have.
+  `raw_state` reports what the framework actually said.
+- **`M3MCP_SOCKET_DIR`** relocates the endpoint for both the app and the bridge, so a development
+  build can run beside an installed one. `LocalHTTPServer.start()` unlinks the socket path before
+  binding, so without this a development build silently steals the installed app's endpoint.
+- **`M3MCP_TCC_REQUEST_TIMEOUT_SECONDS`** bounds the wait for the macOS permission dialog.
+
+### Changed
+
+- **Calendar tools no longer request access on every call.** They read
+  `EKEventStore.authorizationStatus` first and only prompt when it is `notDetermined`. The old path
+  called `requestFullAccessToEvents` on every `calendar_search`, which re-activated the app each time
+  and, after a denial, asked an already-answered question instead of reporting what was wrong.
+- **A permission request is bounded.** An unanswered dialog never calls its completion handler, so the
+  old code hung for as long as the client would wait — indistinguishable from a broken server. It now
+  returns an error naming the missing permission.
+- **`calendar_create_calendar` will not fall back to the default calendar's source.** On a machine
+  with no local ("On My Mac") source the old-style fallback would create a calendar inside whichever
+  account happened to be default. It now says so and asks for `source` explicitly.
+
+### Fixed
+
+- `VoiceMemosProvider.dateValue` called `doubleValue(statement, column)` without the required
+  argument label, so `main` did not compile with Swift 6.3.
+
 ## 0.2.0
+
 
 ### Breaking
 
