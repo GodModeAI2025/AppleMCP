@@ -69,6 +69,20 @@ final class LocalMCPService {
             response = await permissionProvider.openSettings(input: input)
         case "calendar_search":
             response = await calendarProvider.search(input: input)
+        case "calendar_read_event":
+            response = await calendarProvider.readEvent(input: input)
+        case "calendar_list_calendars":
+            response = await calendarProvider.listCalendars(input: input)
+        case "calendar_create_event":
+            response = await calendarProvider.createEvent(input: input)
+        case "calendar_update_event":
+            response = await calendarProvider.updateEvent(input: input)
+        case "calendar_delete_event":
+            response = await calendarProvider.deleteEvent(input: input)
+        case "calendar_create_calendar":
+            response = await calendarProvider.createCalendar(input: input)
+        case "calendar_delete_calendar":
+            response = await calendarProvider.deleteCalendar(input: input)
         case "contacts_search":
             response = await contactsProvider.search(input: input)
         case "mail_search":
