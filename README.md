@@ -71,8 +71,9 @@ The M3MCP UI app must be running for MCP calls to work. The bridge talks to the 
 
 | Tool | Description |
 |---|---|
-| `mail_search` | Search messages in Apple Mail (subject, sender, date, read status) |
-| `mail_read` | Read full email content by ID (body, recipients, attachments metadata) |
+| `mail_search` | Search every mailbox in Apple Mail — subject, sender, recipients, optionally body — with `offset` paging, a `mailbox` filter, and a `meta` block that says whether the result was truncated |
+| `mail_list_mailboxes` | List mailboxes with account, path, role (inbox / sent / drafts / archive / junk / trash / folder) and message counts |
+| `mail_read` | Read full email content by ID (body, recipients, mailbox, attachments metadata) |
 | `calendar_search` | Search calendar events via EventKit |
 | `contacts_search` | Search contacts / address book |
 | `reminders_search` | Search reminders (incomplete, completed, or all) |

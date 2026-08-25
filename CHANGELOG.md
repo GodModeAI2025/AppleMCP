@@ -1,5 +1,46 @@
 # Changelog
 
+## Unreleased
+
+### Added
+
+- **`mail_search` can be paged, scoped and trusted.** New inputs `offset`, `mailbox`, `fields`,
+  `match`, `include_junk`, `include_recipients` and `auto_intent`; `limit` now goes to 500 instead of
+  being silently clamped to 50.
+- **`mail_list_mailboxes`**: every mailbox in the index with its account, path, role (`inbox`, `sent`,
+  `drafts`, `archive`, `junk`, `trash`, `folder`) and message counts — so a `mailbox` filter can name
+  something that exists.
+- **`ToolResponse.meta`**, an optional string map. `mail_search` fills in `total`, `returned`,
+  `offset`, `limit`, `has_more`, `truncated`, `total_exact`, `scanned`, `scan_capped`,
+  `fields_matched` inputs, and `recipients_searchable`. Additive: every existing decoder and every
+  provider that does not set it are unaffected.
+- Each mail item now reports `mailbox`, `mailbox_role` and `fields_matched`, so a hit can be
+  attributed to a folder and to the field that matched it.
+- `M3MCP_MAIL_ROOT` relocates the Mail store root the provider reads, so the search behaviour can be
+  tested against a synthetic Envelope Index. Read-only, like the provider.
+
+### Fixed
+
+- **A sender address behind a display name was unsearchable.** The query matched
+  `COALESCE(addresses.comment, addresses.address)`, so a non-null display name masked the address
+  column: measured on a real store, three address-shaped queries returned 150 items with **zero**
+  sender matches — every hit came from a subject line. Display and matching are now separate
+  expressions, and `firstname.lastname` actually searches an address.
+- **Recipients were never searched**, so "the message I sent to X" was findable only if X appeared in
+  the subject. `mail_search` now joins `recipients` when the schema has it, and reports
+  `meta.recipients_searchable` when it does not.
+- **A truncated result was indistinguishable from a complete one.** `limit:200` returned 50 items with
+  `message: null`. `meta.truncated` / `meta.has_more` / `meta.total` now say so.
+- **A multi-word query was matched as one substring**, so `"Graph API"` returned nothing while
+  `"Graph"` returned 23. Terms are ANDed by default; `match:"phrase"` keeps the old behaviour.
+- `since_hours` is applied in the query rather than to an already-truncated page.
+- `include_body` was documented and never read; it now returns a body snippet, and `fields:["body"]`
+  searches message bodies within a `max_candidates` bound that `meta.scan_capped` reports.
+- The `mail_search` schema claimed inbox-only scope (`"Maximum inbox messages to inspect"`). The SQL
+  never had a mailbox predicate — the description was wrong, not the code.
+- `VoiceMemosProvider.dateValue` called `doubleValue(statement, column)` without the `column:` label,
+  so the app target did not build with Swift 6.3.
+
 ## 0.2.0
 
 ### Breaking
