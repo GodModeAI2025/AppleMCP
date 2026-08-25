@@ -61,7 +61,10 @@ if [[ -n "${M3MCP_ALLOW_CODESIGN_NOPROMPT:-}" ]]; then
   IMPORT_ARGS+=(-T /usr/bin/codesign)
 fi
 
-security import "$WORK_DIR/identity.p12" -k "$KEYCHAIN" -P "$PASSWORD" "${IMPORT_ARGS[@]}" >/dev/null
+# bash 3.2 — the shell macOS actually ships — treats "${arr[@]}" as an unbound variable under
+# `set -u` when the array is empty, so the default path (no extra args) aborted here. The
+# ${arr[@]+...} guard expands to nothing when unset and is portable back to 3.2.
+security import "$WORK_DIR/identity.p12" -k "$KEYCHAIN" -P "$PASSWORD" ${IMPORT_ARGS[@]+"${IMPORT_ARGS[@]}"} >/dev/null
 
 if security find-identity -p codesigning 2>/dev/null | grep -qF "$IDENTITY_NAME"; then
   echo "Created '$IDENTITY_NAME'."

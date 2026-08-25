@@ -89,6 +89,8 @@ final class LocalMCPService {
             response = await mailProvider.search(input: input)
         case "mail_read":
             response = await mailProvider.read(input: input)
+        case "mail_list_mailboxes":
+            response = await mailProvider.listMailboxes(input: input)
         case "reminders_search":
             response = await remindersProvider.search(input: input)
         case "notes_search":
