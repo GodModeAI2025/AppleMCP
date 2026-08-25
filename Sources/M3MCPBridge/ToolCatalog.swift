@@ -42,8 +42,97 @@ enum ToolCatalog {
             description: "Read/search local macOS Calendar events via EventKit.",
             schema: querySchema(extra: [
                 "start_days": ["type": "integer", "description": "Relative start day offset. Default -7."],
-                "end_days": ["type": "integer", "description": "Relative end day offset. Default 60."]
+                "end_days": ["type": "integer", "description": "Relative end day offset. Default 60."],
+                "calendar": ["type": "string", "description": "Restrict the search to one calendar, by title or id."]
             ])
+        ),
+        MCPTool(
+            name: "calendar_read_event",
+            description: "Read one macOS Calendar event by the id returned from calendar_search or a write tool. Use this to read an event back after writing it: calendar_search only scans a date window.",
+            schema: objectSchema(properties: [
+                "id": ["type": "string", "description": "Event id."]
+            ], required: ["id"])
+        ),
+        MCPTool(
+            name: "calendar_list_calendars",
+            description: "List the local macOS calendars, with their source, id, and whether they are writable. Call this before writing, to pick a target calendar.",
+            schema: objectSchema(properties: [
+                "query": ["type": "string", "description": "Filter on calendar or source title. Empty returns all."],
+                "writable_only": ["type": "boolean", "description": "When true, omit read-only calendars. Default false."]
+            ])
+        ),
+        MCPTool(
+            name: "calendar_create_event",
+            description: "Create an event in a local macOS calendar via EventKit. Writes to the user's real calendar — confirm the target calendar and the times before calling.",
+            schema: objectSchema(properties: [
+                "title": ["type": "string", "description": "Event title."],
+                "start": [
+                    "type": "string",
+                    "description": "Start as an ISO 8601 timestamp, e.g. 2026-08-25T09:00:00+02:00. A timestamp with no zone is read as local time. When all_day is true, YYYY-MM-DD is accepted."
+                ],
+                "end": ["type": "string", "description": "End, same formats as start. Omit and pass duration_minutes instead."],
+                "duration_minutes": ["type": "integer", "description": "Length in minutes, used when end is omitted."],
+                "all_day": ["type": "boolean", "description": "When true, create an all-day event. Default false."],
+                "calendar": ["type": "string", "description": "Target calendar by title or id. Defaults to the system default calendar for new events."],
+                "calendar_id": ["type": "string", "description": "Target calendar by id. Takes precedence over 'calendar'."],
+                "location": ["type": "string", "description": "Location text."],
+                "notes": ["type": "string", "description": "Notes body."],
+                "url": ["type": "string", "description": "URL to attach to the event. Some CalDAV and Exchange servers drop this field; project_slug does not rely on it."],
+                "project_slug": [
+                    "type": "string",
+                    "description": "Machine-readable project identifier, stored as a 'Project: <slug>' line at the top of the notes and reported back as metadata.project_slug. Lowercase; a-z, 0-9, '-', '_', '.'; max 64 characters. Notes are plain text on every calendar backend, which is why the slug goes there rather than in url."
+                ],
+                "alarm_minutes_before": ["type": "integer", "description": "Add an alarm this many minutes before the start."]
+            ], required: ["title", "start"])
+        ),
+        MCPTool(
+            name: "calendar_update_event",
+            description: "Change an existing macOS Calendar event. Only the fields passed are changed; anything omitted is left as it is.",
+            schema: objectSchema(properties: [
+                "id": ["type": "string", "description": "Event id, from calendar_search or calendar_create_event."],
+                "title": ["type": "string", "description": "New title."],
+                "start": ["type": "string", "description": "New start, ISO 8601."],
+                "end": ["type": "string", "description": "New end, ISO 8601."],
+                "duration_minutes": ["type": "integer", "description": "New length in minutes, applied from the start date."],
+                "all_day": ["type": "boolean", "description": "Switch the event between all-day and timed."],
+                "location": ["type": "string", "description": "New location. Empty string clears it."],
+                "notes": ["type": "string", "description": "New notes body. An existing project_slug is preserved unless project_slug is also passed."],
+                "url": ["type": "string", "description": "New URL. Empty string clears it."],
+                "project_slug": ["type": "string", "description": "New project slug. Empty string removes the marker."],
+                "calendar": ["type": "string", "description": "Move the event to this calendar, by title or id."],
+                "calendar_id": ["type": "string", "description": "Move the event to this calendar, by id."],
+                "span": [
+                    "type": "string",
+                    "description": "For a recurring event: 'this_event' (default) changes this occurrence, 'future_events' changes this one and all later ones."
+                ]
+            ], required: ["id"])
+        ),
+        MCPTool(
+            name: "calendar_delete_event",
+            description: "Delete a macOS Calendar event by id. There is no undo.",
+            schema: objectSchema(properties: [
+                "id": ["type": "string", "description": "Event id, from calendar_search or calendar_create_event."],
+                "span": [
+                    "type": "string",
+                    "description": "For a recurring event: 'this_event' (default) deletes this occurrence, 'future_events' deletes this one and all later ones."
+                ]
+            ], required: ["id"])
+        ),
+        MCPTool(
+            name: "calendar_create_calendar",
+            description: "Create a calendar. Defaults to the on-device 'Local' source so a scratch or test calendar does not sync to an account.",
+            schema: objectSchema(properties: [
+                "title": ["type": "string", "description": "Calendar title. Must not already exist."],
+                "source": ["type": "string", "description": "Source title to create it in, e.g. 'On My Mac' or an account name. Defaults to the local source."]
+            ], required: ["title"])
+        ),
+        MCPTool(
+            name: "calendar_delete_calendar",
+            description: "Delete a calendar and every event in it. There is no undo, so id and title must both be given and must refer to the same calendar.",
+            schema: objectSchema(properties: [
+                "id": ["type": "string", "description": "Calendar id, from calendar_list_calendars."],
+                "title": ["type": "string", "description": "Exact current title of that calendar. The delete is refused if it does not match."]
+            ], required: ["id", "title"])
         ),
         MCPTool(
             name: "contacts_search",

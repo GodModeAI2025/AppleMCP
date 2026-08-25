@@ -101,7 +101,8 @@ final class PermissionProvider {
             title: "Calendar",
             endpoint: "eventkit://events",
             state: effectiveState,
-            required: true
+            required: true,
+            rawState: state
         )
     }
 
@@ -148,7 +149,8 @@ final class PermissionProvider {
             title: "Contacts",
             endpoint: "contacts://local",
             state: effectiveState,
-            required: true
+            required: true,
+            rawState: state
         )
     }
 
@@ -358,26 +360,41 @@ final class PermissionProvider {
         return await speechRecognitionStatusItem(prompt: true)
     }
 
+    /// `rawState` is the framework's own answer, reported alongside `state` whenever the two can
+    /// differ.
+    ///
+    /// `verifiedState` can promote a `not_determined` status to `authorized` from a flag cached in
+    /// `UserDefaults`. That flag is keyed on the bundle identifier, so a second build of the app —
+    /// a development build, say — inherits it and reports `authorized` while EventKit still refuses
+    /// every call. Measured on macOS 26.5: `permissions_status` said `authorized`, and the first
+    /// write then sat waiting for a permission dialog. Exposing the raw value is what lets a caller
+    /// tell an actual grant from a remembered one.
     private func permissionItem(
         id: String,
         title: String,
         endpoint: String,
         state: String,
         required: Bool,
-        preview: String? = nil
+        preview: String? = nil,
+        rawState: String? = nil
     ) -> DataItem {
-        DataItem(
+        var metadata: [String: String] = [
+            "endpoint": endpoint,
+            "state": state,
+            "required": String(required)
+        ]
+        if let rawState {
+            metadata["raw_state"] = rawState
+        }
+
+        return DataItem(
             id: id,
             title: title,
             subtitle: endpoint,
             kind: "permission",
             source: "Permissions",
             preview: preview ?? state,
-            metadata: [
-                "endpoint": endpoint,
-                "state": state,
-                "required": String(required)
-            ]
+            metadata: metadata
         )
     }
 

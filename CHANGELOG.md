@@ -4,44 +4,47 @@
 
 ### Added
 
-- **`mail_search` can be paged, scoped and trusted.** New inputs `offset`, `mailbox`, `fields`,
-  `match`, `include_junk`, `include_recipients` and `auto_intent`; `limit` now goes to 500 instead of
-  being silently clamped to 50.
-- **`mail_list_mailboxes`**: every mailbox in the index with its account, path, role (`inbox`, `sent`,
-  `drafts`, `archive`, `junk`, `trash`, `folder`) and message counts — so a `mailbox` filter can name
-  something that exists.
-- **`ToolResponse.meta`**, an optional string map. `mail_search` fills in `total`, `returned`,
-  `offset`, `limit`, `has_more`, `truncated`, `total_exact`, `scanned`, `scan_capped`,
-  `fields_matched` inputs, and `recipients_searchable`. Additive: every existing decoder and every
-  provider that does not set it are unaffected.
-- Each mail item now reports `mailbox`, `mailbox_role` and `fields_matched`, so a hit can be
-  attributed to a folder and to the field that matched it.
-- `M3MCP_MAIL_ROOT` relocates the Mail store root the provider reads, so the search behaviour can be
-  tested against a synthetic Envelope Index. Read-only, like the provider.
+- **Calendar write support.** `calendar_create_event`, `calendar_update_event` and
+  `calendar_delete_event`, plus the three tools a caller needs to use them safely:
+  `calendar_list_calendars` (which calendar, and is it writable), `calendar_read_event` (read one
+  event back by id — `calendar_search` scans a date window, so it cannot confirm a write that moved
+  an event out of that window), and `calendar_create_calendar` / `calendar_delete_calendar`.
+- **`project_slug` on create and update.** A machine-readable project identifier, stored as a
+  `Project: <slug>` line at the top of the notes and reported back as `metadata.project_slug` by
+  every calendar read path. Notes rather than `url`, because `EKEvent.url` is dropped by some CalDAV
+  and Exchange servers while notes are plain text everywhere. Slugs are validated, so a slug carrying
+  a newline cannot plant a second marker.
+- **`calendar` on `calendar_search`**, to scope a search to one calendar. Without it a busy range can
+  push a specific event past the 100-item ceiling.
+- **`raw_state` on the permission items that can disagree with themselves.** `permissions_status`
+  promotes a `not_determined` status to `authorized` from a `UserDefaults` flag; that flag is keyed on
+  the bundle identifier, so a second build of the app inherits it and claims access it does not have.
+  `raw_state` reports what the framework actually said.
+- **`M3MCP_SOCKET_DIR`** relocates the endpoint for both the app and the bridge, so a development
+  build can run beside an installed one. `LocalHTTPServer.start()` unlinks the socket path before
+  binding, so without this a development build silently steals the installed app's endpoint.
+- **`M3MCP_TCC_REQUEST_TIMEOUT_SECONDS`** bounds the wait for the macOS permission dialog.
+
+### Changed
+
+- **Calendar tools no longer request access on every call.** They read
+  `EKEventStore.authorizationStatus` first and only prompt when it is `notDetermined`. The old path
+  called `requestFullAccessToEvents` on every `calendar_search`, which re-activated the app each time
+  and, after a denial, asked an already-answered question instead of reporting what was wrong.
+- **A permission request is bounded.** An unanswered dialog never calls its completion handler, so the
+  old code hung for as long as the client would wait — indistinguishable from a broken server. It now
+  returns an error naming the missing permission.
+- **`calendar_create_calendar` will not fall back to the default calendar's source.** On a machine
+  with no local ("On My Mac") source the old-style fallback would create a calendar inside whichever
+  account happened to be default. It now says so and asks for `source` explicitly.
 
 ### Fixed
 
-- **A sender address behind a display name was unsearchable.** The query matched
-  `COALESCE(addresses.comment, addresses.address)`, so a non-null display name masked the address
-  column: measured on a real store, three address-shaped queries returned 150 items with **zero**
-  sender matches — every hit came from a subject line. Display and matching are now separate
-  expressions, and `firstname.lastname` actually searches an address.
-- **Recipients were never searched**, so "the message I sent to X" was findable only if X appeared in
-  the subject. `mail_search` now joins `recipients` when the schema has it, and reports
-  `meta.recipients_searchable` when it does not.
-- **A truncated result was indistinguishable from a complete one.** `limit:200` returned 50 items with
-  `message: null`. `meta.truncated` / `meta.has_more` / `meta.total` now say so.
-- **A multi-word query was matched as one substring**, so `"Graph API"` returned nothing while
-  `"Graph"` returned 23. Terms are ANDed by default; `match:"phrase"` keeps the old behaviour.
-- `since_hours` is applied in the query rather than to an already-truncated page.
-- `include_body` was documented and never read; it now returns a body snippet, and `fields:["body"]`
-  searches message bodies within a `max_candidates` bound that `meta.scan_capped` reports.
-- The `mail_search` schema claimed inbox-only scope (`"Maximum inbox messages to inspect"`). The SQL
-  never had a mailbox predicate — the description was wrong, not the code.
-- `VoiceMemosProvider.dateValue` called `doubleValue(statement, column)` without the `column:` label,
-  so the app target did not build with Swift 6.3.
+- `VoiceMemosProvider.dateValue` called `doubleValue(statement, column)` without the required
+  argument label, so `main` did not compile with Swift 6.3.
 
 ## 0.2.0
+
 
 ### Breaking
 
