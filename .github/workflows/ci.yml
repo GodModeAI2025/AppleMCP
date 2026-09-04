@@ -1,0 +1,61 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  swift:
+    name: Build and tests
+    # macos-26, not macos-14 or macos-15: Package.swift weak-links FoundationModels
+    # unconditionally, and that framework only exists in the macOS 26 SDK. On an older SDK
+    # the link step fails with "ld: framework 'FoundationModels' not found". macos-14 is
+    # also deprecated in actions/runner-images.
+    runs-on: macos-26
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: SDK carries FoundationModels
+        run: |
+          set -euo pipefail
+          swift --version
+          sdk="$(xcrun --show-sdk-path)"
+          echo "SDK: $sdk"
+          if [ ! -d "$sdk/System/Library/Frameworks/FoundationModels.framework" ]; then
+            echo "::error::This SDK has no FoundationModels. Package.swift passes -weak_framework FoundationModels, so the link step would fail. Use a runner image whose default Xcode ships the macOS 26 SDK." >&2
+            exit 1
+          fi
+
+      - name: swift build
+        run: swift build
+
+      - name: swift test
+        run: swift test
+
+      # install_local.sh, the documented install path, builds with -c release. Release uses
+      # whole-module optimization, so it catches what a debug build lets through.
+      - name: swift build -c release
+        run: swift build -c release
+
+  docs:
+    name: Docs against code
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: README and landing page match the code
+        run: python3 script/check_docs.py

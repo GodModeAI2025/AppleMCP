@@ -19,9 +19,9 @@
   <key>NSAppDataUsageDescription</key>
   <string>M3MCP liest den lokalen Apple-Mail-Index fuer MCP-Mail-Abfragen, ohne Mail.app per AppleScript zu durchsuchen.</string>
   <key>NSCalendarsUsageDescription</key>
-  <string>M3MCP liest lokale Kalenderdaten fuer MCP-Abfragen.</string>
+  <string>M3MCP liest lokale Kalenderdaten fuer MCP-Abfragen und legt Termine und Kalender an, aendert und loescht sie ueber die Kalender-Schreibwerkzeuge.</string>
   <key>NSCalendarsFullAccessUsageDescription</key>
-  <string>M3MCP liest lokale Kalenderdaten fuer MCP-Abfragen.</string>
+  <string>M3MCP liest lokale Kalenderdaten fuer MCP-Abfragen und legt Termine und Kalender an, aendert und loescht sie ueber die Kalender-Schreibwerkzeuge.</string>
   <key>NSContactsUsageDescription</key>
   <string>M3MCP liest lokale Kontakte fuer MCP-Abfragen.</string>
   <key>NSRemindersUsageDescription</key>
