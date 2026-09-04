@@ -2,9 +2,9 @@
 
 [![CI](https://github.com/GodModeAI2025/AppleMCP/actions/workflows/ci.yml/badge.svg)](https://github.com/GodModeAI2025/AppleMCP/actions/workflows/ci.yml)
 
-Native macOS 15+ MCP server that gives AI assistants local access to your Apple data and Apple Intelligence features. Most tools read. Writing happens in three places: five calendar tools change your calendars, `ai_image_playground` writes a PNG per call, and `voicememos_transcribe` stores every transcript it produces under `~/Library/Application Support/M3MCP/transcripts/`.
+Native macOS 15+ MCP server that gives AI assistants local access to your Apple data and Apple Intelligence features. Most tools read. Those that write include five calendar tools that change your calendars, `ai_image_playground`, which writes a PNG per call, and `voicememos_transcribe`, which keeps the transcripts it produces under `~/Library/Application Support/M3MCP/transcripts/` and leaves a scratch audio file in the temporary directory whenever a recording has to be transcoded before recognition.
 
-AppleMCP consists of a SwiftUI app that bridges macOS privacy-controlled APIs and a `stdio` MCP server for Claude Desktop, Claude Code, and other MCP clients. It runs locally, with no cloud account and no sync of its own. Two things cross that line: `ai_translate` and `ai_writing_tools` hand your text to a Shortcut you built yourself, and `voicememos_transcribe` lets Apple's speech service take the audio when the locale has no on-device model. See [Limits](#limits).
+AppleMCP consists of a SwiftUI app that bridges macOS privacy-controlled APIs and a `stdio` MCP server for Claude Desktop, Claude Code, and other MCP clients. It runs locally, with no cloud account and no sync of its own. That does not make every path local: `ai_translate` and `ai_writing_tools` hand your text to a Shortcut you built yourself, `voicememos_transcribe` lets Apple's speech service take the audio when the locale has no on-device model, and an event a calendar tool writes into an iCloud calendar syncs like any other. See [Limits](#limits).
 
 ## What It Does
 

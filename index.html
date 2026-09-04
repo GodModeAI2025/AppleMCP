@@ -182,7 +182,7 @@
                 </div>
                 <div class="card">
                     <h3>Voice Memos</h3>
-                    <p>Search recordings in the local CloudRecordings store, read the transcript macOS stores inside each <code>.m4a</code>, or transcribe with Speech.framework, on device where the locale has a model and through Apple's speech service where it does not. Each recognition run is stored under Application Support, so the next call for that recording is free.</p>
+                    <p>Search recordings in the local CloudRecordings store, read the transcript macOS stores inside each <code>.m4a</code>, or transcribe with Speech.framework, on device where the locale has a model and through Apple's speech service where it does not. What it recognizes is written to Application Support, which makes a second call for the same recording cheap. Nothing removes those files afterwards.</p>
                 </div>
             </div>
         </section>
