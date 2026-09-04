@@ -38,7 +38,8 @@ final class SocketAuthenticationTests: XCTestCase {
     @discardableResult
     private func startServer(
         pinnedTo hashes: Set<String> = [],
-        requestTimeout: TimeInterval = 10
+        requestTimeout: TimeInterval = 10,
+        maximumOpenConnections: Int = 128
     ) throws -> LocalHTTPServer {
         let server = LocalHTTPServer(
             socketURL: socketURL,
@@ -71,11 +72,61 @@ final class SocketAuthenticationTests: XCTestCase {
                     ]
                 )
             },
-            requestTimeout: requestTimeout
+            requestTimeout: requestTimeout,
+            maximumOpenConnections: maximumOpenConnections
         )
         try server.start()
         self.server = server
         return server
+    }
+
+    /// Connects `count` times and sends `payload` on each, leaving every connection open.
+    ///
+    /// With no payload these are the silent connections the availability tests are about. The
+    /// listen backlog is smaller than a burst, so a refused connect is retried: that is what an
+    /// attacker with a loop of their own would do, and not retrying would measure the kernel rather
+    /// than the server.
+    @discardableResult
+    private func openConnections(_ count: Int, sending payload: Data? = nil) -> [Int32] {
+        var opened: [Int32] = []
+        for _ in 0..<count {
+            for attempt in 0..<40 {
+                let descriptor = socket(AF_UNIX, SOCK_STREAM, 0)
+                guard descriptor >= 0 else { break }
+                var address = Self.address(for: socketURL.path)
+                let connected = withUnsafePointer(to: &address) { pointer in
+                    pointer.withMemoryRebound(to: sockaddr.self, capacity: 1) { addressPointer in
+                        connect(descriptor, addressPointer, socklen_t(MemoryLayout<sockaddr_un>.size))
+                    }
+                }
+                if connected == 0 {
+                    if let payload {
+                        _ = payload.withUnsafeBytes { raw in
+                            raw.baseAddress.map { write(descriptor, $0, raw.count) }
+                        }
+                    }
+                    opened.append(descriptor)
+                    break
+                }
+                close(descriptor)
+                usleep(useconds_t(2_000 * (attempt + 1)))
+            }
+        }
+        return opened
+    }
+
+    /// Raises the descriptor limit where the hard limit allows it, because both ends of every
+    /// connection live in this process. Returns what is available afterwards.
+    private func availableDescriptors() -> rlim_t {
+        var limits = rlimit()
+        guard getrlimit(RLIMIT_NOFILE, &limits) == 0 else { return 0 }
+        if limits.rlim_cur < 512 {
+            var raised = limits
+            raised.rlim_cur = min(rlim_t(1024), limits.rlim_max)
+            _ = setrlimit(RLIMIT_NOFILE, &raised)
+            _ = getrlimit(RLIMIT_NOFILE, &limits)
+        }
+        return limits.rlim_cur
     }
 
     // MARK: - Token
@@ -421,46 +472,18 @@ final class SocketAuthenticationTests: XCTestCase {
     /// server. `/health` and an authorised tool call have to keep answering while they sit there.
     func testIdleConnectionsCannotStarveTheEndpoint() throws {
         // Two descriptors per connection, both ends being in this process, so the test needs headroom
-        // a stock runner does not always have. Raise the soft limit where the hard limit allows it,
-        // and skip rather than measure something else where it does not.
-        var limits = rlimit()
-        if getrlimit(RLIMIT_NOFILE, &limits) == 0, limits.rlim_cur < 512 {
-            var raised = limits
-            raised.rlim_cur = min(rlim_t(1024), limits.rlim_max)
-            _ = setrlimit(RLIMIT_NOFILE, &raised)
-            _ = getrlimit(RLIMIT_NOFILE, &limits)
-        }
+        // a stock runner does not always have. Skip rather than measure something else where the
+        // hard limit does not allow raising it.
+        let descriptors = availableDescriptors()
         try XCTSkipUnless(
-            limits.rlim_cur >= 512,
-            "only \(limits.rlim_cur) descriptors available; 120 connections need both ends of each"
+            descriptors >= 512,
+            "only \(descriptors) descriptors available; 120 connections need both ends of each"
         )
 
         try startServer()
 
-        var idle: [Int32] = []
+        let idle = openConnections(120)
         defer { for descriptor in idle { close(descriptor) } }
-
-        // The listen backlog is small, so a burst outruns the accept loop and the kernel starts
-        // refusing. Retrying gives the loop a chance to drain, which is what an attacker with a
-        // loop of their own would do too.
-        for _ in 0..<120 {
-            for attempt in 0..<40 {
-                let descriptor = socket(AF_UNIX, SOCK_STREAM, 0)
-                guard descriptor >= 0 else { break }
-                var address = Self.address(for: socketURL.path)
-                let connected = withUnsafePointer(to: &address) { pointer in
-                    pointer.withMemoryRebound(to: sockaddr.self, capacity: 1) { addressPointer in
-                        connect(descriptor, addressPointer, socklen_t(MemoryLayout<sockaddr_un>.size))
-                    }
-                }
-                if connected == 0 {
-                    idle.append(descriptor)
-                    break
-                }
-                close(descriptor)
-                usleep(useconds_t(2_000 * (attempt + 1)))
-            }
-        }
         XCTAssertGreaterThan(idle.count, 100, "only \(idle.count) connections were accepted")
 
         let started = Date()
@@ -474,6 +497,57 @@ final class SocketAuthenticationTests: XCTestCase {
 
         let elapsed = Date().timeIntervalSince(started)
         XCTAssertLessThan(elapsed, 8, "the endpoint took \(elapsed)s to answer behind \(idle.count) idle connections")
+    }
+
+    /// The cap itself must not become the outage.
+    ///
+    /// The test above stays under `maximumOpenConnections`, which is where a cap looks like a fix.
+    /// This one goes past it three times over: every slot is held by a process that sent nothing,
+    /// which is the cheapest attack there is. A silent slot has to yield to a real client, or the
+    /// endpoint is gone for as long as the attacker keeps reconnecting.
+    func testSilentConnectionsPastTheCapStillYieldTheEndpointToARealClient() throws {
+        // A small cap on purpose: the point is what happens *past* it, and 8 slots make that
+        // measurable without needing several hundred descriptors.
+        let cap = 8
+        try XCTSkipUnless(availableDescriptors() >= 256, "not enough descriptors for both ends of 24 connections")
+        try startServer(maximumOpenConnections: cap)
+
+        let silent = openConnections(cap * 3)
+        defer { for descriptor in silent { close(descriptor) } }
+        XCTAssertGreaterThanOrEqual(silent.count, cap * 2, "only \(silent.count) connections were accepted")
+
+        let started = Date()
+        let health = try request(method: "GET", path: "/health", body: nil, token: nil, timeout: 8)
+        XCTAssertEqual(health.status, 200, "with \(silent.count) silent connections against a cap of \(cap): \(health.statusLine)")
+
+        let tool = try request(
+            method: "POST", path: "/tools/source_status", body: Data("{}".utf8), token: token, timeout: 8
+        )
+        XCTAssertEqual(tool.status, 200, tool.statusLine)
+
+        let elapsed = Date().timeIntervalSince(started)
+        XCTAssertLessThan(elapsed, 8, "the endpoint took \(elapsed)s behind \(silent.count) silent connections")
+    }
+
+    /// A half-read request is work in progress, not a free slot.
+    ///
+    /// Displacing it would trade one denial for another: an attacker that sends one byte per
+    /// connection would then be pushing real requests out instead of being bounded by them. So when
+    /// every slot holds something that has spoken, the endpoint says `503` and means it.
+    func testAConnectionThatHasSentSomethingIsNotDisplacedAndTheCapThenHolds() throws {
+        let cap = 4
+        try startServer(maximumOpenConnections: cap)
+
+        // A request line and no terminator: enough to fill the buffer, never enough to answer.
+        let talking = openConnections(cap, sending: Data("GET /health HTTP/1.1\r\n".utf8))
+        defer { for descriptor in talking { close(descriptor) } }
+        XCTAssertEqual(talking.count, cap)
+
+        // Give the server a moment to read what was sent, so the buffers are no longer empty.
+        usleep(200_000)
+
+        let reply = try request(method: "GET", path: "/health", body: nil, token: nil, timeout: 8)
+        XCTAssertEqual(reply.status, 503, "a full set of partly-read requests must not be displaced: \(reply.statusLine)")
     }
 
     /// A request that never ends is answered and dropped, instead of being waited on.

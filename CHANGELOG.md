@@ -68,13 +68,31 @@ reads it.
   waiting for a request is now read through a dispatch source and costs a descriptor and a deadline
   rather than a thread; the deadline answers `408` and drops it. A thread is committed only once a
   complete request exists, and both counts are capped — 128 connections waiting, 32 requests being
-  served, anything past that is `503` straight away.
-  `SocketAuthenticationTests.testIdleConnectionsCannotStarveTheEndpoint` measures it: with 120 idle
-  connections in place, `/health` and a tool call used to hit an eight second timeout and now answer
-  in 0.04 seconds. What it is not is immunity: 128 connections held open still refuse the 129th until
-  a deadline frees a slot, and SECURITY.md says so under Known Gaps. The listen backlog went from 16
-  to the same 128 in the same breath — at 16 a burst overran it and the kernel answered a perfectly
-  ordinary client with ECONNREFUSED before the server ever saw it.
+  served. A cap on its own only moved the number, though: with 128 slots taken, the next connection
+  was refused with `503` no matter whose it was, so the same attack worked at 128 instead of at 120.
+  So the cap no longer decides by arrival order. When every slot is taken, the connection that has
+  waited longest without sending a single byte gives up its place to the new arrival, and only when
+  every slot holds a request that is actually being read is the new one refused. Exactly one
+  connection loses either way; this decides which, in favour of the one that has not yet had its
+  turn. The bridge writes its whole request in one call right after `connect`, so it is out of the
+  silent set within microseconds and is never the one displaced.
+  `SocketAuthenticationTests.testSilentConnectionsPastTheCapStillYieldTheEndpointToARealClient`
+  measures it past the cap, `testAConnectionThatHasSentSomethingIsNotDisplacedAndTheCapThenHolds`
+  measures that a half-read request is not thrown away to make room, and
+  `testIdleConnectionsCannotStarveTheEndpoint` keeps the original case. Against the state before this
+  release: 900 connections that say nothing used to leave `/health` and a tool call in an eight
+  second timeout and now answer in 0.12 seconds.
+- **The signature check in front of the accept loop refused ordinary clients under load.** The peer's
+  code identity was read on the accept queue, for every connection, before anything was known about
+  what it wanted. That queue is the only thing draining the listen backlog, so a process opening
+  sockets in a loop pushed the backlog to its limit and the kernel answered other people's `connect`
+  calls with ECONNREFUSED, measured at 63 to 74 refusals in six seconds where the same load against
+  the previous release produced none. The peer is now read when a complete request arrives, which is
+  where authorization needs it and where the cost falls on a connection that has actually asked for
+  something. Same load, same six seconds: 98 to 100 percent of tool calls answered `200`, against
+  0 percent before this change. The listen backlog went from 16 to 128 in the same breath. At 16 a
+  burst overran it and the kernel answered a perfectly ordinary client with ECONNREFUSED before the
+  server ever saw it.
 - **The bridge hung instead of answering when it was not allowed to read the keychain item.** With no
   `M3MCP_TOKEN` set, the bridge reads the token from the login keychain — an item the app created, so
   the ACL names the app and a read from the bridge needs the user's confirmation. Measured with an

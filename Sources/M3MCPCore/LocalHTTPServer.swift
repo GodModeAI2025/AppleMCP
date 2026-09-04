@@ -12,11 +12,14 @@ import Foundation
 /// directory hash. `SocketAuthorizer` holds the rules, `PeerIdentity` reads the peer.
 ///
 /// Availability is part of that access control, because authorization cannot happen before the
-/// request has been read whole — the token is a header. So an accepted connection is read through a
-/// dispatch source rather than by a thread parked in `read`: until a complete request arrives it
-/// costs a descriptor and a deadline, and nothing else. A thread is spent only once there is
-/// something to answer. Without that, 120 connections that say nothing were enough for any local
+/// request has been read whole: the token is a header. So an accepted connection is read through a
+/// dispatch source rather than by a thread parked in `read`. Until a complete request arrives it
+/// costs a descriptor and a deadline and nothing else, and a thread is spent only once there is
+/// something to answer. Two rules follow from that, and both are needed. A silent connection gets a
+/// deadline, and when the slots are full a silent connection is the one that loses its place to a
+/// new arrival. Without the first, 120 connections that say nothing were enough for any local
 /// process to take the endpoint away from the client that holds the token, `/health` included.
+/// Without the second, 128 of them still were.
 ///
 /// This type lives in M3MCPCore rather than in the app target so the authorization path can be
 /// exercised by `swift test`. Security code that only runs inside a GUI app is security code nobody
@@ -55,15 +58,18 @@ public final class LocalHTTPServer {
     ///
     /// A waiting connection costs a descriptor and a dispatch source, so this bounds the endpoint's
     /// share of the process's file descriptors rather than its threads.
+    ///
+    /// The cap does not decide who gets turned away when it is reached. A connection that has sent
+    /// nothing yields its slot to a newer one, so filling every slot buys a silent process a burst
+    /// and not an outage. See `acceptPendingConnections`.
     private let maximumOpenConnections: Int
 
     /// How many complete requests may be served at once.
     ///
     /// `connectionQueue` is concurrent and `serve` blocks on it, so every request in flight holds a
     /// thread out of a pool not much larger than 64. Only a connection that has already delivered a
-    /// whole request gets one — which is the difference between this cap and the one above, and the
-    /// reason a process that connects and stays silent can no longer take the endpoint away from a
-    /// client that has the token.
+    /// whole request gets one, which is the difference between this cap and the one above: silence
+    /// is cheap, and a thread is the price of having said something.
     private let maximumConcurrentRequests: Int
 
     private let connectionCountLock = NSLock()
@@ -233,15 +239,13 @@ public final class LocalHTTPServer {
     /// whole point of reading through a source instead of blocking on `read`.
     private final class PendingConnection {
         let descriptor: Int32
-        let peer: PeerIdentity
         var buffer = Data()
         var readSource: DispatchSourceRead?
         var timer: DispatchSourceTimer?
         var closed = false
 
-        init(descriptor: Int32, peer: PeerIdentity) {
+        init(descriptor: Int32) {
             self.descriptor = descriptor
-            self.peer = peer
         }
     }
 
@@ -254,27 +258,67 @@ public final class LocalHTTPServer {
 
             prepare(client)
 
-            // Past the cap the connection is dropped here, on the accept queue, before anything is
-            // committed to it. The refusal is written best-effort on a non-blocking descriptor: a
-            // client that will not read it must not be able to stall the accept loop in turn.
-            guard claimSlot(\.openConnections, limit: maximumOpenConnections) else {
-                refuse(client, status: 503, reason: "Too many open connections")
-                continue
+            // At the cap, the connection that just arrived is the wrong one to turn away. It is the
+            // one that might have something to say; a slot held without a single byte in it belongs
+            // to a connection that has already shown it has not. So the oldest silent connection is
+            // dropped and the new one takes its place. That is what a cap alone did not do: a
+            // process without a token can still fill every slot, but it cannot keep them, because
+            // every arrival after that costs it the oldest slot it holds.
+            //
+            // The bridge writes its whole request in one call straight after `connect`, so it is out
+            // of the silent set within microseconds and is never the connection picked. Exactly one
+            // connection is refused either way; this only decides which, and it decides in favour of
+            // the one that has not yet had its turn.
+            if !claimSlot(\.openConnections, limit: maximumOpenConnections) {
+                // Synchronous on purpose. `pendingConnections` belongs to `readQueue`, and waiting
+                // here is also what stops the accept loop from running ahead of its own admissions
+                // and holding an unbounded number of descriptors while it does.
+                var displaced = false
+                readQueue.sync { displaced = self.dropOldestSilentConnection() }
+
+                // Nothing silent left means every slot holds a request being read, and then the
+                // refusal is the honest answer. It is written best-effort on a non-blocking
+                // descriptor: a client that will not read it must not stall the accept loop in turn.
+                guard displaced, claimSlot(\.openConnections, limit: maximumOpenConnections) else {
+                    refuse(client, status: 503, reason: "Too many open connections")
+                    continue
+                }
             }
 
-            // Read while the connection is still open and before any work is queued: the audit
-            // token identifies the process that connected, and a pid alone could be recycled.
-            let peer = PeerIdentity.resolve(descriptor: client)
-
             // Onto the read queue, which owns everything about a pending connection from here on.
+            // Nothing else happens here: this loop is the only thing draining the listen backlog,
+            // and every microsecond it spends on a connection is a microsecond in which the kernel
+            // may answer somebody else's `connect` with ECONNREFUSED. Working out who the peer is
+            // costs a signature check and belongs where it is needed, not in front of the queue.
             readQueue.async { [weak self] in
                 guard let self else {
                     close(client)
                     return
                 }
-                self.beginReading(client, peer: peer)
+                self.beginReading(client)
             }
         }
+    }
+
+    /// Ends the connection that has waited longest without sending a byte, so a newer one can have
+    /// its slot. Runs on `readQueue`, which owns `pendingConnections`.
+    ///
+    /// Returns false when there is nothing silent to drop, which means every slot is held by a
+    /// request that is actually being read. Those are not displaced: a half-read request is work in
+    /// progress, and throwing it away would turn a full endpoint into a lossy one.
+    private func dropOldestSilentConnection() -> Bool {
+        guard let victim = pendingConnections.first(where: { $0.buffer.isEmpty && !$0.closed }) else {
+            return false
+        }
+
+        finish(
+            victim,
+            writing: response(
+                status: 503,
+                body: ["error": "Displaced by a newer connection after sending nothing"]
+            )
+        )
+        return true
     }
 
     /// Non-blocking, no SIGPIPE, and a send timeout for the reply.
@@ -306,8 +350,8 @@ public final class LocalHTTPServer {
     // MARK: - Reading a request without holding a thread
 
     /// Runs on `readQueue`.
-    private func beginReading(_ client: Int32, peer: PeerIdentity) {
-        let connection = PendingConnection(descriptor: client, peer: peer)
+    private func beginReading(_ client: Int32) {
+        let connection = PendingConnection(descriptor: client)
 
         let readSource = DispatchSource.makeReadSource(fileDescriptor: client, queue: readQueue)
         readSource.setEventHandler { [weak self] in
@@ -380,10 +424,17 @@ public final class LocalHTTPServer {
         // the descriptor it was created with. Without it, cancelling the source would close the
         // socket out from under the reply.
         let served = dup(connection.descriptor)
-        let peer = connection.peer
-        finish(connection, writing: nil)
+        guard served >= 0 else {
+            finish(connection, writing: nil)
+            return
+        }
 
-        guard served >= 0 else { return }
+        // Now, and not at `accept`: the peer is what authorization is decided on, so it is read for
+        // a connection that has actually asked for something and never for one that only sat there.
+        // `dup` shares the socket, so `LOCAL_PEERTOKEN` still names the process that connected, and
+        // reading it here keeps that true even if the peer has since gone away.
+        let peer = PeerIdentity.resolve(descriptor: served)
+        finish(connection, writing: nil)
 
         // The refusal goes out while the descriptor is still non-blocking, so a client that will not
         // read it cannot hold up `readQueue` in the bargain.
