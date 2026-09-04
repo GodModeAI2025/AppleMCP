@@ -31,6 +31,22 @@ reads it.
 - **Server › Copy MCP Client Token** (⇧⌘T) puts the token on the pasteboard, and the app window and
   `/health` both report whether the client binary is pinned or whether the install is running
   token-only.
+- **Two-step confirmation for the calendar write tools.** `calendar_create_event`,
+  `calendar_update_event`, `calendar_delete_event`, `calendar_create_calendar` and
+  `calendar_delete_calendar` no longer write on the first call. That call returns `ok: false` with a
+  preview — for the two tools that change an existing event, the event as it stands right now — and a
+  `confirm_token` in `meta`; repeating the call with the same arguments plus that token carries the
+  write out.
+
+  The token is an HMAC over the tool name and the canonical form of the arguments, so a token issued
+  for moving one meeting cannot confirm deleting a calendar. It expires after five minutes, and the
+  key is fresh per app start, so a pending confirmation does not survive a restart.
+
+  The check sits in `LocalMCPService.handle` ahead of every provider, not in the tool schema: the
+  bridge answers `tools/list` out of its own catalog without asking the app, so a schema that
+  declares `confirm_token` says nothing about what the socket does. `confirm_token` is declared in
+  `ToolCatalog` all the same — the schemas set `additionalProperties: false`, and a client that
+  validates its arguments would otherwise drop the parameter and never get past step one.
 
 ### Changed
 

@@ -13,6 +13,10 @@ final class LocalMCPService {
     private let foundationModelsProvider = FoundationModelsProvider()
     private let permissionProvider = PermissionProvider()
 
+    /// Two-step confirmation for the calendar write tools. The key is fresh for this app run, so a
+    /// token from before a restart is void — which is what a confirmation is for.
+    private let writeGuard = WriteGuard()
+
     var services: [ServiceHealth] {
         [
             ServiceHealth(name: "Permissions", endpoint: "m3mcp://permissions", mode: "TCC preflight", state: "on-demand"),
@@ -42,7 +46,17 @@ final class LocalMCPService {
         ]
     }
 
-    func handle(tool: String, input: [String: JSONValue]) async -> ToolResponse {
+    func handle(tool: String, input requested: [String: JSONValue]) async -> ToolResponse {
+        // Ahead of every provider, so a write tool cannot be reached without the second step, whether
+        // the call arrives through the bridge or straight off the socket.
+        let input: [String: JSONValue]
+        switch writeGuard.evaluate(tool: tool, input: requested) {
+        case .execute(let confirmed):
+            input = confirmed
+        case .challenge(let challenge):
+            return await preview(for: challenge)
+        }
+
         let response: ToolResponse
         switch tool {
         case "source_status":
@@ -124,5 +138,23 @@ final class LocalMCPService {
         }
 
         return response
+    }
+
+    /// The first half of a write: what is there now, so the confirmation is read against the real
+    /// state rather than against the arguments the caller sent.
+    ///
+    /// Only the two tools that change an existing event can show this. `calendar_create_event` has
+    /// nothing to read yet, and for the calendar tools the arguments are the whole story; both fall
+    /// back to echoing the call in `meta`.
+    private func preview(for challenge: WriteGuard.Challenge) async -> ToolResponse {
+        guard challenge.tool == "calendar_update_event" || challenge.tool == "calendar_delete_event",
+              let id = challenge.arguments["id"]?.stringValue,
+              !id.isEmpty
+        else {
+            return challenge.response()
+        }
+
+        let current = await calendarProvider.readEvent(input: ["id": .string(id)])
+        return challenge.response(preview: current.ok ? current.items : [])
     }
 }

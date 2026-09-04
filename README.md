@@ -185,7 +185,16 @@ The M3MCP UI app must be running for MCP calls to work. The bridge talks to the 
 
 ### Calendar Writes
 
-These change the user's calendar. There is no undo.
+These change the user's calendar. There is no undo, so each of them takes two calls.
+
+The first call writes nothing. It answers `ok: false` with a preview — for `calendar_update_event`
+and `calendar_delete_event` that is the event as it stands right now — and a `confirm_token` in
+`meta`. Repeat the call with the same arguments plus `"confirm_token": "<value>"` and it goes
+through. The token is an HMAC over the tool name and the arguments, so a token issued for moving one
+meeting cannot delete a calendar, it is valid for five minutes, and it is void after an app restart.
+
+The check runs in the app, ahead of every provider, not in the tool schema. Something that talks to
+`~/Library/Application Support/M3MCP/mcp.sock` directly is subject to it exactly as an MCP client is.
 
 | Tool | Description |
 |---|---|
@@ -253,7 +262,7 @@ The security policy and the threat model live in `SECURITY.md`, currently in rev
 - **`ai_writing_tools` needs a Shortcut named "Writing Tools"** for the same reason, and the same open question follows: the text goes into that Shortcut, and where it goes from there is the Shortcut's business, not AppleMCP's. `ai_summarize` does not; it calls FoundationModels directly and needs macOS 26.
 - **`ai_image_playground` leaves files behind.** Each call writes a PNG into the process temporary directory and returns the path. AppleMCP never deletes them; they stay until macOS clears that directory.
 - **`voicememos_transcribe` keeps what it recognizes.** Every recognition run writes the text to `~/Library/Application Support/M3MCP/transcripts/<digest>.txt`, mode `0600` in a `0700` directory, which is what makes the second call for the same recording cheap. Nothing deletes those files afterwards, and unlike the PNG files they do not sit in a directory macOS clears. Recognition is only on device where the locale has a model: `LegacySpeechRecognizer` sets `requiresOnDeviceRecognition` to whatever `SFSpeechRecognizer` reports as supported (line 72), so on every other locale the audio goes to Apple.
-- **Calendar writes cannot be undone.** `calendar_delete_calendar` removes a calendar with its events. It refuses unless `id` and `title` agree and the calendar is mutable, and that is the whole safety net: there is no dry-run mode and no confirmation step.
+- **Calendar writes cannot be undone.** The two-step confirmation makes a write deliberate; it does not make it reversible. `calendar_delete_calendar` removes a calendar with its events, and once confirmed the events are gone. There is no snapshot and no restore tool.
 - **Test coverage is narrow.** The suite covers the Voice Memos transcript parser and the calendar project slug. Providers, the local HTTP server, and the bridge have no tests, so CI proves that the package builds and those two units work, not that a provider still returns what it used to.
 - **The release build carries no Apple signature.** It is signed ad hoc: no Developer ID, no
   notarisation, `spctl --assess` answers `rejected`, and because the designated requirement is the
@@ -276,7 +285,8 @@ Tracked in the issue tracker:
 
 Wanted, no issue open yet:
 
-- A safety layer for the write tools: dry-run, and a confirmation for the destructive ones
+- An undo for the write tools. The confirmation step makes a write deliberate; a snapshot before the
+  write is what would make it reversible
 - Tests for the providers and the bridge, so CI covers more than the parser
 - A build macOS does not warn about: Developer ID signing and notarisation. The release build is
   signed ad hoc, so every download costs the user a trip through System Settings

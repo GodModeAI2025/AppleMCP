@@ -63,7 +63,7 @@ enum ToolCatalog {
         ),
         MCPTool(
             name: "calendar_create_event",
-            description: "Create an event in a local macOS calendar via EventKit. Writes to the user's real calendar — confirm the target calendar and the times before calling.",
+            description: "Create an event in a local macOS calendar via EventKit. Two steps: the first call writes nothing and returns a preview plus meta.confirm_token; repeat the call with the same arguments and confirm_token set to that value to go ahead. The token expires after five minutes and is void if any argument changes.",
             schema: objectSchema(properties: [
                 "title": ["type": "string", "description": "Event title."],
                 "start": [
@@ -83,11 +83,11 @@ enum ToolCatalog {
                     "description": "Machine-readable project identifier, stored as a 'Project: <slug>' line at the top of the notes and reported back as metadata.project_slug. Lowercase; a-z, 0-9, '-', '_', '.'; max 64 characters. Notes are plain text on every calendar backend, which is why the slug goes there rather than in url."
                 ],
                 "alarm_minutes_before": ["type": "integer", "description": "Add an alarm this many minutes before the start."]
-            ], required: ["title", "start"])
+            ], required: ["title", "start"], confirmable: true)
         ),
         MCPTool(
             name: "calendar_update_event",
-            description: "Change an existing macOS Calendar event. Only the fields passed are changed; anything omitted is left as it is.",
+            description: "Change an existing macOS Calendar event. Only the fields passed are changed; anything omitted is left as it is. Two steps: the first call writes nothing and returns the event as it stands now plus meta.confirm_token; repeat the call with the same arguments and confirm_token set to that value to go ahead.",
             schema: objectSchema(properties: [
                 "id": ["type": "string", "description": "Event id, from calendar_search or calendar_create_event."],
                 "title": ["type": "string", "description": "New title."],
@@ -105,34 +105,34 @@ enum ToolCatalog {
                     "type": "string",
                     "description": "For a recurring event: 'this_event' (default) changes this occurrence, 'future_events' changes this one and all later ones."
                 ]
-            ], required: ["id"])
+            ], required: ["id"], confirmable: true)
         ),
         MCPTool(
             name: "calendar_delete_event",
-            description: "Delete a macOS Calendar event by id. There is no undo.",
+            description: "Delete a macOS Calendar event by id. There is no undo. Two steps: the first call deletes nothing and returns the event that would be deleted plus meta.confirm_token; repeat the call with the same arguments and confirm_token set to that value to go ahead.",
             schema: objectSchema(properties: [
                 "id": ["type": "string", "description": "Event id, from calendar_search or calendar_create_event."],
                 "span": [
                     "type": "string",
                     "description": "For a recurring event: 'this_event' (default) deletes this occurrence, 'future_events' deletes this one and all later ones."
                 ]
-            ], required: ["id"])
+            ], required: ["id"], confirmable: true)
         ),
         MCPTool(
             name: "calendar_create_calendar",
-            description: "Create a calendar. Defaults to the on-device 'Local' source so a scratch or test calendar does not sync to an account.",
+            description: "Create a calendar. Defaults to the on-device 'Local' source so a scratch or test calendar does not sync to an account. Two steps: the first call creates nothing and returns meta.confirm_token; repeat the call with the same arguments and confirm_token set to that value to go ahead.",
             schema: objectSchema(properties: [
                 "title": ["type": "string", "description": "Calendar title. Must not already exist."],
                 "source": ["type": "string", "description": "Source title to create it in, e.g. 'On My Mac' or an account name. Defaults to the local source."]
-            ], required: ["title"])
+            ], required: ["title"], confirmable: true)
         ),
         MCPTool(
             name: "calendar_delete_calendar",
-            description: "Delete a calendar and every event in it. There is no undo, so id and title must both be given and must refer to the same calendar.",
+            description: "Delete a calendar and every event in it. There is no undo, so id and title must both be given and must refer to the same calendar. Two steps as well: the first call deletes nothing and returns meta.confirm_token; repeat the call with the same arguments and confirm_token set to that value to go ahead.",
             schema: objectSchema(properties: [
                 "id": ["type": "string", "description": "Calendar id, from calendar_list_calendars."],
                 "title": ["type": "string", "description": "Exact current title of that calendar. The delete is refused if it does not match."]
-            ], required: ["id", "title"])
+            ], required: ["id", "title"], confirmable: true)
         ),
         MCPTool(
             name: "contacts_search",
@@ -320,7 +320,25 @@ enum ToolCatalog {
         return objectSchema(properties: properties)
     }
 
-    private static func objectSchema(properties: [String: Any], required: [String] = []) -> [String: Any] {
+    /// `confirmable` adds the second-step parameter. It has to be declared: `additionalProperties` is
+    /// false, so a client that validates its arguments against this schema would drop an undeclared
+    /// `confirm_token` and never get past the first step.
+    private static func objectSchema(
+        properties: [String: Any],
+        required: [String] = [],
+        confirmable: Bool = false
+    ) -> [String: Any] {
+        var properties = properties
+        if confirmable {
+            properties["confirm_token"] = [
+                "type": "string",
+                "description": "Second step. Leave it out on the first call: that call writes nothing and "
+                    + "returns the token in meta.confirm_token together with a preview. Pass it back "
+                    + "unchanged, with the same arguments, to carry the write out. Valid for five minutes, "
+                    + "and only for the exact arguments it was issued for."
+            ]
+        }
+
         var schema: [String: Any] = [
             "type": "object",
             "properties": properties,
