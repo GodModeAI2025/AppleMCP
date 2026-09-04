@@ -2,9 +2,9 @@
 
 [![CI](https://github.com/GodModeAI2025/AppleMCP/actions/workflows/ci.yml/badge.svg)](https://github.com/GodModeAI2025/AppleMCP/actions/workflows/ci.yml)
 
-Native macOS 15+ MCP server that gives AI assistants local access to your Apple data and Apple Intelligence features. Most tools read. Five calendar tools write to your calendars, and `ai_image_playground` writes PNG files to disk.
+Native macOS 15+ MCP server that gives AI assistants local access to your Apple data and Apple Intelligence features. Most tools read. Writing happens in three places: five calendar tools change your calendars, `ai_image_playground` writes a PNG per call, and `voicememos_transcribe` stores every transcript it produces under `~/Library/Application Support/M3MCP/transcripts/`.
 
-AppleMCP consists of a SwiftUI app that bridges macOS privacy-controlled APIs and a `stdio` MCP server for Claude Desktop, Claude Code, and other MCP clients. Everything runs locally: no cloud, no sync, no data leaves your machine.
+AppleMCP consists of a SwiftUI app that bridges macOS privacy-controlled APIs and a `stdio` MCP server for Claude Desktop, Claude Code, and other MCP clients. It runs locally, with no cloud account and no sync of its own. Two things cross that line: `ai_translate` and `ai_writing_tools` hand your text to a Shortcut you built yourself, and `voicememos_transcribe` lets Apple's speech service take the audio when the locale has no on-device model. See [Limits](#limits).
 
 ## What It Does
 
@@ -17,7 +17,7 @@ AppleMCP consists of a SwiftUI app that bridges macOS privacy-controlled APIs an
 | **Notes** | Notes.app AppleScript Automation | Automation Permission |
 | **Photos** | Photos.framework | Photos Access |
 | **Voice Memos** | Local `CloudRecordings.db` + in-file transcripts, SpeechAnalyzer / SFSpeechRecognizer for recordings without one | Full Disk Access, Speech Recognition (only for `voicememos_transcribe`) |
-| **Apple Intelligence** | Native APIs (ImagePlayground, Translation, Writing Tools) | None |
+| **Apple Intelligence** | ImagePlayground framework for images; `shortcuts run` through AppleScript for Translation and Writing Tools | None |
 | **Foundation Models** | On-device language model via FoundationModels (macOS 26, weak-linked) | None |
 
 ## What AppleMCP Is Not
@@ -97,7 +97,7 @@ The M3MCP UI app must be running for MCP calls to work. The bridge talks to the 
 
 | Tool | Description |
 |---|---|
-| `mail_search` | Search messages in Apple Mail (subject, sender, date, read status) |
+| `mail_search` | Search messages in the local Apple Mail index. Matches subject, sender and recipients by default, body on request; scoped to a mailbox with `mailbox`, narrowed with `unread_only` and `since_hours`, paged with `offset`, and `match` picks how a multi-word query applies: all, any, or phrase |
 | `mail_list_mailboxes` | List the mailboxes of the local Mail index with account, path, role, and message counts, so a `mail_search` can be scoped to a name that exists |
 | `mail_read` | Read full email content by ID (body, recipients, attachments metadata) |
 | `calendar_search` | Search calendar events via EventKit, optionally scoped to one calendar |
@@ -113,7 +113,7 @@ The M3MCP UI app must be running for MCP calls to work. The bridge talks to the 
 | `voicememos_read` | Read one recording including its stored transcript |
 | `voicememos_transcript` | Return a stored transcript as text, timestamped text, or JSON segments |
 | `voicememos_audio` | Return the recording as a local path or base64 audio |
-| `voicememos_transcribe` | Transcribe on device: stored transcript, cache, SpeechAnalyzer (macOS 26), then SFSpeechRecognizer |
+| `voicememos_transcribe` | Transcribe a recording: stored transcript, cache, SpeechAnalyzer (macOS 26), then SFSpeechRecognizer, which is on device only where the locale has a model |
 
 ### Calendar Writes
 
@@ -170,9 +170,9 @@ See [docs/VOICE_MEMOS.md](docs/VOICE_MEMOS.md) for the store layout, the transcr
 
 ## Privacy
 
-All data stays local. The app uses macOS TCC (Transparency, Consent, and Control) for every data source. AppleMCP opens no remote connection: the endpoint is a Unix domain socket rather than a TCP port, and the HTTP the bridge speaks travels only over that socket.
+What the app reads stays on the Mac, except where a tool hands it on: `ai_translate` and `ai_writing_tools` to a Shortcut you built, `voicememos_transcribe` to Apple's speech service on locales without an on-device model, see [Limits](#limits). The app uses macOS TCC (Transparency, Consent, and Control) for every data source. AppleMCP opens no remote connection: the endpoint is a Unix domain socket rather than a TCP port, and the HTTP the bridge speaks travels only over that socket.
 
-Because the app holds Full Disk Access, anything that can reach the endpoint inherits that reach. The socket lives in a `0700` directory and is itself `0600`, so a sandboxed app — the case macOS TCC exists to stop — cannot connect, and a web page cannot reach it under any circumstances. An unsandboxed process running as you is a different case, see [Limits](#limits). Mail reads the local SQLite index directly, it never sends emails or modifies any data. Voice Memos are opened read-only, and speech recognition runs on device whenever the locale supports it, so recordings never leave the Mac.
+Because the app holds Full Disk Access, anything that can reach the endpoint inherits that reach. The socket lives in a `0700` directory and is itself `0600`, so a sandboxed app — the case macOS TCC exists to stop — cannot connect, and a web page cannot reach it under any circumstances. An unsandboxed process running as you is a different case, see [Limits](#limits). Mail reads the local SQLite index directly, it never sends emails or modifies any data. Voice Memos are opened read-only. Speech recognition runs on device where the locale has a model for it; where it does not, the audio goes to Apple's speech service instead.
 
 ## Security
 
@@ -182,8 +182,9 @@ The security policy and the threat model live in `SECURITY.md`, currently in rev
 
 - **The socket does not check who connects.** File permissions keep out sandboxed apps and web pages. They do not distinguish one unsandboxed process of yours from another, so any local process running as you can call the endpoint and use the app's Full Disk Access. Tracked as [issue #9](https://github.com/GodModeAI2025/AppleMCP/issues/9).
 - **`ai_translate` has prerequisites nothing sets up for you.** The provider pipes the text through `/usr/bin/python3` into `shortcuts run Translate`. You need a Shortcut named "Translate" that you created yourself, and the system Python 3 at `/usr/bin/python3`. Without either the tool answers that translation is not reachable. Whether the translation itself stays on the Mac depends on whether the language pair is downloaded, which the Shortcuts and Translate apps decide, not AppleMCP.
-- **`ai_writing_tools` needs a Shortcut named "Writing Tools"** for the same reason. `ai_summarize` does not; it calls FoundationModels directly and needs macOS 26.
+- **`ai_writing_tools` needs a Shortcut named "Writing Tools"** for the same reason, and the same open question follows: the text goes into that Shortcut, and where it goes from there is the Shortcut's business, not AppleMCP's. `ai_summarize` does not; it calls FoundationModels directly and needs macOS 26.
 - **`ai_image_playground` leaves files behind.** Each call writes a PNG into the process temporary directory and returns the path. AppleMCP never deletes them; they stay until macOS clears that directory.
+- **`voicememos_transcribe` keeps what it recognizes.** Every recognition run writes the text to `~/Library/Application Support/M3MCP/transcripts/<digest>.txt`, mode `0600` in a `0700` directory, which is what makes the second call for the same recording cheap. Nothing deletes those files afterwards, and unlike the PNG files they do not sit in a directory macOS clears. Recognition is only on device where the locale has a model: `LegacySpeechRecognizer` sets `requiresOnDeviceRecognition` to whatever `SFSpeechRecognizer` reports as supported (line 72), so on every other locale the audio goes to Apple.
 - **Calendar writes cannot be undone.** `calendar_delete_calendar` removes a calendar with its events. It refuses unless `id` and `title` agree and the calendar is mutable, and that is the whole safety net: there is no dry-run mode and no confirmation step.
 - **Test coverage is narrow.** The suite covers the Voice Memos transcript parser and the calendar project slug. Providers, the local HTTP server, and the bridge have no tests, so CI proves that the package builds and those two units work, not that a provider still returns what it used to.
 - **Building needs the macOS 26 SDK.** `Package.swift` weak-links `FoundationModels`, which exists only in that SDK. Without it the link step fails with `ld: framework 'FoundationModels' not found`, even though the built app runs on macOS 15.

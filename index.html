@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>AppleMCP — Local Apple Data for AI Assistants</title>
-    <meta name="description" content="Native macOS MCP server giving AI assistants secure, local access to Mail, Calendar, Contacts, Notes, Photos, Reminders, Voice Memos, and Apple Intelligence.">
+    <meta name="description" content="Native macOS MCP server giving AI assistants local access to Mail, Calendar, Contacts, Notes, Photos, Reminders, Voice Memos, and Apple Intelligence.">
     <style>
         :root {
             --bg: #0d1117;
@@ -143,13 +143,13 @@
     <div class="container">
         <header>
             <h1>AppleMCP</h1>
-            <p>Native macOS MCP server that gives AI assistants secure, local access to your Apple data and Apple Intelligence.</p>
+            <p>Native macOS MCP server that gives AI assistants local access to your Apple data and Apple Intelligence.</p>
             <div class="badge-row">
                 <span class="badge blue">macOS 15+</span>
                 <span class="badge blue">Swift</span>
                 <span class="badge">MCP Protocol</span>
                 <span class="badge">Local-first</span>
-                <span class="badge">Privacy-safe</span>
+                <span class="badge">Unix socket, no TCP port</span>
             </div>
         </header>
 
@@ -174,7 +174,7 @@
                 </div>
                 <div class="card">
                     <h3>Reminders</h3>
-                    <p>Search reminders via EventKit. Filter by completion status, due dates, priorities.</p>
+                    <p>Search reminders via EventKit. The query matches title, notes and list name, and completion status is the one filter. Due date and priority come back as metadata; results are sorted by due date.</p>
                 </div>
                 <div class="card">
                     <h3>Photos</h3>
@@ -182,7 +182,7 @@
                 </div>
                 <div class="card">
                     <h3>Voice Memos</h3>
-                    <p>Search recordings in the local CloudRecordings store, read the transcript macOS stores inside each <code>.m4a</code>, or transcribe on device with Speech.framework.</p>
+                    <p>Search recordings in the local CloudRecordings store, read the transcript macOS stores inside each <code>.m4a</code>, or transcribe with Speech.framework, on device where the locale has a model and through Apple's speech service where it does not. Each recognition run is stored under Application Support, so the next call for that recording is free.</p>
                 </div>
             </div>
         </section>
@@ -192,11 +192,11 @@
             <div class="grid">
                 <div class="card">
                     <h3>Writing Tools</h3>
-                    <p>Summarize, rewrite, proofread, or change tone using Apple's on-device writing tools.</p>
+                    <p>Summarize, rewrite, proofread, or change tone. The text goes through a Shortcut named Writing Tools that you create yourself; without it the tool reports that Writing Tools is not reachable.</p>
                 </div>
                 <div class="card">
                     <h3>Translation</h3>
-                    <p>Translate text between languages using the system translation service.</p>
+                    <p>Translate text between languages through a Shortcut named Translate that you create yourself, driven by <code>/usr/bin/python3</code>. Whether the translation stays on the Mac depends on the language pair Shortcuts and Translate have downloaded.</p>
                 </div>
                 <div class="card">
                     <h3>Image Playground</h3>
@@ -257,7 +257,7 @@ curl --unix-socket ~/Library/Application\ Support/M3MCP/mcp.sock \
         </div>
 
         <footer>
-            <p>AppleMCP is open source under the Apache 2.0 license. All data stays on your device.</p>
+            <p>AppleMCP is open source under the Apache 2.0 license. What it reads stays on your device, apart from ai_translate and ai_writing_tools, which pass text to a Shortcut you built, and transcription on locales without an on-device speech model.</p>
             <p style="margin-top: 8px;"><a href="https://godmodeai2025.github.io/MarkZimmermann/" style="color: var(--muted); text-decoration: none;">Impressum</a></p>
         </footer>
     </div>

@@ -96,7 +96,9 @@ first:
    by `timeout_seconds` (default 300); the task is cancelled when it expires.
 
 Everything runs inside M3MCPApp, so macOS attributes the Speech Recognition permission to the signed
-app bundle rather than to the MCP bridge process, and recognition stays on device.
+app bundle rather than to the MCP bridge process. Step 3 is on device by construction. Step 4 sets
+`requiresOnDeviceRecognition` to what `SFSpeechRecognizer` reports as supported, so a locale without a
+local model is recognized by Apple's speech service, not on the Mac.
 
 - The locale defaults to the system locale. Pass `language` (for example `de-DE`) to override it.
 - Pass `prefer_stored: false` to skip steps 1 and 2 and force fresh recognition.
