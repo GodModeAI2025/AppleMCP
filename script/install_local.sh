@@ -25,6 +25,9 @@ CONFIGURATION="${M3MCP_CONFIGURATION:-release}"
 INSTALL_DIR="${M3MCP_INSTALL_DIR:-$HOME/Applications}"
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+# shellcheck source=lib/codesign.sh
+source "$ROOT_DIR/script/lib/codesign.sh"
+
 APP_BUNDLE="$INSTALL_DIR/$BUNDLE_NAME.app"
 APP_BINARY="$APP_BUNDLE/Contents/MacOS/$APP_NAME"
 AGENT_PLIST="$HOME/Library/LaunchAgents/$BUNDLE_ID.plist"
@@ -32,34 +35,10 @@ SOURCE_INFO_PLIST="$ROOT_DIR/Sources/$APP_NAME/Resources/Info.plist"
 
 # --- signing identity -------------------------------------------------------------------------
 
-pick_identity() {
-  if [[ -n "${M3MCP_CODESIGN_IDENTITY:-}" ]]; then
-    printf '%s' "$M3MCP_CODESIGN_IDENTITY"
-    return
-  fi
-  # A self-signed local identity is preferred: it cannot expire out from under you mid-project and
-  # gives a certificate-based designated requirement, so privacy grants survive rebuilds.
-  #
-  # Only expiry and revocation disqualify a certificate. CSSMERR_TP_NOT_TRUSTED is the normal state
-  # for a self-signed certificate and codesign accepts it, so it must not be filtered out.
-  local all
-  all="$(security find-identity -p codesigning 2>/dev/null || true)"
-  for name in "M3MCP Local Development" "Developer ID Application" "Apple Development"; do
-    while IFS= read -r line; do
-      [[ -z "$line" ]] && continue
-      if printf '%s' "$line" | grep -qE "CSSMERR_TP_CERT_(EXPIRED|REVOKED)"; then
-        local reason
-        reason="$(printf '%s' "$line" | sed 's/.*(\(CSSMERR[^)]*\)).*/\1/')"
-        echo "Skipping unusable identity ($reason): $name" >&2
-        continue
-      fi
-      printf '%s\n' "$line" | sed 's/.*"\(.*\)".*/\1/'
-      return
-    done < <(printf '%s\n' "$all" | grep -F "\"$name")
-  done
-}
-
-IDENTITY="$(pick_identity)"
+# The rules live in script/lib/codesign.sh so that script/package_release.sh follows exactly the
+# same ones. Two scripts picking an identity two different ways is a difference nobody notices
+# until a user reports a signature neither path was supposed to produce.
+IDENTITY="$(m3mcp_pick_identity)"
 if [[ -z "$IDENTITY" ]]; then
   cat >&2 <<EOF
 No usable code-signing identity found.
@@ -109,13 +88,9 @@ codesign --verify --strict "$APP_BUNDLE"
 
 # The guard that matters. `spctl` reporting "rejected" is fine — that is the ordinary unidentified
 # developer verdict for a locally signed app. A revoked certificate is not fine: macOS would classify
-# the app as malware and delete it.
-ASSESSMENT="$(spctl --assess --type execute -vv "$APP_BUNDLE" 2>&1 || true)"
-if printf '%s' "$ASSESSMENT" | grep -q "CSSMERR_TP_CERT_REVOKED"; then
-  echo >&2
-  echo "ABORTING: '$IDENTITY' is REVOKED. Signing with it would make macOS treat this app as" >&2
-  echo "malware and move it to the Bin. Create a local identity instead:" >&2
-  echo "  ./script/create_local_identity.sh" >&2
+# the app as malware and delete it. The staged bundle goes away with it, so a half-installed app
+# signed by a revoked certificate is not left behind for launchd to find.
+if ! m3mcp_reject_revoked_signature "$APP_BUNDLE" "$IDENTITY"; then
   rm -rf "$APP_BUNDLE"
   exit 1
 fi
