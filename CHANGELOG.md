@@ -7,6 +7,45 @@ reads it.
 
 ## Unreleased
 
+### Added
+
+- **Client authentication on the socket.** The only access control on
+  `~/Library/Application Support/M3MCP/mcp.sock` was the filesystem: `0600` in a `0700` directory.
+  That keeps out other users, sandboxed apps and web pages, and nothing else — every unsandboxed
+  process of the same user could connect and inherit the app's Full Disk Access. Two checks now sit
+  in front of every request except `GET /health`:
+  - a **capability token**, 32 bytes from `SecRandomCopyBytes`, created on the app's first start and
+    kept in the login keychain. `M3MCPBridge` sends it as `Authorization: Bearer …`, reading it from
+    `M3MCP_TOKEN` or from the keychain. Missing or wrong is `401`.
+  - the **code identity of the connecting process**. `getsockopt(LOCAL_PEERTOKEN)` yields the peer's
+    audit token — not a pid, which can be recycled between `accept` and the lookup — and the Security
+    framework turns it into a `SecCode` whose signature is checked and whose code directory hash is
+    read. The app pins that hash to the `M3MCPBridge` beside its own executable, so a token copied
+    out of an MCP client's config and replayed by another process is `403`.
+
+  A `getpeereid` check was considered and left out on purpose: a `0600` socket in a `0700` directory
+  means the kernel already refused every other uid, so it would restate a condition rather than add
+  one. Answers [issue #9](https://github.com/GodModeAI2025/AppleMCP/issues/9).
+- **`M3MCP_TOKEN`** configures a client that cannot answer a keychain prompt, and
+  **`M3MCP_TRUSTED_CLIENT_CDHASH`** pins a bridge that lives outside the app bundle.
+- **Server › Copy MCP Client Token** (⇧⌘T) puts the token on the pasteboard, and the app window and
+  `/health` both report whether the client binary is pinned or whether the install is running
+  token-only.
+
+### Changed
+
+- **`/health` no longer carries the call history.** It was the same reply as `/status`, so
+  `recentActivity` — the last 30 calls with their arguments and results — was readable by anything
+  that could open the socket. `/health` stays free of a token because it is the documented probe, and
+  now answers with version, endpoint, providers and the state of the client check. `/status` returns
+  the history and needs the token.
+- **`LocalHTTPServer` moved from the app target to `M3MCPCore`.** Security code that only runs inside
+  a GUI app is security code nobody checks; from `M3MCPCore` the authorization path is exercised by
+  `swift test`, including a case that launches the packaged `M3MCPBridge` as a real client.
+- **`script/install_local.sh` installs `M3MCPBridge` into the bundle** next to the app, the way
+  `script/package_release.sh` already did. Without a sibling bridge there is nothing for the app to
+  pin, and the documented install path produced exactly that.
+
 ## 0.3.0
 
 ### Added

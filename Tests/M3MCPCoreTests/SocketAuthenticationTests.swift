@@ -1,0 +1,457 @@
+import Darwin
+import Foundation
+import XCTest
+@testable import M3MCPCore
+
+/// Exercises the access control on the real socket rather than on the tool schema.
+///
+/// The bridge answers `tools/list` out of its own catalog without ever asking the app, so grepping a
+/// schema proves nothing about what the server does. Every test here opens the Unix socket, writes
+/// an HTTP request by hand and reads the status line back.
+final class SocketAuthenticationTests: XCTestCase {
+    private var directory: URL!
+    private var server: LocalHTTPServer?
+
+    private let token = "test-token-aaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+
+    override func setUpWithError() throws {
+        try super.setUpWithError()
+        // Short path on purpose: sockaddr_un.sun_path holds 103 usable bytes.
+        directory = URL(fileURLWithPath: NSTemporaryDirectory(), isDirectory: true)
+            .appendingPathComponent("m3\(UInt32.random(in: 0..<0xFFFFFF))", isDirectory: true)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+    }
+
+    override func tearDownWithError() throws {
+        server?.stop()
+        server = nil
+        if let directory {
+            try? FileManager.default.removeItem(at: directory)
+        }
+        try super.tearDownWithError()
+    }
+
+    // MARK: - Fixture
+
+    private var socketURL: URL { directory.appendingPathComponent("mcp.sock", isDirectory: false) }
+
+    @discardableResult
+    private func startServer(pinnedTo hashes: Set<String> = []) throws -> LocalHTTPServer {
+        let server = LocalHTTPServer(
+            socketURL: socketURL,
+            authorizer: SocketAuthorizer(token: token, trustedCodeDirectoryHashes: hashes),
+            toolHandler: { tool, input in
+                ToolResponse(
+                    ok: true,
+                    source: "test",
+                    items: [DataItem(id: tool, title: tool, kind: "test", source: "test")],
+                    message: "ran \(tool) with \(input.count) argument(s)"
+                )
+            },
+            statusHandler: {
+                StatusResponse(
+                    ok: true,
+                    version: m3mcpVersion,
+                    endpoint: "test",
+                    services: [ServiceHealth(name: "Test", endpoint: "t://", mode: "test", state: "on-demand")],
+                    recentActivity: [
+                        ActivityEntry(
+                            endpoint: "mail://local-index",
+                            provider: "Mail",
+                            status: "ok",
+                            detail: "1 item(s)",
+                            durationMilliseconds: 3,
+                            toolName: "mail_search",
+                            inputJSON: "{\"query\":\"salary negotiation\"}",
+                            outputJSON: "{\"ok\":true}"
+                        )
+                    ]
+                )
+            }
+        )
+        try server.start()
+        self.server = server
+        return server
+    }
+
+    // MARK: - Token
+
+    func testToolCallWithoutTokenIsRefused() throws {
+        try startServer()
+        let reply = try request(method: "POST", path: "/tools/source_status", body: Data("{}".utf8), token: nil)
+
+        XCTAssertEqual(reply.status, 401)
+        XCTAssertTrue(reply.statusLine.contains("Unauthorized"), reply.statusLine)
+
+        // It has to arrive as a ToolResponse: that is the only shape LocalAppClient can read, so
+        // anything else reaches the MCP client as "unreadable response" instead of as the reason.
+        let decoded = try M3JSON.makeDecoder().decode(ToolResponse.self, from: reply.body)
+        XCTAssertFalse(decoded.ok)
+        XCTAssertTrue(decoded.message?.contains("capability token") == true, decoded.message ?? "")
+    }
+
+    func testToolCallWithTheWrongTokenIsRefused() throws {
+        try startServer()
+        let reply = try request(
+            method: "POST",
+            path: "/tools/source_status",
+            body: Data("{}".utf8),
+            token: "test-token-bbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+        )
+
+        XCTAssertEqual(reply.status, 401)
+        let decoded = try M3JSON.makeDecoder().decode(ToolResponse.self, from: reply.body)
+        XCTAssertFalse(decoded.ok)
+    }
+
+    func testToolCallWithTheConfiguredTokenGoesThrough() throws {
+        try startServer()
+        let reply = try request(method: "POST", path: "/tools/source_status", body: Data("{}".utf8), token: token)
+
+        XCTAssertEqual(reply.status, 200)
+        let decoded = try M3JSON.makeDecoder().decode(ToolResponse.self, from: reply.body)
+        XCTAssertTrue(decoded.ok)
+        XCTAssertEqual(decoded.items.first?.id, "source_status")
+    }
+
+    // MARK: - Peer identity
+
+    func testTokenFromAnUnpinnedBinaryIsRefused() throws {
+        // A hash no process on this machine can have: the token is right, the binary is not.
+        try startServer(pinnedTo: ["0000000000000000000000000000000000000000"])
+        let reply = try request(method: "POST", path: "/tools/source_status", body: Data("{}".utf8), token: token)
+
+        XCTAssertEqual(reply.status, 403)
+        XCTAssertTrue(reply.statusLine.contains("Forbidden"), reply.statusLine)
+        let decoded = try M3JSON.makeDecoder().decode(ToolResponse.self, from: reply.body)
+        XCTAssertFalse(decoded.ok)
+        XCTAssertTrue(decoded.message?.contains("not configured for") == true, decoded.message ?? "")
+    }
+
+    func testTokenFromThePinnedBinaryGoesThrough() throws {
+        let own = try XCTUnwrap(
+            PeerIdentity.codeDirectoryHashOfCurrentProcess(),
+            "the test binary has no code signature, so peer pinning cannot be exercised"
+        )
+        try startServer(pinnedTo: [own])
+        let reply = try request(method: "POST", path: "/tools/source_status", body: Data("{}".utf8), token: token)
+
+        XCTAssertEqual(reply.status, 200)
+    }
+
+    func testPeerOfAConnectionResolvesToThisProcess() throws {
+        try startServer()
+
+        // Same check the server makes, run against a connection this test opens itself.
+        let listener = try makeListener(at: directory.appendingPathComponent("peer.sock", isDirectory: false))
+        defer { close(listener.descriptor); unlink(listener.path) }
+
+        DispatchQueue.global().async {
+            let client = socket(AF_UNIX, SOCK_STREAM, 0)
+            var address = Self.address(for: listener.path)
+            _ = withUnsafePointer(to: &address) { pointer in
+                pointer.withMemoryRebound(to: sockaddr.self, capacity: 1) { addressPointer in
+                    connect(client, addressPointer, socklen_t(MemoryLayout<sockaddr_un>.size))
+                }
+            }
+            Thread.sleep(forTimeInterval: 0.5)
+            close(client)
+        }
+
+        let accepted = accept(listener.descriptor, nil, nil)
+        XCTAssertGreaterThanOrEqual(accepted, 0)
+        defer { close(accepted) }
+
+        let peer = PeerIdentity.resolve(descriptor: accepted)
+        XCTAssertEqual(peer.processIdentifier, getpid())
+        XCTAssertEqual(peer.userIdentifier, getuid())
+        XCTAssertTrue(peer.signatureValid, peer.note ?? "no note")
+        XCTAssertEqual(peer.codeDirectoryHash, PeerIdentity.codeDirectoryHashOfCurrentProcess())
+    }
+
+    // MARK: - Health and status
+
+    func testHealthAnswersWithoutATokenAndCarriesNoActivityLog() throws {
+        try startServer()
+        let reply = try request(method: "GET", path: "/health", body: nil, token: nil)
+
+        XCTAssertEqual(reply.status, 200)
+        let status = try M3JSON.makeDecoder().decode(StatusResponse.self, from: reply.body)
+        XCTAssertEqual(status.version, m3mcpVersion)
+        // The activity log holds the arguments and results of past tool calls. It must not be on the
+        // one path that answers without a token.
+        XCTAssertTrue(status.recentActivity.isEmpty)
+        XCTAssertFalse(String(data: reply.body, encoding: .utf8)?.contains("salary negotiation") ?? true)
+        XCTAssertTrue(status.services.contains { $0.name == "Client Authentication" })
+    }
+
+    func testStatusNeedsTheTokenBecauseItCarriesTheActivityLog() throws {
+        try startServer()
+
+        let refused = try request(method: "GET", path: "/status", body: nil, token: nil)
+        XCTAssertEqual(refused.status, 401)
+        XCTAssertFalse(String(data: refused.body, encoding: .utf8)?.contains("salary negotiation") ?? true)
+
+        let allowed = try request(method: "GET", path: "/status", body: nil, token: token)
+        XCTAssertEqual(allowed.status, 200)
+        let status = try M3JSON.makeDecoder().decode(StatusResponse.self, from: allowed.body)
+        XCTAssertEqual(status.recentActivity.count, 1)
+    }
+
+    // MARK: - Token primitives
+
+    func testBearerParsingIgnoresCaseAndRejectsOtherSchemes() {
+        XCTAssertEqual(SocketAuthorizer.bearerToken(in: "Bearer abc"), "abc")
+        XCTAssertEqual(SocketAuthorizer.bearerToken(in: "bearer abc"), "abc")
+        XCTAssertEqual(SocketAuthorizer.bearerToken(in: "  BEARER   abc  "), "abc")
+        XCTAssertNil(SocketAuthorizer.bearerToken(in: "Basic abc"))
+        XCTAssertNil(SocketAuthorizer.bearerToken(in: "Bearer"))
+        XCTAssertNil(SocketAuthorizer.bearerToken(in: "Bearer "))
+        XCTAssertNil(SocketAuthorizer.bearerToken(in: nil))
+    }
+
+    func testTokenComparisonRejectsPrefixesAndEmptyExpectations() {
+        XCTAssertTrue(CapabilityToken.matches("abcdef", "abcdef"))
+        XCTAssertFalse(CapabilityToken.matches("abcde", "abcdef"))
+        XCTAssertFalse(CapabilityToken.matches("abcdefg", "abcdef"))
+        XCTAssertFalse(CapabilityToken.matches("", ""))
+        XCTAssertFalse(CapabilityToken.matches("abcdef", ""))
+    }
+
+    func testGeneratedTokensAreDistinctAndConfigFileSafe() throws {
+        let first = try CapabilityToken.generate()
+        let second = try CapabilityToken.generate()
+        XCTAssertNotEqual(first, second)
+        XCTAssertEqual(first.count, 43)
+        XCTAssertNil(first.rangeOfCharacter(from: CharacterSet(charactersIn: "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_").inverted))
+    }
+
+    func testKeychainRoundTrip() throws {
+        let service = "de.markzimmermann.m3mcp.test.\(UUID().uuidString)"
+        let account = "test"
+        let token = try CapabilityToken.generate()
+
+        do {
+            try CapabilityToken.write(token: token, service: service, account: account)
+        } catch {
+            // A locked or unavailable login keychain is an environment problem, not a defect.
+            throw XCTSkip("Keychain is not writable here: \(error.localizedDescription)")
+        }
+        defer { try? CapabilityToken.delete(service: service, account: account) }
+
+        XCTAssertEqual(try CapabilityToken.read(service: service, account: account), token)
+        try CapabilityToken.delete(service: service, account: account)
+        XCTAssertNil(try CapabilityToken.read(service: service, account: account))
+    }
+
+    // MARK: - The bridge as the real client
+
+    /// The end-to-end shape: the shipped bridge binary, launched the way an MCP client launches it,
+    /// against a server that enforces the token.
+    func testBridgeReachesTheServerWithTheTokenAndIsRefusedWithout() throws {
+        let bridge = try XCTUnwrap(Self.bridgeExecutable(), "M3MCPBridge is not built; run swift build first")
+        try startServer()
+
+        let call = #"{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"source_status","arguments":{}}}"#
+
+        let configured = try run(
+            bridge,
+            input: call,
+            environment: [
+                M3MCPEndpoint.directoryEnvironmentKey: directory.path,
+                CapabilityToken.environmentKey: token
+            ]
+        )
+        XCTAssertTrue(configured.contains("\"isError\" : false") || configured.contains("\"isError\":false"), configured)
+        XCTAssertTrue(configured.contains("ran source_status"), configured)
+
+        let unconfigured = try run(
+            bridge,
+            input: call,
+            environment: [
+                M3MCPEndpoint.directoryEnvironmentKey: directory.path,
+                // A keychain service that cannot exist, so this does not depend on what happens to be
+                // in the developer's login keychain.
+                CapabilityToken.serviceEnvironmentKey: "de.markzimmermann.m3mcp.test.\(UUID().uuidString)"
+            ]
+        )
+        XCTAssertTrue(unconfigured.contains("No capability token"), unconfigured)
+    }
+
+    /// The probe README and index.html print, and the same probe aimed at a tool.
+    ///
+    /// curl is the shape an attacker would reach for first, and it is also the shape the docs tell a
+    /// user to run, so both outcomes belong in a test: `/health` still answers, a tool call does not.
+    func testDocumentedCurlProbeAnswersAndCurlCannotCallAToolWithoutTheToken() throws {
+        guard FileManager.default.isExecutableFile(atPath: "/usr/bin/curl") else {
+            throw XCTSkip("no curl on this machine")
+        }
+        try startServer()
+
+        let health = try curl(["--unix-socket", socketURL.path, "-s", "-o", "/dev/null",
+                               "-w", "%{http_code}", "http://localhost/health"])
+        XCTAssertEqual(health, "200")
+
+        let tool = try curl(["--unix-socket", socketURL.path, "-s", "-o", "/dev/null",
+                             "-w", "%{http_code}", "-X", "POST",
+                             "-H", "Content-Type: application/json", "-d", "{}",
+                             "http://localhost/tools/mail_search"])
+        XCTAssertEqual(tool, "401")
+
+        let authorised = try curl(["--unix-socket", socketURL.path, "-s", "-o", "/dev/null",
+                                   "-w", "%{http_code}", "-X", "POST",
+                                   "-H", "Content-Type: application/json",
+                                   "-H", "Authorization: Bearer \(token)", "-d", "{}",
+                                   "http://localhost/tools/mail_search"])
+        XCTAssertEqual(authorised, "200")
+    }
+
+    private func curl(_ arguments: [String]) throws -> String {
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: "/usr/bin/curl")
+        process.arguments = arguments
+        let output = Pipe()
+        process.standardOutput = output
+        process.standardError = FileHandle.nullDevice
+        try process.run()
+        let data = output.fileHandleForReading.readDataToEndOfFile()
+        process.waitUntilExit()
+        return String(data: data, encoding: .utf8)?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+    }
+
+    // MARK: - Raw HTTP over the socket
+
+    private struct Reply {
+        let statusLine: String
+        let status: Int
+        let body: Data
+    }
+
+    private func request(method: String, path: String, body: Data?, token: String?) throws -> Reply {
+        let descriptor = socket(AF_UNIX, SOCK_STREAM, 0)
+        guard descriptor >= 0 else { throw Failure("socket() failed") }
+        defer { close(descriptor) }
+
+        var address = Self.address(for: socketURL.path)
+        let connected = withUnsafePointer(to: &address) { pointer in
+            pointer.withMemoryRebound(to: sockaddr.self, capacity: 1) { addressPointer in
+                connect(descriptor, addressPointer, socklen_t(MemoryLayout<sockaddr_un>.size))
+            }
+        }
+        guard connected == 0 else { throw Failure("connect() failed: \(String(cString: strerror(errno)))") }
+
+        var request = Data()
+        request.append(Data("\(method) \(path) HTTP/1.1\r\n".utf8))
+        request.append(Data("Host: localhost\r\n".utf8))
+        request.append(Data("Content-Type: application/json\r\n".utf8))
+        if let token {
+            request.append(Data("Authorization: Bearer \(token)\r\n".utf8))
+        }
+        request.append(Data("Content-Length: \(body?.count ?? 0)\r\n".utf8))
+        request.append(Data("Connection: close\r\n\r\n".utf8))
+        if let body { request.append(body) }
+
+        try request.withUnsafeBytes { raw in
+            guard let base = raw.baseAddress else { return }
+            var offset = 0
+            while offset < raw.count {
+                let written = write(descriptor, base.advanced(by: offset), raw.count - offset)
+                guard written > 0 else { throw Failure("write() failed") }
+                offset += written
+            }
+        }
+
+        var buffer = Data()
+        var chunk = [UInt8](repeating: 0, count: 32 * 1024)
+        while true {
+            let count = chunk.withUnsafeMutableBytes { raw in read(descriptor, raw.baseAddress, raw.count) }
+            if count == 0 { break }
+            guard count > 0 else { throw Failure("read() failed") }
+            buffer.append(contentsOf: chunk[0..<count])
+        }
+
+        guard let headerEnd = buffer.range(of: Data("\r\n\r\n".utf8)),
+              let headerText = String(data: buffer[buffer.startIndex..<headerEnd.lowerBound], encoding: .utf8),
+              let statusLine = headerText.components(separatedBy: "\r\n").first,
+              let code = Int(statusLine.split(separator: " ")[1])
+        else {
+            throw Failure("the server sent no readable status line")
+        }
+
+        return Reply(statusLine: statusLine, status: code, body: Data(buffer[headerEnd.upperBound...]))
+    }
+
+    // MARK: - Helpers
+
+    private struct Failure: Error, CustomStringConvertible {
+        let description: String
+        init(_ description: String) { self.description = description }
+    }
+
+    private static func address(for path: String) -> sockaddr_un {
+        var address = sockaddr_un()
+        address.sun_family = sa_family_t(AF_UNIX)
+        let capacity = MemoryLayout.size(ofValue: address.sun_path)
+        withUnsafeMutablePointer(to: &address.sun_path) { pointer in
+            pointer.withMemoryRebound(to: CChar.self, capacity: capacity) { destination in
+                _ = strlcpy(destination, path, capacity)
+            }
+        }
+        return address
+    }
+
+    private func makeListener(at url: URL) throws -> (descriptor: Int32, path: String) {
+        let path = url.path
+        unlink(path)
+        let descriptor = socket(AF_UNIX, SOCK_STREAM, 0)
+        var address = Self.address(for: path)
+        let bound = withUnsafePointer(to: &address) { pointer in
+            pointer.withMemoryRebound(to: sockaddr.self, capacity: 1) { addressPointer in
+                Darwin.bind(descriptor, addressPointer, socklen_t(MemoryLayout<sockaddr_un>.size))
+            }
+        }
+        guard bound == 0, listen(descriptor, 4) == 0 else {
+            close(descriptor)
+            throw Failure("could not listen on \(path)")
+        }
+        return (descriptor, path)
+    }
+
+    /// Walks up from the test bundle until it finds the built bridge next to it.
+    private static func bridgeExecutable() -> URL? {
+        var directory = Bundle(for: SocketAuthenticationTests.self).bundleURL
+        for _ in 0..<6 {
+            let candidate = directory.appendingPathComponent("M3MCPBridge", isDirectory: false)
+            if FileManager.default.isExecutableFile(atPath: candidate.path) {
+                return candidate
+            }
+            directory = directory.deletingLastPathComponent()
+        }
+        return nil
+    }
+
+    private func run(_ executable: URL, input: String, environment: [String: String]) throws -> String {
+        let process = Process()
+        process.executableURL = executable
+        var environmentForRun = ProcessInfo.processInfo.environment
+        // Anything inherited would decide the outcome instead of the test.
+        environmentForRun.removeValue(forKey: CapabilityToken.environmentKey)
+        environmentForRun.removeValue(forKey: CapabilityToken.serviceEnvironmentKey)
+        for (key, value) in environment { environmentForRun[key] = value }
+        process.environment = environmentForRun
+
+        let stdin = Pipe()
+        let stdout = Pipe()
+        process.standardInput = stdin
+        process.standardOutput = stdout
+        process.standardError = FileHandle.nullDevice
+
+        try process.run()
+        stdin.fileHandleForWriting.write(Data((input + "\n").utf8))
+        try? stdin.fileHandleForWriting.close()
+
+        let output = stdout.fileHandleForReading.readDataToEndOfFile()
+        process.waitUntilExit()
+        return String(data: output, encoding: .utf8) ?? ""
+    }
+}

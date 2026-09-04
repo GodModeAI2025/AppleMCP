@@ -12,6 +12,15 @@ final class LocalAppClient {
     private let timeout: TimeInterval
     private let queue = DispatchQueue(label: "de.markzimmermann.m3mcp.bridge.client")
 
+    /// Resolved on the first tool call, not at start-up.
+    ///
+    /// `initialize` and `tools/list` are answered out of the catalog without ever touching the app,
+    /// and an MCP client sends them the moment it launches the bridge. Reading the keychain there
+    /// would put an authorization prompt in front of a user who has not asked for any data yet — and
+    /// it would break `script/check_release_artifact.sh`, which pipes `initialize` into the packaged
+    /// bridge on a machine with no app, no keychain item and no token.
+    private var credentials: CapabilityToken.Resolution??
+
     /// Speech recognition and transcript searches can take minutes; a short timeout would report the
     /// app as unreachable while it is still working.
     init(socketURL: URL = M3MCPEndpoint.socketURL, timeout: TimeInterval = 600) {
@@ -19,8 +28,28 @@ final class LocalAppClient {
         self.timeout = timeout
     }
 
+    private func resolvedCredentials() -> CapabilityToken.Resolution? {
+        if let credentials {
+            return credentials
+        }
+        let resolved = CapabilityToken.existing()
+        credentials = resolved
+        return resolved
+    }
+
     func call(tool: String, arguments: [String: Any]) async -> ToolResponse {
         let path = "/tools/\(tool.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? tool)"
+
+        guard let credentials = resolvedCredentials() else {
+            return ToolResponse(
+                ok: false,
+                source: "M3MCPBridge",
+                message: "No capability token, so M3MCPApp will refuse this call. Open the M3MCP app, "
+                    + "choose Server › Copy MCP Client Token, and add it to this client's configuration "
+                    + "as \"env\": {\"\(CapabilityToken.environmentKey)\": \"<token>\"}. The bridge otherwise "
+                    + "reads it from the login keychain, which needs the app to have run at least once."
+            )
+        }
 
         let body: Data
         do {
@@ -34,7 +63,7 @@ final class LocalAppClient {
         }
 
         do {
-            let response = try await send(method: "POST", path: path, body: body)
+            let response = try await send(method: "POST", path: path, body: body, token: credentials.token)
             guard (200..<500).contains(response.status) else {
                 return ToolResponse(
                     ok: false,
@@ -65,7 +94,7 @@ final class LocalAppClient {
         let message: String
     }
 
-    private func send(method: String, path: String, body: Data) async throws -> HTTPReply {
+    private func send(method: String, path: String, body: Data, token: String) async throws -> HTTPReply {
         try await withCheckedThrowingContinuation { continuation in
             queue.async { [socketURL, timeout] in
                 do {
@@ -74,6 +103,7 @@ final class LocalAppClient {
                         method: method,
                         path: path,
                         body: body,
+                        token: token,
                         timeout: timeout
                     )
                     continuation.resume(returning: reply)
@@ -89,6 +119,7 @@ final class LocalAppClient {
         method: String,
         path: String,
         body: Data,
+        token: String,
         timeout: TimeInterval
     ) throws -> HTTPReply {
         let descriptor = socket(AF_UNIX, SOCK_STREAM, 0)
@@ -135,6 +166,7 @@ final class LocalAppClient {
         request.append(Data("\(method) \(path) HTTP/1.1\r\n".utf8))
         request.append(Data("Host: localhost\r\n".utf8))
         request.append(Data("Content-Type: application/json\r\n".utf8))
+        request.append(Data("Authorization: Bearer \(token)\r\n".utf8))
         request.append(Data("Content-Length: \(body.count)\r\n".utf8))
         request.append(Data("Connection: close\r\n\r\n".utf8))
         request.append(body)

@@ -150,6 +150,7 @@
                 <span class="badge">MCP Protocol</span>
                 <span class="badge">Local-first</span>
                 <span class="badge">Unix socket, no TCP port</span>
+                <span class="badge">Capability token per client</span>
             </div>
         </header>
 
@@ -217,7 +218,8 @@
         |
    M3MCPBridge (lightweight CLI)
         |
-   HTTP over Unix socket (0600)
+   HTTP over Unix socket (0600), capability token,
+   client pinned to its code signature
         |
    M3MCPApp (SwiftUI, holds TCC permissions)
         |
@@ -256,15 +258,20 @@ swift test
 {
   "mcpServers": {
     "applemcp": {
-      "command": "/path/to/AppleMCP/.build/release/M3MCPBridge"
+      "command": "/path/to/AppleMCP/.build/release/M3MCPBridge",
+      "env": { "M3MCP_TOKEN": "&lt;token&gt;" }
     }
   }
 }
 
-# Or add to Claude Code
-claude mcp add applemcp /path/to/AppleMCP/.build/release/M3MCPBridge
+# The token comes from the app: Server &gt; Copy MCP Client Token.
+# Without it the app refuses every tool call.
 
-# Check the endpoint
+# Or add to Claude Code
+claude mcp add applemcp --env M3MCP_TOKEN=&lt;token&gt; -- /path/to/AppleMCP/.build/release/M3MCPBridge
+
+# Check the endpoint. /health is the one path that answers without a token,
+# and it carries no call history for that reason.
 curl --unix-socket ~/Library/Application\ Support/M3MCP/mcp.sock \
   http://localhost/health</code></pre>
         </section>

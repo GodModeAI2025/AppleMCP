@@ -19,6 +19,7 @@
 set -euo pipefail
 
 APP_NAME="M3MCPApp"
+BRIDGE_NAME="M3MCPBridge"
 BUNDLE_NAME="M3MCP"
 BUNDLE_ID="de.markzimmermann.m3mcp"
 CONFIGURATION="${M3MCP_CONFIGURATION:-release}"
@@ -30,6 +31,7 @@ source "$ROOT_DIR/script/lib/codesign.sh"
 
 APP_BUNDLE="$INSTALL_DIR/$BUNDLE_NAME.app"
 APP_BINARY="$APP_BUNDLE/Contents/MacOS/$APP_NAME"
+BRIDGE_BINARY="$APP_BUNDLE/Contents/MacOS/$BRIDGE_NAME"
 AGENT_PLIST="$HOME/Library/LaunchAgents/$BUNDLE_ID.plist"
 SOURCE_INFO_PLIST="$ROOT_DIR/Sources/$APP_NAME/Resources/Info.plist"
 
@@ -58,8 +60,11 @@ echo "Signing identity: $IDENTITY"
 echo "Building ($CONFIGURATION)…"
 cd "$ROOT_DIR"
 swift build -c "$CONFIGURATION"
-BUILT_BINARY="$(swift build -c "$CONFIGURATION" --show-bin-path)/$APP_NAME"
+BIN_PATH="$(swift build -c "$CONFIGURATION" --show-bin-path)"
+BUILT_BINARY="$BIN_PATH/$APP_NAME"
+BUILT_BRIDGE="$BIN_PATH/$BRIDGE_NAME"
 [[ -x "$BUILT_BINARY" ]] || { echo "Build produced no binary at $BUILT_BINARY" >&2; exit 1; }
+[[ -x "$BUILT_BRIDGE" ]] || { echo "Build produced no bridge at $BUILT_BRIDGE" >&2; exit 1; }
 
 # --- stop the running instance ----------------------------------------------------------------
 
@@ -76,12 +81,18 @@ rm -rf "$APP_BUNDLE"
 mkdir -p "$APP_BUNDLE/Contents/MacOS"
 cp "$BUILT_BINARY" "$APP_BINARY"
 chmod +x "$APP_BINARY"
+# The bridge goes in beside the app, the same way script/package_release.sh puts it there. The app
+# pins the client it accepts to the M3MCPBridge next to its own executable, so an installation
+# without this file falls back to token-only and says so in its window.
+cp "$BUILT_BRIDGE" "$BRIDGE_BINARY"
+chmod +x "$BRIDGE_BINARY"
 cp "$SOURCE_INFO_PLIST" "$APP_BUNDLE/Contents/Info.plist"
 printf 'APPL????' > "$APP_BUNDLE/Contents/PkgInfo"
 xattr -cr "$APP_BUNDLE" 2>/dev/null || true
 
 # --- sign -------------------------------------------------------------------------------------
 
+codesign --force --sign "$IDENTITY" "$BRIDGE_BINARY" >/dev/null
 codesign --force --sign "$IDENTITY" "$APP_BINARY" >/dev/null
 codesign --force --sign "$IDENTITY" "$APP_BUNDLE" >/dev/null
 codesign --verify --strict "$APP_BUNDLE"
@@ -133,6 +144,13 @@ echo "  $APP_BUNDLE"
 echo "then restart it:  launchctl kickstart -k gui/$UID/$BUNDLE_ID"
 echo
 echo "Because the signature uses a stable certificate, that grant persists across future rebuilds."
+echo
+echo "Point your MCP client at the bridge that was installed with the app:"
+echo "  $BRIDGE_BINARY"
+echo "and give it the capability token from the app's Server menu (Copy MCP Client Token):"
+echo '  "env": { "M3MCP_TOKEN": "<token>" }'
+echo "Without the token the app refuses every tool call. The bridge can also read the token from the"
+echo "login keychain, which asks once per binary."
 echo
 echo "Manage:"
 echo "  launchctl kickstart -k gui/$UID/$BUNDLE_ID   # restart"

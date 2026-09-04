@@ -7,6 +7,11 @@ import Foundation
 /// from reading the data the app re-exposes. A socket file makes the boundary a filesystem one:
 /// the directory is `0700` and the socket is `0600`, so only the user's own unsandboxed processes
 /// can connect, and a web page cannot reach it at all.
+///
+/// Those permissions are the outer layer, not the whole of it. "the user's own unsandboxed
+/// processes" is a large set, and every one of them used to inherit the app's Full Disk Access by
+/// connecting. `SocketAuthorizer` now requires a capability token on everything but `GET /health`,
+/// and `PeerIdentity` checks which binary is on the other end.
 public enum M3MCPEndpoint {
     /// `sockaddr_un.sun_path` is 104 bytes on Darwin, including the terminator.
     public static let maximumSocketPathLength = 103

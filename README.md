@@ -27,6 +27,7 @@ AppleMCP consists of a SwiftUI app that bridges macOS privacy-controlled APIs an
 - **No computer use.** There is no loop in which a model looks at the screen and acts on it.
 - **No mail sending.** The Mail tools read the local index and the `.emlx` files. They compose nothing and send nothing.
 - **No network.** The endpoint is a Unix domain socket, not a TCP port. The bridge does speak HTTP, but only across that socket. The sources open no connection to a remote host and contain no `URLSession`.
+- **No anonymous callers.** Every tool call carries a capability token the app issues on first start, and the app checks the code identity of the process that connected. `/health` is the exception and answers with nothing but version and endpoint.
 
 ## Download
 
@@ -119,6 +120,9 @@ Check that it is up:
 curl --unix-socket ~/Library/Application\ Support/M3MCP/mcp.sock http://localhost/health
 ```
 
+`/health` is the one path that answers without a token, and it carries no call history for that
+reason. `/status` and every `/tools/…` call need `Authorization: Bearer <token>`.
+
 ### 3. Connect Your MCP Client
 
 #### Claude Desktop
@@ -129,7 +133,8 @@ Add to your Claude Desktop MCP config (`~/Library/Application Support/Claude/cla
 {
   "mcpServers": {
     "applemcp": {
-      "command": "/path/to/AppleMCP/.build/release/M3MCPBridge"
+      "command": "/path/to/AppleMCP/.build/release/M3MCPBridge",
+      "env": { "M3MCP_TOKEN": "<token>" }
     }
   }
 }
@@ -138,8 +143,19 @@ Add to your Claude Desktop MCP config (`~/Library/Application Support/Claude/cla
 #### Claude Code
 
 ```bash
-claude mcp add applemcp /path/to/AppleMCP/.build/release/M3MCPBridge
+claude mcp add applemcp --env M3MCP_TOKEN=<token> -- /path/to/AppleMCP/.build/release/M3MCPBridge
 ```
+
+#### The token
+
+The app issues a capability token on its first start and the server refuses every tool call that does
+not carry it. Get it from the app: **Server › Copy MCP Client Token** (⇧⌘T), then paste it into the
+config above.
+
+`M3MCP_TOKEN` is not the only way. With no environment variable set the bridge reads the token from
+the login keychain instead, which macOS confirms once per binary. The environment variable is the
+path to use when a client's configuration is easier to edit than a keychain prompt is to answer, and
+the one to use in scripts.
 
 The M3MCP UI app must be running for MCP calls to work. The bridge talks to the app over a Unix domain socket in the user's Application Support directory.
 
@@ -224,7 +240,7 @@ See [docs/VOICE_MEMOS.md](docs/VOICE_MEMOS.md) for the store layout, the transcr
 
 What the app reads stays on the Mac, except where a tool hands it on: `ai_translate` and `ai_writing_tools` to a Shortcut you built, `voicememos_transcribe` to Apple's speech service on locales without an on-device model, see [Limits](#limits). The app uses macOS TCC (Transparency, Consent, and Control) for every data source. AppleMCP opens no remote connection: the endpoint is a Unix domain socket rather than a TCP port, and the HTTP the bridge speaks travels only over that socket.
 
-Because the app holds Full Disk Access, anything that can reach the endpoint inherits that reach. The socket lives in a `0700` directory and is itself `0600`, so a sandboxed app — the case macOS TCC exists to stop — cannot connect, and a web page cannot reach it under any circumstances. An unsandboxed process running as you is a different case, see [Limits](#limits). Mail reads the local SQLite index directly, it never sends emails or modifies any data. Voice Memos are opened read-only. Speech recognition runs on device where the locale has a model for it; where it does not, the audio goes to Apple's speech service instead.
+Because the app holds Full Disk Access, anything that can reach the endpoint inherits that reach. The socket lives in a `0700` directory and is itself `0600`, so a sandboxed app — the case macOS TCC exists to stop — cannot connect, and a web page cannot reach it under any circumstances. That used to be the whole of the defence; it is now the outer layer of three. A tool call also has to carry the capability token the app issued, and where the app can see the `M3MCPBridge` next to its own executable, the connecting process is checked against that binary's code directory hash — read from the connection's audit token, not from a process id, so a recycled pid cannot stand in for it. A token copied out of an MCP client's config by some other process is therefore not enough to use it. Mail reads the local SQLite index directly, it never sends emails or modifies any data. Voice Memos are opened read-only. Speech recognition runs on device where the locale has a model for it; where it does not, the audio goes to Apple's speech service instead.
 
 ## Security
 
@@ -232,7 +248,7 @@ The security policy and the threat model live in `SECURITY.md`, currently in rev
 
 ## Limits
 
-- **The socket does not check who connects.** File permissions keep out sandboxed apps and web pages. They do not distinguish one unsandboxed process of yours from another, so any local process running as you can call the endpoint and use the app's Full Disk Access. Tracked as [issue #9](https://github.com/GodModeAI2025/AppleMCP/issues/9).
+- **The client check needs the bridge to be next to the app.** `script/package_release.sh` and `script/install_local.sh` both put `M3MCPBridge` in the bundle, so the pin has something to pin to. Run the app straight out of `.build` without having built the bridge, or point a client at a bridge copied somewhere else, and the app falls back to the token alone — it says so in the window and in `/health`, and `M3MCP_TRUSTED_CLIENT_CDHASH` sets the pin by hand. The token on its own still leaves a process that can read your MCP client's config able to replay it.
 - **`ai_translate` has prerequisites nothing sets up for you.** The provider pipes the text through `/usr/bin/python3` into `shortcuts run Translate`. You need a Shortcut named "Translate" that you created yourself, and the system Python 3 at `/usr/bin/python3`. Without either the tool answers that translation is not reachable. Whether the translation itself stays on the Mac depends on whether the language pair is downloaded, which the Shortcuts and Translate apps decide, not AppleMCP.
 - **`ai_writing_tools` needs a Shortcut named "Writing Tools"** for the same reason, and the same open question follows: the text goes into that Shortcut, and where it goes from there is the Shortcut's business, not AppleMCP's. `ai_summarize` does not; it calls FoundationModels directly and needs macOS 26.
 - **`ai_image_playground` leaves files behind.** Each call writes a PNG into the process temporary directory and returns the path. AppleMCP never deletes them; they stay until macOS clears that directory.
@@ -255,7 +271,7 @@ The security policy and the threat model live in `SECURITY.md`, currently in rev
 
 Tracked in the issue tracker:
 
-- Verify the connecting process on the socket, so an unsandboxed local process cannot borrow the app's Full Disk Access ([issue #9](https://github.com/GodModeAI2025/AppleMCP/issues/9))
+- Scopes per client, so a client configured for calendar reads cannot call a write tool. The capability token is one token for the whole surface ([issue #9](https://github.com/GodModeAI2025/AppleMCP/issues/9) covered the process check)
 - Bring the threat model into the repo, updated for the current architecture ([issue #10](https://github.com/GodModeAI2025/AppleMCP/issues/10), in review as [PR #14](https://github.com/GodModeAI2025/AppleMCP/pull/14))
 
 Wanted, no issue open yet:

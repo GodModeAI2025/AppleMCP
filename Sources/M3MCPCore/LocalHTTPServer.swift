@@ -1,20 +1,29 @@
 import Darwin
 import Foundation
-import M3MCPCore
 
 /// Serves the MCP tool endpoint over a Unix domain socket.
 ///
 /// The transport is HTTP so the request shape stays familiar (`curl --unix-socket` still works), but
-/// the socket replaces the former loopback TCP port. Access control is now the filesystem's job:
-/// the socket lives in a `0700` directory and is itself `0600`, so a sandboxed app — the case macOS
-/// TCC is meant to stop — cannot reach it, and neither can a web page.
-final class LocalHTTPServer {
-    typealias ToolHandler = (String, [String: JSONValue]) async -> ToolResponse
-    typealias StatusHandler = () async -> StatusResponse
+/// the socket replaces the former loopback TCP port. The filesystem carries part of the access
+/// control — the socket lives in a `0700` directory and is itself `0600`, so a sandboxed app cannot
+/// reach it and neither can a web page — and that is where it used to end. It no longer does: every
+/// request other than `GET /health` has to present the capability token, and where the app could
+/// work out which binary its bridge is, the connecting process is checked against that binary's code
+/// directory hash. `SocketAuthorizer` holds the rules, `PeerIdentity` reads the peer.
+///
+/// This type lives in M3MCPCore rather than in the app target so the authorization path can be
+/// exercised by `swift test`. Security code that only runs inside a GUI app is security code nobody
+/// checks.
+public final class LocalHTTPServer {
+    public typealias ToolHandler = (String, [String: JSONValue]) async -> ToolResponse
+    public typealias StatusHandler = () async -> StatusResponse
+    public typealias AuditHandler = (AccessAttempt) -> Void
 
     private let socketURL: URL
     private let toolHandler: ToolHandler
     private let statusHandler: StatusHandler
+    private let authorizer: SocketAuthorizer
+    private let auditHandler: AuditHandler?
     private let acceptQueue = DispatchQueue(label: "de.markzimmermann.m3mcp.accept")
     private let connectionQueue = DispatchQueue(
         label: "de.markzimmermann.m3mcp.connections",
@@ -25,16 +34,24 @@ final class LocalHTTPServer {
 
     private let maximumRequestBytes = 1_000_000
 
-    init(socketURL: URL, toolHandler: @escaping ToolHandler, statusHandler: @escaping StatusHandler) {
+    public init(
+        socketURL: URL,
+        authorizer: SocketAuthorizer,
+        toolHandler: @escaping ToolHandler,
+        statusHandler: @escaping StatusHandler,
+        auditHandler: AuditHandler? = nil
+    ) {
         self.socketURL = socketURL
+        self.authorizer = authorizer
         self.toolHandler = toolHandler
         self.statusHandler = statusHandler
+        self.auditHandler = auditHandler
     }
 
-    struct StartFailure: LocalizedError {
-        let message: String
+    public struct StartFailure: LocalizedError {
+        public let message: String
 
-        var errorDescription: String? { message }
+        public var errorDescription: String? { message }
 
         init(_ message: String, errno code: Int32? = nil) {
             if let code {
@@ -47,7 +64,7 @@ final class LocalHTTPServer {
 
     // MARK: - Lifecycle
 
-    func start() throws {
+    public func start() throws {
         guard acceptSource == nil else {
             return
         }
@@ -121,7 +138,7 @@ final class LocalHTTPServer {
         acceptSource = source
     }
 
-    func stop() {
+    public func stop() {
         acceptSource?.cancel()
         acceptSource = nil
         listeningDescriptor = -1
@@ -167,13 +184,17 @@ final class LocalHTTPServer {
                 _ = fcntl(client, F_SETFL, clientFlags & ~O_NONBLOCK)
             }
 
+            // Read while the connection is still open and before any work is queued: the audit
+            // token identifies the process that connected, and a pid alone could be recycled.
+            let peer = PeerIdentity.resolve(descriptor: client)
+
             connectionQueue.async { [weak self] in
-                self?.serve(client)
+                self?.serve(client, peer: peer)
             }
         }
     }
 
-    private func serve(_ client: Int32) {
+    private func serve(_ client: Int32, peer: PeerIdentity) {
         defer { close(client) }
 
         switch readRequest(from: client) {
@@ -181,7 +202,7 @@ final class LocalHTTPServer {
             // The handlers are async; this connection thread waits for them.
             let done = DispatchSemaphore(value: 0)
             Task { [weak self] in
-                await self?.respond(to: request, on: client)
+                await self?.respond(to: request, on: client, peer: peer)
                 done.signal()
             }
             done.wait()
@@ -303,13 +324,37 @@ final class LocalHTTPServer {
 
     // MARK: - Responding
 
-    private func respond(to request: HTTPRequest, on client: Int32) async {
+    private func respond(to request: HTTPRequest, on client: Int32, peer: PeerIdentity) async {
         if let reason = RequestGuard.rejection(for: request) {
-            send(status: 403, body: ["error": reason], to: client)
+            report(request, peer: peer, allowed: false, reason: reason)
+            send(status: 403, reason: reason, path: request.path, to: client)
             return
         }
 
-        if request.method == "GET", request.path == "/health" || request.path == "/status" {
+        let decision = authorizer.authorize(
+            method: request.method,
+            path: request.path,
+            authorizationHeader: request.headers["authorization"],
+            peer: peer
+        )
+
+        if case .deny(let status, let reason) = decision {
+            report(request, peer: peer, allowed: false, reason: reason)
+            send(status: status, reason: reason, path: request.path, to: client)
+            return
+        }
+
+        report(request, peer: peer, allowed: true, reason: nil)
+
+        if request.method == "GET", request.path == "/health" {
+            // The documented probe, and the one path that answers without a token — so it must not
+            // carry the activity log, which holds the arguments and results of past tool calls.
+            let status = await statusHandler()
+            send(status: 200, codable: Self.publicStatus(status, authorizer: authorizer), to: client)
+            return
+        }
+
+        if request.method == "GET", request.path == "/status" {
             let status = await statusHandler()
             send(status: 200, codable: status, to: client)
             return
@@ -323,7 +368,44 @@ final class LocalHTTPServer {
             return
         }
 
-        send(status: 404, body: ["error": "Not found"], to: client)
+        send(status: 404, reason: "Not found", path: request.path, to: client)
+    }
+
+    /// `/health` without the activity log, plus one line saying how the endpoint is guarded. A caller
+    /// that wants the log asks `/status` and presents the token.
+    private static func publicStatus(_ status: StatusResponse, authorizer: SocketAuthorizer) -> StatusResponse {
+        StatusResponse(
+            ok: status.ok,
+            version: status.version,
+            endpoint: status.endpoint,
+            services: status.services + [
+                ServiceHealth(
+                    name: "Client Authentication",
+                    endpoint: "m3mcp://auth",
+                    mode: "capability token + peer code identity",
+                    state: authorizer.pinningDescription
+                )
+            ],
+            recentActivity: []
+        )
+    }
+
+    private func report(_ request: HTTPRequest, peer: PeerIdentity, allowed: Bool, reason: String?) {
+        guard let auditHandler else { return }
+        auditHandler(
+            AccessAttempt(method: request.method, path: request.path, peer: peer, allowed: allowed, reason: reason)
+        )
+    }
+
+    /// A refusal on a tool path has to decode as a `ToolResponse`, because that is the only shape
+    /// `LocalAppClient` knows how to read; anything else reaches the MCP client as "unreadable
+    /// response" instead of as the reason it was refused.
+    private func send(status: Int, reason: String, path: String, to client: Int32) {
+        if path.hasPrefix("/tools/") {
+            send(status: status, codable: ToolResponse(ok: false, source: "M3MCP Server", message: reason), to: client)
+        } else {
+            send(status: status, body: ["error": reason], to: client)
+        }
     }
 
     private func send<T: Encodable>(status: Int, codable: T, to client: Int32) {
@@ -348,6 +430,7 @@ final class LocalHTTPServer {
         switch status {
         case 200: reason = "OK"
         case 400: reason = "Bad Request"
+        case 401: reason = "Unauthorized"
         case 403: reason = "Forbidden"
         case 404: reason = "Not Found"
         case 413: reason = "Payload Too Large"

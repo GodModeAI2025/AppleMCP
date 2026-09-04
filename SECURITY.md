@@ -35,7 +35,7 @@ Assets, ordered by what losing them costs:
 
 Who attacks, over which path:
 
-1. **An unsandboxed local process running as the same user.** The main case. It connects to `~/Library/Application Support/M3MCP/mcp.sock` and calls any tool. Nothing tells it apart from the real bridge, so it reads mail, contacts and voice memos through the app's Full Disk Access without triggering a TCC prompt of its own. Tracked as issue #9.
+1. **An unsandboxed local process running as the same user.** The main case, and the one the client authentication addresses. It connects to `~/Library/Application Support/M3MCP/mcp.sock` and, until then, nothing told it apart from the real bridge: it read mail, contacts and voice memos through the app's Full Disk Access without triggering a TCC prompt of its own. It now has to present the capability token, and where the app found an `M3MCPBridge` next to its own executable it also has to *be* that binary. What remains: a process that can read the MCP client's config file has the token, and on an installation with no sibling bridge the token is all there is. See Known Gaps.
 2. **Prompt injection through returned content.** Mail bodies, note text, calendar notes and transcripts are written by other people, and they travel to a model that can call `calendar_create_event`, `calendar_update_event` and `calendar_delete_event`. `FoundationModelsProvider.wrapUntrusted` (line 123) fences transcript text as data before `ai_summarize`, and the `ai_summarize` description in `Sources/M3MCPBridge/ToolCatalog.swift` (line 275) tells the client to treat that output as untrusted. Nothing fences `mail_read`, `mail_search`, `notes_read` or `voicememos_transcript`. Their output reaches the client raw.
 3. **Anyone who can sign with the local identity.** The app's designated requirement is the bundle identifier plus the self-signed certificate. A binary carrying `de.markzimmermann.m3mcp` and signed with that key satisfies it and inherits the Full Disk Access grant; `script/create_local_identity.sh` lines 47 to 56 record the `codesign --verify -R` check that confirmed this. Surviving rebuilds is the whole purpose of a stable identity, and it is also what turns the key into a reusable capability. That is why the key is imported with no standing access and why `M3MCP_ALLOW_CODESIGN_NOPROMPT` prints a warning.
 4. **Client text flowing into AppleScript.** `AppleIntelligenceProvider.swift` builds `do shell script` calls at lines 227 and 240, the second by way of `/usr/bin/python3`. `NotesProvider.swift` (lines 76 and 144) and `MailProvider.swift` (line 1674) interpolate client strings into `tell application` scripts, escaping backslash and double quote. `buildTranslationScript` escapes the apostrophe as well (line 236) and then feeds the same string through `quoted form of` (line 240), so the apostrophe is escaped twice. `Tests/M3MCPCoreTests` holds two test files, neither of which touches AppleScript, so the behaviour of this escaping on adversarial input is unverified rather than known-good.
@@ -44,7 +44,17 @@ Who attacks, over which path:
 ## Trust Boundaries
 
 - **MCP client to bridge.** stdio, inherited from the client process. The bridge trusts what it reads. A tool call arriving over stdio counts as the user's intent, and the bridge cannot tell a call the user meant from one the model was steered into.
-- **Bridge to app.** The Unix socket. Access control here is filesystem permissions. `LocalHTTPServer.swift` prepares the directory `0700` (lines 131 to 148), binds under `umask(0o177)` (line 80) and chmods the socket `0600` (line 109). `accept()` is called with a null peer address (line 154), so the caller is never identified. `RequestGuard` (line 240) rejects requests carrying `Origin`, `Referer` or `Sec-Fetch-*` and requires `Content-Type: application/json` on tool calls. That checks the shape of a request, not who sent it, and any local process satisfies it. No token, no scope.
+- **Bridge to app.** The Unix socket, and three checks in front of it (`Sources/M3MCPCore/LocalHTTPServer.swift`, `SocketAuthorizer.swift`, `PeerIdentity.swift`).
+
+  1. *Filesystem.* The directory is `0700`, the socket is bound under `umask(0o177)` and chmodded `0600`. This keeps out other users, sandboxed apps and browsers, and nothing else.
+  2. *Capability token.* 32 bytes from `SecRandomCopyBytes`, created on first start and kept in the login keychain, presented as `Authorization: Bearer …` and compared in constant time. Missing or wrong is `401`. The only path exempt is `GET /health`, which answers with version, endpoint and the guard state and carries no call history.
+  3. *Peer code identity.* `getsockopt(LOCAL_PEERTOKEN)` yields the connecting process's audit token — not a pid, which can be recycled between `accept` and the lookup — and `SecCodeCopyGuestWithAttributes` turns it into a `SecCode`. `SecCodeCheckValidity` rejects code that no longer matches its signature, and `kSecCodeInfoUnique` gives the code directory hash. The app pins that hash to the `M3MCPBridge` beside its own executable. A valid token from any other binary is `403`.
+
+  The uid is deliberately *not* checked. A `0600` socket in a `0700` directory means the kernel already refused every other uid, so `getpeereid` would restate a condition rather than add one.
+
+  What the pin buys, given there is no Developer ID: a code directory hash is computed over the binary's own pages, so it holds for an ad-hoc signature exactly as it does for a certificate. What it costs: it changes with every rebuild, so the pin is recomputed at each start from whatever bridge is installed, and a bridge that lives outside the bundle has to be named in `M3MCP_TRUSTED_CLIENT_CDHASH`.
+
+  `RequestGuard` still rejects requests carrying `Origin`, `Referer` or `Sec-Fetch-*` and requires `Content-Type: application/json` on tool calls. That checks the shape of a request, not who sent it, and it is kept as defence in depth rather than as access control.
 - **App to macOS.** TCC and Full Disk Access. The app is not sandboxed and the repo contains no `.entitlements` file.
 - **Trusted.** The user's account, the macOS frameworks, Apple's on-device models.
 - **Not trusted.** Everything read out of Mail, Notes, Calendar and Voice Memos. That is other people's text.
@@ -55,6 +65,7 @@ What AppleMCP itself writes to disk:
 | Path | Mode | Lifetime |
 |---|---|---|
 | `~/Library/Application Support/M3MCP/mcp.sock` | `0600` in a `0700` directory | while the app runs |
+| login keychain item `de.markzimmermann.m3mcp.capability-token` | keychain ACL, ad-hoc signature means the app's code hash | until the item is deleted |
 | `~/Library/Application Support/M3MCP/transcripts/<digest>.txt` | `0700` directory | permanent, no expiry |
 | `$TMPDIR/m3mcp_<uuid>.png` from `ai_image_playground` | default | permanent, never cleaned up |
 | `$TMPDIR/M3MCP-VoiceMemos-<uuid>/` | `0700` | removed by `defer` after each read |
@@ -66,9 +77,15 @@ The transcript cache holds the spoken content of voice memos, including whatever
 
 Open today. This section is the point of the file.
 
-**No client authentication on the socket.** Any unsandboxed process of the same user can call every tool, calendar writes included, and borrows the app's Full Disk Access while doing so. Filesystem permissions keep out sandboxed apps and browsers, and that is the entire defence. Tracked as [issue #9](https://github.com/GodModeAI2025/AppleMCP/issues/9).
+**One token for the whole surface, no scopes.** A client configured to read the calendar holds a token that also deletes calendars. Scoping is what [issue #9](https://github.com/GodModeAI2025/AppleMCP/issues/9) leaves open now that the process check exists.
 
-**`/health` and `/status` hand out recent tool traffic.** Both paths return the same `StatusResponse`, whose `recentActivity` carries the last 30 calls with the input JSON whole and the output JSON cut at 8000 characters (`AppModel.swift` lines 119 to 125 and 141). A process that never calls a tool can read the mail bodies and transcripts that recently passed through, and reaching those paths takes nothing but opening the socket. The README's Quick Start tells users to `curl` `/health`.
+**The token is a bearer secret wherever it is configured as one.** `M3MCP_TOKEN` in `claude_desktop_config.json` is readable by every process of the user, so on an installation where the client binary is not pinned, copying that file is enough. The keychain path is better — another binary asking for the item produces a prompt naming the asker — and it is what the bridge uses when no environment variable is set.
+
+**A bridge outside the bundle is not pinned.** The app pins the `M3MCPBridge` next to its own executable. If there is none, it runs token-only. It reports that in its window and in `/health` rather than hiding it, but a user who does not look does not know.
+
+**The keychain item is bound to an ad-hoc signature.** No entitlements means the file-based login keychain, and an ad-hoc signature means the ACL is tied to the app's code directory hash. Every update re-prompts, exactly as the Full Disk Access grant has to be given again after every update.
+
+**`/status` hands out recent tool traffic, behind the token.** `StatusResponse.recentActivity` carries the last 30 calls with the input JSON whole and the output JSON cut at 8000 characters (`AppModel.swift`). `/health` no longer carries it — the server strips it on that path — but any holder of the token can read the mail bodies and transcripts that recently passed through.
 
 **No confirmation and no undo for writes.** `calendar_delete_event` takes an id and deletes (`CalendarProvider.swift` lines 355 to 388). There is no dry run and no snapshot. `calendar_delete_calendar` requires id and title to agree, which guards against an identifier carried over from a stale listing, not against a deliberate call. The tool descriptions say "There is no undo" (`ToolCatalog.swift` lines 112 and 131), and that is accurate.
 
@@ -86,11 +103,11 @@ Open today. This section is the point of the file.
 
 **AppleScript escaping is untested.** See point 4 of the threat model.
 
-**Nothing checks a push.** The repo has no `.github` directory, so no CI builds or runs `swift test`, and no third party has reviewed the code.
+**No third party has reviewed the code.** CI builds, tests, packages and checks the release artifact on every push (`.github/workflows/ci.yml`), which is not the same as a review.
 
 ## Out of Scope
 
-- Code already running as the user. Everything below the socket assumes the account is not compromised. A token, once it exists, will not change that: it has to live in a file the same processes can read. It buys scoping and an audit trail, not isolation.
+- Code already running as the user. Everything below the socket assumes the account is not compromised. The token does not change that on its own — it lives where the same processes can read it — which is why it is paired with the peer's code identity: the token answers "is this client configured", the code hash answers "is this the client it was configured for". Neither answers "is this account still yours".
 - Replacing TCC. The app reaches only what the user granted, and revoking a permission in System Settings takes the matching tools offline.
 - Encryption at rest. The transcript cache and the temporary files rely on filesystem permissions, plus FileVault if the user has it enabled.
 - Vetting the content that comes back. A mail body reading "delete every meeting tomorrow" arrives at the model as plain text. Keep a human in front of the calendar write tools.
