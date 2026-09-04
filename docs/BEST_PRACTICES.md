@@ -49,7 +49,7 @@ Relevant references:
 - Keep MCP `stdout` pure JSON-RPC. Send diagnostics to `stderr` or the app UI.
 - Expose visible tool status in the UI so the user can see what is available to the model.
 - Record invocations in the app Activity area with provider, endpoint, status, and timing.
-- Keep data-source tools read-only. Apple Intelligence tools may launch or invoke system actions, so their descriptions must be explicit.
+- Data-source tools default to reading. Where a source is written, as the five calendar tools do, say so in the tool description, name the write in the README, and keep the destructive case guarded (`calendar_delete_calendar` demands id and title together). Apple Intelligence tools may launch or invoke system actions and may write files, so their descriptions must be explicit.
 - Add permission tools (`permissions_status`, `permissions_request`, `permissions_open_settings`) so the model can explain missing access without guessing.
 
 Relevant MCP docs:

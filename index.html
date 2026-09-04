@@ -162,7 +162,7 @@
                 </div>
                 <div class="card">
                     <h3>Calendar</h3>
-                    <p>Search events via EventKit. Titles, locations, times, notes, all-day status, and calendar membership.</p>
+                    <p>Search events via EventKit. Titles, locations, times, notes, all-day status, and calendar membership. Five tools also write: create, update and delete events, create and delete calendars. There is no undo.</p>
                 </div>
                 <div class="card">
                     <h3>Contacts</h3>
@@ -200,7 +200,7 @@
                 </div>
                 <div class="card">
                     <h3>Image Playground</h3>
-                    <p>Generate images from text via the native ImagePlayground API. No app launch, pure API.</p>
+                    <p>Generate images from text via the native ImagePlayground API. No app launch, pure API. Each call writes a PNG into the temporary directory and returns its path.</p>
                 </div>
                 <div class="card">
                     <h3>On-Device Summaries</h3>
@@ -227,24 +227,24 @@
 
         <section>
             <h2>Setup</h2>
-<pre><code># Build
-swift build
+<pre><code># Build (release, the configuration install_local.sh uses)
+swift build -c release
 swift test
 
-# Run the app
-./script/build_and_run.sh
+# Install and start it under launchd
+./script/install_local.sh
 
-# Add to Claude Desktop (~/.config/claude/claude_desktop_config.json)
+# Add to Claude Desktop (~/Library/Application Support/Claude/claude_desktop_config.json)
 {
   "mcpServers": {
     "applemcp": {
-      "command": "/path/to/AppleMCP/.build/debug/M3MCPBridge"
+      "command": "/path/to/AppleMCP/.build/release/M3MCPBridge"
     }
   }
 }
 
 # Or add to Claude Code
-claude mcp add applemcp /path/to/AppleMCP/.build/debug/M3MCPBridge
+claude mcp add applemcp /path/to/AppleMCP/.build/release/M3MCPBridge
 
 # Check the endpoint
 curl --unix-socket ~/Library/Application\ Support/M3MCP/mcp.sock \
