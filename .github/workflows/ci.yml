@@ -23,16 +23,19 @@ jobs:
     runs-on: macos-26
     timeout-minutes: 45
 
-    env:
-      CLANG_MODULE_CACHE_PATH: ${{ runner.temp }}/applemcp-clang-module-cache
-      SWIFTPM_MODULECACHE_OVERRIDE: ${{ runner.temp }}/applemcp-swiftpm-module-cache
-
     steps:
       - name: Check out source
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           persist-credentials: false
           fetch-depth: 0
+
+      - name: Configure isolated module caches
+        run: |
+          printf '%s\n' \
+            "CLANG_MODULE_CACHE_PATH=$RUNNER_TEMP/applemcp-clang-module-cache" \
+            "SWIFTPM_MODULECACHE_OVERRIDE=$RUNNER_TEMP/applemcp-swiftpm-module-cache" \
+            >> "$GITHUB_ENV"
 
       - name: Verify Swift toolchain and FoundationModels import
         run: |
