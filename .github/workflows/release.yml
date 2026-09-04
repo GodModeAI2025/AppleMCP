@@ -1,0 +1,53 @@
+name: Release
+
+# A v* tag builds the artifact and attaches it to a draft release. Publishing is a separate,
+# deliberate act by a human, which is why the release is created as a draft.
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: read
+
+jobs:
+  release:
+    name: Package and attach
+    # macos-26 for the same reason ci.yml uses it: Package.swift weak-links FoundationModels, which
+    # only exists in the macOS 26 SDK, so an older image fails at the link step.
+    runs-on: macos-26
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      # Every step below calls a script in the repository. Nothing here embeds packaging logic,
+      # because logic that lives only in a workflow can only be tested by pushing a tag.
+      - name: Tag matches the version in CHANGELOG.md
+        run: |
+          set -euo pipefail
+          tag="${GITHUB_REF_NAME}"
+          changelog="$(script/version.sh)"
+          echo "tag: $tag, CHANGELOG.md: $changelog"
+          if [ "${tag#v}" != "$changelog" ]; then
+            echo "::error::Tag $tag does not match the version CHANGELOG.md names ($changelog). Move the Unreleased entries under a '## ${tag#v}' heading, or tag v$changelog." >&2
+            exit 1
+          fi
+
+      - name: Package
+        run: script/package_release.sh dist
+
+      - name: Check the artifact
+        run: script/check_release_artifact.sh dist
+
+      - name: Release notes from CHANGELOG.md
+        run: script/version.sh --section > dist/release-notes.md
+
+      - uses: softprops/action-gh-release@v2
+        with:
+          # A draft, so the owner reads the notes and the checksum before anything is public.
+          draft: true
+          body_path: dist/release-notes.md
+          files: |
+            dist/M3MCP.app.zip
+            dist/M3MCP.app.zip.sha256
