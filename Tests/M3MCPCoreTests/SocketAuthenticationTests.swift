@@ -543,11 +543,20 @@ final class SocketAuthenticationTests: XCTestCase {
         setsockopt(descriptor, SOL_SOCKET, SO_RCVTIMEO, &deadline, socklen_t(MemoryLayout<timeval>.size))
         setsockopt(descriptor, SOL_SOCKET, SO_SNDTIMEO, &deadline, socklen_t(MemoryLayout<timeval>.size))
 
+        // A full listen backlog is answered by the kernel with ECONNREFUSED before the server sees
+        // anything, so a burst of connections from elsewhere in the test would otherwise show up here
+        // as a server failure. Retrying briefly separates the two; the timing assertions are what
+        // measure whether the server is actually reachable.
         var address = Self.address(for: socketURL.path)
-        let connected = withUnsafePointer(to: &address) { pointer in
-            pointer.withMemoryRebound(to: sockaddr.self, capacity: 1) { addressPointer in
-                connect(descriptor, addressPointer, socklen_t(MemoryLayout<sockaddr_un>.size))
+        var connected: Int32 = -1
+        for attempt in 0..<40 {
+            connected = withUnsafePointer(to: &address) { pointer in
+                pointer.withMemoryRebound(to: sockaddr.self, capacity: 1) { addressPointer in
+                    connect(descriptor, addressPointer, socklen_t(MemoryLayout<sockaddr_un>.size))
+                }
             }
+            if connected == 0 || errno != ECONNREFUSED { break }
+            usleep(useconds_t(2_000 * (attempt + 1)))
         }
         guard connected == 0 else { throw Failure("connect() failed: \(String(cString: strerror(errno)))") }
 

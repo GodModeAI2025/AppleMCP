@@ -165,7 +165,11 @@ public final class LocalHTTPServer {
             _ = fcntl(descriptor, F_SETFL, flags | O_NONBLOCK)
         }
 
-        guard listen(descriptor, 16) == 0 else {
+        // The backlog is what the kernel holds between a client's connect and this server's accept.
+        // At 16 a burst — an attacker's, or a client reconnecting while one is in flight — overran it
+        // and the kernel answered ECONNREFUSED, which looks to a client like a server that is not
+        // there. It is matched to the connection cap instead, and 128 is where Darwin tops out.
+        guard listen(descriptor, Int32(min(maximumOpenConnections, 128))) == 0 else {
             let code = errno
             close(descriptor)
             unlink(path)

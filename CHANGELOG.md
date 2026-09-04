@@ -72,7 +72,9 @@ reads it.
   `SocketAuthenticationTests.testIdleConnectionsCannotStarveTheEndpoint` measures it: with 120 idle
   connections in place, `/health` and a tool call used to hit an eight second timeout and now answer
   in 0.04 seconds. What it is not is immunity: 128 connections held open still refuse the 129th until
-  a deadline frees a slot, and SECURITY.md says so under Known Gaps.
+  a deadline frees a slot, and SECURITY.md says so under Known Gaps. The listen backlog went from 16
+  to the same 128 in the same breath — at 16 a burst overran it and the kernel answered a perfectly
+  ordinary client with ECONNREFUSED before the server ever saw it.
 - **The bridge hung instead of answering when it was not allowed to read the keychain item.** With no
   `M3MCP_TOKEN` set, the bridge reads the token from the login keychain — an item the app created, so
   the ACL names the app and a read from the bridge needs the user's confirmation. Measured with an
