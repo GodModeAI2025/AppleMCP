@@ -38,8 +38,9 @@ reads it.
   notarisation, a Gatekeeper warning on first launch, and a Full Disk Access grant that has to be
   given again after every update because the designated requirement is the binary hash.
 - **`script/check_release_artifact.sh`** runs in CI on every push. It packages, checks the archive
-  against an exact list of expected entries, verifies the signature and the checksum, and compares a
-  second packaging run byte for byte, so a broken package fails before a tag is set instead of after.
+  against an exact list of expected entries, verifies the signature and the checksum, starts the
+  packaged bridge to see which version it reports to an MCP client, and compares a second packaging
+  run byte for byte. A broken package fails before a tag is set instead of after.
 
 ### Changed
 

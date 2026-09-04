@@ -12,11 +12,12 @@
 #      no .git, no .github, no index.html, no sources, no keys, no example data
 #   3. the unpacked bundle passes codesign --verify --strict --deep
 #   4. the app and the bridge are there, executable, and Mach-O
-#   5. the version inside Info.plist is the one CHANGELOG.md names
+#   5. the version inside Info.plist, and the version the packaged bridge reports to an MCP client,
+#      are both the one CHANGELOG.md names
 #   6. packaging the same binaries again produces the same bytes, so nothing in the packaging step
 #      depends on the clock, the staging directory or the order the filesystem returns names
 #
-# Check 6 is about packaging, not about the compiler. swift build is not bit-for-bit reproducible,
+# The last check is about packaging, not about the compiler. swift build is not bit-for-bit reproducible,
 # so a clean rebuild of the same commit gives a different binary and a different ZIP. It is skipped
 # when M3MCP_CODESIGN_IDENTITY is set, because codesign records a signing time in the CMS blob and a
 # certificate signature therefore cannot be byte-identical between two runs.
@@ -147,7 +148,22 @@ else
   pass "bundle identifier is $BUNDLE_ID"
 fi
 
-# --- 6. same binaries, same bytes ---------------------------------------------------------------
+# The bridge answers initialize without the app running, and `head -1` closes the pipe, so this
+# neither hangs nor needs a timeout. It checks what an MCP client is actually told, rather than
+# grepping the source for a string.
+INIT_REQUEST='{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2024-11-05","capabilities":{},"clientInfo":{"name":"check_release_artifact","version":"0"}}}'
+BRIDGE_REPLY="$(printf '%s\n' "$INIT_REQUEST" | "$APP/Contents/MacOS/M3MCPBridge" 2>/dev/null | head -1 || true)"
+BRIDGE_VERSION="$(printf '%s' "$BRIDGE_REPLY" | sed -n 's/.*"serverInfo":{[^}]*"version":"\([^"]*\)".*/\1/p')"
+if [[ -z "$BRIDGE_VERSION" ]]; then
+  fail "the packaged bridge did not answer initialize with a serverInfo version. It said: ${BRIDGE_REPLY:-nothing}"
+elif [[ "$BRIDGE_VERSION" != "$VERSION" ]]; then
+  fail "the bridge tells MCP clients it is version $BRIDGE_VERSION, CHANGELOG.md says $VERSION."
+  fail "  The constant is m3mcpVersion in Sources/M3MCPCore/CoreModels.swift."
+else
+  pass "the packaged bridge reports version $BRIDGE_VERSION to an MCP client"
+fi
+
+# --- 7. same binaries, same bytes ---------------------------------------------------------------
 
 if [[ -n "${M3MCP_CODESIGN_IDENTITY:-}" ]]; then
   echo "  skip  reproducibility: M3MCP_CODESIGN_IDENTITY is set, and a certificate signature records"

@@ -1,6 +1,10 @@
 import Foundation
 
-public let m3mcpVersion = "0.2.0"
+// The version an MCP client sees in the initialize response, and the one the app's status and
+// health replies carry. Swift needs it at compile time, so it cannot read CHANGELOG.md, which is
+// where the version is maintained. script/check_release_artifact.sh runs the packaged bridge in CI
+// and fails if this constant and CHANGELOG.md have drifted apart.
+public let m3mcpVersion = "0.3.0"
 
 public enum JSONValue: Codable, Equatable, Sendable {
     case string(String)
