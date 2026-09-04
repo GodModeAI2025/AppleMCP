@@ -47,6 +47,15 @@ jobs:
       - name: swift build -c release
         run: swift build -c release
 
+      # The release artifact is built on every push, not only when a tag is set. A package that
+      # ships the wrong files, loses its signature or stops being reproducible then fails here,
+      # while it is still someone's pull request, instead of after the first tag is public.
+      - name: Package the release artifact
+        run: script/package_release.sh dist
+
+      - name: Check the release artifact
+        run: script/check_release_artifact.sh dist
+
   docs:
     name: Docs against code
     runs-on: ubuntu-latest
