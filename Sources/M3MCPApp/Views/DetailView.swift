@@ -7,6 +7,7 @@ struct DetailView: View {
     let permissionItems: [DataItem]
     let permissionMessage: String?
     let serverState: String
+    let authenticationSummary: String
     let onPermissions: () -> Void
     let onPermissionRefresh: () -> Void
     let onOpenPermissionSettings: (String) -> Void
@@ -53,6 +54,12 @@ struct DetailView: View {
                 Text("\(M3MCPEndpoint.displayPath)  \(serverState)")
                     .font(.caption)
                     .foregroundStyle(.secondary)
+                // Whether the client binary is pinned or the endpoint is running on the token alone
+                // belongs in front of the user, not only in /health.
+                Text(authenticationSummary)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .textSelection(.enabled)
             }
 
             Spacer()
