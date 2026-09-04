@@ -29,9 +29,19 @@ public struct SocketAuthorizer: Sendable {
     /// Code directory hashes that may connect. Empty means pinning is off — see `pinningDescription`.
     public let trustedCodeDirectoryHashes: Set<String>
 
-    public init(token: String, trustedCodeDirectoryHashes: Set<String> = []) {
+    /// Where the pin came from, in words. It goes into the refusal, because the likely cause of a
+    /// `403` is a client pointed at a second copy of the bridge, and the message should name the copy
+    /// that would work.
+    public let trustDescription: String
+
+    public init(
+        token: String,
+        trustedCodeDirectoryHashes: Set<String> = [],
+        trustDescription: String = ""
+    ) {
         self.token = token
         self.trustedCodeDirectoryHashes = Set(trustedCodeDirectoryHashes.map { $0.lowercased() })
+        self.trustDescription = trustDescription
     }
 
     public var pinsPeerIdentity: Bool { !trustedCodeDirectoryHashes.isEmpty }
@@ -89,8 +99,10 @@ public struct SocketAuthorizer: Sendable {
             return .deny(
                 status: 403,
                 reason: "The token is valid, but it was presented by a process this instance is not "
-                    + "configured for. Only the M3MCPBridge shipped with this app may connect. Peer: "
-                    + "\(peer.description)."
+                    + "configured for. Only the M3MCPBridge that ships with this app may connect"
+                    + (trustDescription.isEmpty ? "" : " (\(trustDescription))")
+                    + ". A second copy of the same bridge built elsewhere has a different code "
+                    + "directory hash and is refused. Peer: \(peer.description)."
             )
         }
 

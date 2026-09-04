@@ -81,6 +81,12 @@ Open today. This section is the point of the file.
 
 **The token is a bearer secret wherever it is configured as one.** `M3MCP_TOKEN` in `claude_desktop_config.json` is readable by every process of the user, so on an installation where the client binary is not pinned, copying that file is enough. The keychain path is better — another binary asking for the item produces a prompt naming the asker — and it is what the bridge uses when no environment variable is set.
 
+**The pin is per binary copy, not per build.** `.build/release/M3MCPBridge` and the copy inside
+`M3MCP.app` are the same source and have different code directory hashes, because the packaging and
+install scripts sign the bundled copy again. A client pointed at the wrong copy is refused on every
+call. The refusal names the copy that would work, and the README table says which path goes with
+which install.
+
 **A bridge outside the bundle is not pinned.** The app pins the `M3MCPBridge` next to its own executable. If there is none, it runs token-only. It reports that in its window and in `/health` rather than hiding it, but a user who does not look does not know.
 
 **The keychain item is bound to an ad-hoc signature.** No entitlements means the file-based login keychain, and an ad-hoc signature means the ACL is tied to the app's code directory hash. Every update re-prompts, exactly as the Full Disk Access grant has to be given again after every update.

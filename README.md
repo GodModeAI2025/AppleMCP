@@ -133,7 +133,7 @@ Add to your Claude Desktop MCP config (`~/Library/Application Support/Claude/cla
 {
   "mcpServers": {
     "applemcp": {
-      "command": "/path/to/AppleMCP/.build/release/M3MCPBridge",
+      "command": "$HOME/Applications/M3MCP.app/Contents/MacOS/M3MCPBridge",
       "env": { "M3MCP_TOKEN": "<token>" }
     }
   }
@@ -143,8 +143,24 @@ Add to your Claude Desktop MCP config (`~/Library/Application Support/Claude/cla
 #### Claude Code
 
 ```bash
-claude mcp add applemcp --env M3MCP_TOKEN=<token> -- /path/to/AppleMCP/.build/release/M3MCPBridge
+claude mcp add applemcp --env M3MCP_TOKEN=<token> -- ~/Applications/M3MCP.app/Contents/MacOS/M3MCPBridge
 ```
+
+#### Which copy of the bridge
+
+This matters now, and it did not before. The app accepts the `M3MCPBridge` that sits next to its own
+executable and refuses every other copy: a second build of the same source, or the same binary signed
+a second time, has a different code directory hash. Which path that is depends on how the app was
+started.
+
+| How the app was started | Point the client at |
+|---|---|
+| `M3MCP.app` from a release download | `M3MCP.app/Contents/MacOS/M3MCPBridge`, wherever you moved the app |
+| `./script/install_local.sh` | `~/Applications/M3MCP.app/Contents/MacOS/M3MCPBridge` |
+| `./script/build_and_run.sh` | `/path/to/AppleMCP/.build/release/M3MCPBridge`. That script does not put a bridge in its bundle, so the app has nothing to pin and runs token-only |
+
+Point a client at the wrong copy and every call comes back refused, with a message naming the copy
+that would work. `M3MCP_TRUSTED_CLIENT_CDHASH` pins a different one on purpose.
 
 #### The token
 

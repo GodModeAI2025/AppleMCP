@@ -51,7 +51,11 @@ final class AppModel: ObservableObject {
         }
 
         let trust = TrustedClient.resolve(appExecutableURL: Bundle.main.executableURL)
-        let authorizer = SocketAuthorizer(token: credentials.token, trustedCodeDirectoryHashes: trust.hashes)
+        let authorizer = SocketAuthorizer(
+            token: credentials.token,
+            trustedCodeDirectoryHashes: trust.hashes,
+            trustDescription: trust.note
+        )
         capabilityToken = credentials.token
         authenticationSummary = "\(authorizer.pinningDescription); token from \(credentials.origin)"
         AppLogger.log("Client authentication: \(trust.note)")

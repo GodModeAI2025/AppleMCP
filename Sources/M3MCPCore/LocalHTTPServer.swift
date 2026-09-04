@@ -374,18 +374,23 @@ public final class LocalHTTPServer {
     /// `/health` without the activity log, plus one line saying how the endpoint is guarded. A caller
     /// that wants the log asks `/status` and presents the token.
     private static func publicStatus(_ status: StatusResponse, authorizer: SocketAuthorizer) -> StatusResponse {
-        StatusResponse(
+        let authenticationRow = ServiceHealth(
+            name: "Client Authentication",
+            endpoint: "m3mcp://auth",
+            mode: "capability token + peer code identity",
+            state: authorizer.pinningDescription
+        )
+        // The app lists the same row in its own service list, and /health would otherwise show it
+        // twice.
+        let services = status.services.contains { $0.name == authenticationRow.name }
+            ? status.services
+            : status.services + [authenticationRow]
+
+        return StatusResponse(
             ok: status.ok,
             version: status.version,
             endpoint: status.endpoint,
-            services: status.services + [
-                ServiceHealth(
-                    name: "Client Authentication",
-                    endpoint: "m3mcp://auth",
-                    mode: "capability token + peer code identity",
-                    state: authorizer.pinningDescription
-                )
-            ],
+            services: services,
             recentActivity: []
         )
     }

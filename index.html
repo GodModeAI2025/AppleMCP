@@ -258,7 +258,7 @@ swift test
 {
   "mcpServers": {
     "applemcp": {
-      "command": "/path/to/AppleMCP/.build/release/M3MCPBridge",
+      "command": "$HOME/Applications/M3MCP.app/Contents/MacOS/M3MCPBridge",
       "env": { "M3MCP_TOKEN": "&lt;token&gt;" }
     }
   }
@@ -266,9 +266,15 @@ swift test
 
 # The token comes from the app: Server &gt; Copy MCP Client Token.
 # Without it the app refuses every tool call.
+#
+# Point the client at the bridge inside the bundle the app runs from.
+# The app accepts the M3MCPBridge next to its own executable and refuses
+# every other copy, because a second build has a different code hash.
+# Only script/build_and_run.sh leaves no bridge in the bundle; with that
+# one the app runs token-only and /path/to/AppleMCP/.build/release/M3MCPBridge works.
 
 # Or add to Claude Code
-claude mcp add applemcp --env M3MCP_TOKEN=&lt;token&gt; -- /path/to/AppleMCP/.build/release/M3MCPBridge
+claude mcp add applemcp --env M3MCP_TOKEN=&lt;token&gt; -- ~/Applications/M3MCP.app/Contents/MacOS/M3MCPBridge
 
 # Check the endpoint. /health is the one path that answers without a token,
 # and it carries no call history for that reason.

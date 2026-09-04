@@ -79,6 +79,13 @@ reads it.
 - **`script/install_local.sh` installs `M3MCPBridge` into the bundle** next to the app, the way
   `script/package_release.sh` already did. Without a sibling bridge there is nothing for the app to
   pin, and the documented install path produced exactly that.
+- **README and index.html point MCP clients at the bridge inside the bundle**, not at
+  `.build/release/M3MCPBridge`. The two copies are the same source and different code directory
+  hashes — `.build/release/M3MCPBridge` carries the ad-hoc signature SwiftPM emitted, the bundled one
+  was signed again by the packaging or install script — so with the pin in place the old instruction
+  would have produced a refusal on every call. `script/build_and_run.sh` puts no bridge in its
+  bundle, so that path runs token-only and `.build/release/M3MCPBridge` still applies; the README
+  table says which is which.
 
 ## 0.3.0
 
