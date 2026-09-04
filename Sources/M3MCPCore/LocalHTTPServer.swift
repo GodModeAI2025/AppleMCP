@@ -381,16 +381,18 @@ public final class LocalHTTPServer {
 
         guard served >= 0 else { return }
 
+        // The refusal goes out while the descriptor is still non-blocking, so a client that will not
+        // read it cannot hold up `readQueue` in the bargain.
+        guard claimSlot(\.requestsInFlight, limit: maximumConcurrentRequests) else {
+            refuse(served, status: 503, reason: "Too many requests in flight")
+            return
+        }
+
         // Back to blocking for the reply: `writeAll` is written for a blocking descriptor, and
         // SO_SNDTIMEO keeps it bounded.
         let flags = fcntl(served, F_GETFL, 0)
         if flags >= 0 {
             _ = fcntl(served, F_SETFL, flags & ~O_NONBLOCK)
-        }
-
-        guard claimSlot(\.requestsInFlight, limit: maximumConcurrentRequests) else {
-            refuse(served, status: 503, reason: "Too many requests in flight")
-            return
         }
 
         connectionQueue.async { [weak self] in
