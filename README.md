@@ -44,21 +44,26 @@ mv M3MCP.app /Applications/
 **Apple Silicon only.** The build has one architecture, `arm64`. On an Intel Mac it will not start,
 and building from source is the way in.
 
-**macOS warns on first launch, and it has reason to.** The app is signed ad hoc: no Developer ID, no
-notarisation, nothing Apple has inspected. `spctl --assess --type execute` answers `rejected`, which
-is the ordinary verdict for a build like this one. Opening it the first time produces a dialog
-saying macOS cannot verify it is free of malware.
+**The app carries no Apple signature.** It is signed ad hoc: no Developer ID, no notarisation,
+nothing Apple has inspected. `spctl --assess --type execute` answers `rejected`, which is the
+ordinary verdict for a build like this one.
 
-To start it anyway: open it once and dismiss the dialog, then go to System Settings, Privacy &
-Security, scroll to the note about M3MCP and choose **Open Anyway**. Right-click and Open stopped
-working for apps that are not notarised. If you prefer one command:
+**On the path above, nothing checks it for you.** `curl` does not mark the download and `unzip` does
+not carry a mark into the bundle, so the app opens without a word from macOS. Verified: `xattr -l`
+on a file fetched with `curl` prints nothing. That is what makes the checksum line worth running.
+
+**Through a browser it is different.** Safari marks the file, Archive Utility carries the mark into
+the unpacked app, and the first launch produces a dialog saying macOS cannot verify the app is free
+of malware. Open it once, dismiss the dialog, then go to System Settings, Privacy & Security, scroll
+to the note about M3MCP and choose **Open Anyway**. Right-click and Open stopped working for apps
+that are not notarised. The one-command version:
 
 ```bash
-xattr -d com.apple.quarantine /Applications/M3MCP.app
+xattr -dr com.apple.quarantine /Applications/M3MCP.app
 ```
 
-That drops the mark macOS puts on downloaded files, which means you are vouching for the file. Check
-the checksum above before you do.
+`-r`, because the mark sits on the files inside the bundle as well. Removing it means you are
+vouching for the file, so check the checksum first.
 
 **The Full Disk Access grant does not survive an update.** An ad-hoc signature pins the app's
 designated requirement to the binary hash, so the next release is a different app as far as macOS is
