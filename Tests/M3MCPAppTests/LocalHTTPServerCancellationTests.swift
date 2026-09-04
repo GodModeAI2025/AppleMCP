@@ -126,7 +126,15 @@ final class LocalHTTPServerCancellationTests: XCTestCase {
         let client = try connect(to: socketURL)
         defer { Darwin.close(client) }
         for byte in Data("GET".utf8) {
-            try writeAll(Data([byte]), to: client)
+            do {
+                try writeAll(Data([byte]), to: client)
+            } catch {
+                let code = (error as? POSIXError)?.code
+                guard code == .EPIPE || code == .ECONNRESET else { throw error }
+                // Under instrumentation the absolute deadline can close the server side before
+                // the final trickle byte. The buffered 408 response remains the behavior asserted.
+                break
+            }
             try await Task.sleep(nanoseconds: 70_000_000)
         }
 
@@ -388,6 +396,21 @@ final class LocalHTTPServerCancellationTests: XCTestCase {
     private func connect(to socketURL: URL) throws -> Int32 {
         let descriptor = Darwin.socket(AF_UNIX, SOCK_STREAM, 0)
         guard descriptor >= 0 else { throw POSIXError(.init(rawValue: errno) ?? .EIO) }
+
+        // A timing failure should surface as EPIPE in the test instead of terminating the entire
+        // xctest process with SIGPIPE. Production sockets apply the same protection on accept.
+        var suppressSIGPIPE: Int32 = 1
+        guard setsockopt(
+            descriptor,
+            SOL_SOCKET,
+            SO_NOSIGPIPE,
+            &suppressSIGPIPE,
+            socklen_t(MemoryLayout<Int32>.size)
+        ) == 0 else {
+            let code = errno
+            Darwin.close(descriptor)
+            throw POSIXError(.init(rawValue: code) ?? .EIO)
+        }
 
         var address = sockaddr_un()
         address.sun_family = sa_family_t(AF_UNIX)
