@@ -26,7 +26,7 @@ AppleMCP consists of a SwiftUI app that bridges macOS privacy-controlled APIs an
 - **No screenshots, no screen recording.** Nothing reads the display.
 - **No computer use.** There is no loop in which a model looks at the screen and acts on it.
 - **No mail sending.** The Mail tools read the local index and the `.emlx` files. They compose nothing and send nothing.
-- **No network listener.** The endpoint is a Unix domain socket, not a TCP port, and the sources contain no HTTP client.
+- **No network.** The endpoint is a Unix domain socket, not a TCP port. The bridge does speak HTTP, but only across that socket. The sources open no connection to a remote host and contain no `URLSession`.
 
 ## Quick Start
 
@@ -45,6 +45,12 @@ For a persistent install under launchd, with a stable signature so the Full Disk
 
 ```bash
 ./script/install_local.sh
+```
+
+That signature has to come from somewhere. Without a usable code-signing identity the script stops with "No usable code-signing identity found", so create a local one first:
+
+```bash
+./script/create_local_identity.sh
 ```
 
 For a one-off run from the terminal:
@@ -92,7 +98,7 @@ The M3MCP UI app must be running for MCP calls to work. The bridge talks to the 
 | Tool | Description |
 |---|---|
 | `mail_search` | Search messages in Apple Mail (subject, sender, date, read status) |
-| `mail_list_mailboxes` | List the mailboxes of the local Mail index, to scope a search |
+| `mail_list_mailboxes` | List the mailboxes of the local Mail index with account, path, role, and message counts, so a `mail_search` can be scoped to a name that exists |
 | `mail_read` | Read full email content by ID (body, recipients, attachments metadata) |
 | `calendar_search` | Search calendar events via EventKit, optionally scoped to one calendar |
 | `calendar_read_event` | Read one event by ID, the way to confirm a write, since `calendar_search` only scans a date window |
@@ -164,7 +170,7 @@ See [docs/VOICE_MEMOS.md](docs/VOICE_MEMOS.md) for the store layout, the transcr
 
 ## Privacy
 
-All data stays local. The app uses macOS TCC (Transparency, Consent, and Control) for every data source. AppleMCP itself makes no network requests: the endpoint is a Unix domain socket, not a TCP port, and the sources contain no HTTP client.
+All data stays local. The app uses macOS TCC (Transparency, Consent, and Control) for every data source. AppleMCP opens no remote connection: the endpoint is a Unix domain socket rather than a TCP port, and the HTTP the bridge speaks travels only over that socket.
 
 Because the app holds Full Disk Access, anything that can reach the endpoint inherits that reach. The socket lives in a `0700` directory and is itself `0600`, so a sandboxed app — the case macOS TCC exists to stop — cannot connect, and a web page cannot reach it under any circumstances. An unsandboxed process running as you is a different case, see [Limits](#limits). Mail reads the local SQLite index directly, it never sends emails or modifies any data. Voice Memos are opened read-only, and speech recognition runs on device whenever the locale supports it, so recordings never leave the Mac.
 
@@ -177,10 +183,10 @@ The security policy and the threat model live in `SECURITY.md`, currently in rev
 - **The socket does not check who connects.** File permissions keep out sandboxed apps and web pages. They do not distinguish one unsandboxed process of yours from another, so any local process running as you can call the endpoint and use the app's Full Disk Access. Tracked as [issue #9](https://github.com/GodModeAI2025/AppleMCP/issues/9).
 - **`ai_translate` has prerequisites nothing sets up for you.** The provider pipes the text through `/usr/bin/python3` into `shortcuts run Translate`. You need a Shortcut named "Translate" that you created yourself, and the system Python 3 at `/usr/bin/python3`. Without either the tool answers that translation is not reachable. Whether the translation itself stays on the Mac depends on whether the language pair is downloaded, which the Shortcuts and Translate apps decide, not AppleMCP.
 - **`ai_writing_tools` needs a Shortcut named "Writing Tools"** for the same reason. `ai_summarize` does not; it calls FoundationModels directly and needs macOS 26.
-- **`ai_image_playground` leaves files behind.** Each call writes a PNG into the process temporary directory and returns the path. Nothing deletes them.
-- **Calendar writes cannot be undone.** `calendar_delete_calendar` removes a calendar with its events; the only guard is that `id` and `title` have to agree. There is no dry-run mode and no confirmation step.
+- **`ai_image_playground` leaves files behind.** Each call writes a PNG into the process temporary directory and returns the path. AppleMCP never deletes them; they stay until macOS clears that directory.
+- **Calendar writes cannot be undone.** `calendar_delete_calendar` removes a calendar with its events. It refuses unless `id` and `title` agree and the calendar is mutable, and that is the whole safety net: there is no dry-run mode and no confirmation step.
 - **Test coverage is narrow.** The suite covers the Voice Memos transcript parser and the calendar project slug. Providers, the local HTTP server, and the bridge have no tests, so CI proves that the package builds and those two units work, not that a provider still returns what it used to.
-- **Building needs the macOS 26 SDK.** `Package.swift` weak-links `FoundationModels`, which exists only in that SDK, so Xcode 26 or later is required to link even though the app runs on macOS 15.
+- **Building needs the macOS 26 SDK.** `Package.swift` weak-links `FoundationModels`, which exists only in that SDK. Without it the link step fails with `ld: framework 'FoundationModels' not found`, even though the built app runs on macOS 15.
 
 ## Roadmap
 
@@ -198,7 +204,7 @@ Wanted, no issue open yet:
 ## Requirements
 
 - macOS 15.0+ to run
-- Xcode 26 or later to build, because of the weak-linked `FoundationModels`
+- Xcode 26 or the matching Command Line Tools to build, for the macOS 26 SDK that carries the weak-linked `FoundationModels`
 - Swift 5.9+ tools version
 - Apple Intelligence features require macOS 15.4+ with Apple Silicon
 
