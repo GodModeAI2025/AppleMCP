@@ -7,9 +7,24 @@ import Photos
 import Speech
 
 final class PermissionProvider {
+    typealias SettingsOpener = @MainActor (URL) -> Bool
+    typealias AppActivator = @MainActor () -> Void
+
     private let eventStore = EKEventStore()
     private let contactStore = CNContactStore()
-    private let defaults = UserDefaults.standard
+    private let settingsOpener: SettingsOpener
+    private let appActivator: AppActivator
+
+    init(
+        settingsOpener: @escaping SettingsOpener = { NSWorkspace.shared.open($0) },
+        appActivator: @escaping AppActivator = {
+            NSApp.setActivationPolicy(.regular)
+            NSApp.activate(ignoringOtherApps: true)
+        }
+    ) {
+        self.settingsOpener = settingsOpener
+        self.appActivator = appActivator
+    }
 
     func status() async -> ToolResponse {
         let calendar = calendarStatusItem()
@@ -29,16 +44,26 @@ final class PermissionProvider {
     }
 
     func requestAll() async -> ToolResponse {
-        let calendar = await requestCalendar()
-        let contacts = await requestContacts()
-        let reminders = await requestReminders()
-        let mail = mailLocalStoreStatusItem()
-        let notes = await notesAutomationStatusItem(prompt: true)
-        let photos = await requestPhotos()
-        let voiceMemos = voiceMemosStoreStatusItem()
-        let speech = await requestSpeechRecognition()
+        let run = await PermissionRequestSequence.run([
+            { await self.requestCalendar() },
+            { await self.requestContacts() },
+            { await self.requestReminders() },
+            { self.mailLocalStoreStatusItem() },
+            { await self.notesAutomationStatusItem(prompt: true) },
+            { await self.requestPhotos() },
+            { self.voiceMemosStoreStatusItem() },
+            { await self.requestSpeechRecognition() }
+        ])
+        guard !run.cancelled else {
+            return ToolResponse(
+                ok: false,
+                source: "Permissions",
+                items: run.items,
+                message: "Permission request was cancelled. No further permission prompt or settings action was started."
+            )
+        }
 
-        let items = [calendar, contacts, reminders, mail, notes, photos, voiceMemos, speech]
+        let items = run.items
         let required = items.filter { $0.metadata["required"] == "true" }
         let ok = required.allSatisfy { $0.metadata["state"] == "authorized" }
 
@@ -52,6 +77,13 @@ final class PermissionProvider {
 
     @MainActor
     func openSettings(input: [String: JSONValue]) -> ToolResponse {
+        guard !Task.isCancelled else {
+            return ToolResponse(
+                ok: false,
+                source: "Permissions",
+                message: "Opening System Settings was cancelled."
+            )
+        }
         let pane = input.string("pane", default: "privacy")
         let urlString: String
 
@@ -80,7 +112,16 @@ final class PermissionProvider {
             return ToolResponse(ok: false, source: "Permissions", message: "Invalid System Settings URL.")
         }
 
-        let opened = NSWorkspace.shared.open(url)
+        // Re-check after the actor hop and immediately next to the UI side effect. Cancellation
+        // while this task waited for MainActor must not open a settings pane afterward.
+        guard !Task.isCancelled else {
+            return ToolResponse(
+                ok: false,
+                source: "Permissions",
+                message: "Opening System Settings was cancelled."
+            )
+        }
+        let opened = settingsOpener(url)
         return ToolResponse(
             ok: opened,
             source: "Permissions",
@@ -91,16 +132,11 @@ final class PermissionProvider {
     private func calendarStatusItem() -> DataItem {
         let status = EKEventStore.authorizationStatus(for: .event)
         let state = eventKitState(status)
-        let effectiveState = verifiedState(
-            key: "permission.calendar.verified",
-            state: state,
-            canUseLastVerified: readableCalendarAccessLooksAvailable()
-        )
         return permissionItem(
             id: "calendar",
             title: "Calendar",
             endpoint: "eventkit://events",
-            state: effectiveState,
+            state: state,
             required: true,
             rawState: state
         )
@@ -139,16 +175,11 @@ final class PermissionProvider {
     private func contactsStatusItem() -> DataItem {
         let status = CNContactStore.authorizationStatus(for: .contacts)
         let state = contactsState(status)
-        let effectiveState = verifiedState(
-            key: "permission.contacts.verified",
-            state: state,
-            canUseLastVerified: false
-        )
         return permissionItem(
             id: "contacts",
             title: "Contacts",
             endpoint: "contacts://local",
-            state: effectiveState,
+            state: state,
             required: true,
             rawState: state
         )
@@ -156,16 +187,22 @@ final class PermissionProvider {
 
     @MainActor
     private func requestReminders() async -> DataItem {
-        NSApp.setActivationPolicy(.regular)
-        NSApp.activate(ignoringOtherApps: true)
+        guard activateForPermissionPrompt() else {
+            return cancelledPermissionItem(
+                id: "reminders",
+                title: "Reminders",
+                endpoint: "eventkit://reminders",
+                required: true
+            )
+        }
 
         do {
-            let granted: Bool = try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Bool, Error>) in
-                eventStore.requestFullAccessToReminders { granted, error in
+            let granted: Bool = try await awaitCancellableCallback { completion in
+                self.eventStore.requestFullAccessToReminders { granted, error in
                     if let error {
-                        continuation.resume(throwing: error)
+                        completion(.failure(error))
                     } else {
-                        continuation.resume(returning: granted)
+                        completion(.success(granted))
                     }
                 }
             }
@@ -175,7 +212,7 @@ final class PermissionProvider {
                 endpoint: "eventkit://reminders",
                 state: granted ? "authorized" : eventKitState(EKEventStore.authorizationStatus(for: .reminder)),
                 required: true
-            ).savingVerified(defaults: defaults, key: "permission.reminders.verified")
+            )
         } catch {
             return permissionItem(
                 id: "reminders",
@@ -190,16 +227,22 @@ final class PermissionProvider {
 
     @MainActor
     private func requestCalendar() async -> DataItem {
-        NSApp.setActivationPolicy(.regular)
-        NSApp.activate(ignoringOtherApps: true)
+        guard activateForPermissionPrompt() else {
+            return cancelledPermissionItem(
+                id: "calendar",
+                title: "Calendar",
+                endpoint: "eventkit://events",
+                required: true
+            )
+        }
 
         do {
-            let granted: Bool = try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Bool, Error>) in
-                eventStore.requestFullAccessToEvents { granted, error in
+            let granted: Bool = try await awaitCancellableCallback { completion in
+                self.eventStore.requestFullAccessToEvents { granted, error in
                     if let error {
-                        continuation.resume(throwing: error)
+                        completion(.failure(error))
                     } else {
-                        continuation.resume(returning: granted)
+                        completion(.success(granted))
                     }
                 }
             }
@@ -210,7 +253,7 @@ final class PermissionProvider {
                 endpoint: "eventkit://events",
                 state: granted ? "authorized" : eventKitState(EKEventStore.authorizationStatus(for: .event)),
                 required: true
-            ).savingVerified(defaults: defaults, key: "permission.calendar.verified")
+            )
         } catch {
             return permissionItem(
                 id: "calendar",
@@ -225,8 +268,14 @@ final class PermissionProvider {
 
     @MainActor
     private func requestContacts() async -> DataItem {
-        NSApp.setActivationPolicy(.regular)
-        NSApp.activate(ignoringOtherApps: true)
+        guard activateForPermissionPrompt() else {
+            return cancelledPermissionItem(
+                id: "contacts",
+                title: "Contacts",
+                endpoint: "contacts://local",
+                required: true
+            )
+        }
 
         do {
             let status = CNContactStore.authorizationStatus(for: .contacts)
@@ -234,12 +283,12 @@ final class PermissionProvider {
                 return contactsStatusItem()
             }
 
-            let granted: Bool = try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Bool, Error>) in
-                contactStore.requestAccess(for: .contacts) { granted, error in
+            let granted: Bool = try await awaitCancellableCallback { completion in
+                self.contactStore.requestAccess(for: .contacts) { granted, error in
                     if let error {
-                        continuation.resume(throwing: error)
+                        completion(.failure(error))
                     } else {
-                        continuation.resume(returning: granted)
+                        completion(.success(granted))
                     }
                 }
             }
@@ -250,7 +299,7 @@ final class PermissionProvider {
                 endpoint: "contacts://local",
                 state: granted ? "authorized" : contactsState(CNContactStore.authorizationStatus(for: .contacts)),
                 required: true
-            ).savingVerified(defaults: defaults, key: "permission.contacts.verified")
+            )
         } catch {
             return permissionItem(
                 id: "contacts",
@@ -284,7 +333,7 @@ final class PermissionProvider {
                 endpoint: "macos://Notes.app",
                 state: "authorized",
                 required: true
-            ).savingVerified(defaults: defaults, key: "permission.notes_automation.verified")
+            )
         }
 
         return permissionItem(
@@ -299,10 +348,44 @@ final class PermissionProvider {
 
     @MainActor
     private func requestPhotos() async -> DataItem {
-        NSApp.setActivationPolicy(.regular)
-        NSApp.activate(ignoringOtherApps: true)
+        guard activateForPermissionPrompt() else {
+            return cancelledPermissionItem(
+                id: "photos",
+                title: "Photos",
+                endpoint: "photos://library",
+                required: true
+            )
+        }
 
-        let status = await PHPhotoLibrary.requestAuthorization(for: .readWrite)
+        // PhotoKit has no read-only access level for fetching the existing library. `.addOnly`
+        // cannot support this project's read APIs, so the framework-level request is `.readWrite`
+        // while the exposed tools remain strictly non-mutating.
+        let status: PHAuthorizationStatus
+        do {
+            status = try await awaitCancellableCallback { completion in
+                PHPhotoLibrary.requestAuthorization(for: .readWrite) { status in
+                    completion(.success(status))
+                }
+            }
+        } catch is CancellationError {
+            return permissionItem(
+                id: "photos",
+                title: "Photos",
+                endpoint: "photos://library",
+                state: "cancelled",
+                required: true,
+                preview: "Photos permission request was cancelled."
+            )
+        } catch {
+            return permissionItem(
+                id: "photos",
+                title: "Photos",
+                endpoint: "photos://library",
+                state: "error",
+                required: true,
+                preview: error.localizedDescription
+            )
+        }
         let state: String
         switch status {
         case .authorized, .limited:
@@ -355,20 +438,45 @@ final class PermissionProvider {
 
     @MainActor
     private func requestSpeechRecognition() async -> DataItem {
-        NSApp.setActivationPolicy(.regular)
-        NSApp.activate(ignoringOtherApps: true)
+        guard activateForPermissionPrompt() else {
+            return cancelledPermissionItem(
+                id: "speech_recognition",
+                title: "Speech Recognition",
+                endpoint: "speech://recognizer",
+                required: false
+            )
+        }
         return await speechRecognitionStatusItem(prompt: true)
     }
 
-    /// `rawState` is the framework's own answer, reported alongside `state` whenever the two can
-    /// differ.
-    ///
-    /// `verifiedState` can promote a `not_determined` status to `authorized` from a flag cached in
-    /// `UserDefaults`. That flag is keyed on the bundle identifier, so a second build of the app —
-    /// a development build, say — inherits it and reports `authorized` while EventKit still refuses
-    /// every call. Measured on macOS 26.5: `permissions_status` said `authorized`, and the first
-    /// write then sat waiting for a permission dialog. Exposing the raw value is what lets a caller
-    /// tell an actual grant from a remembered one.
+    /// Cancellation-aware MainActor side-effect boundary shared by every explicit TCC request.
+    /// Internal visibility provides a deterministic test seam without invoking a real framework
+    /// prompt or activating the application during the test suite.
+    @MainActor
+    func activateForPermissionPrompt() -> Bool {
+        guard !Task.isCancelled else { return false }
+        appActivator()
+        return true
+    }
+
+    private func cancelledPermissionItem(
+        id: String,
+        title: String,
+        endpoint: String,
+        required: Bool
+    ) -> DataItem {
+        permissionItem(
+            id: id,
+            title: title,
+            endpoint: endpoint,
+            state: "cancelled",
+            required: required,
+            preview: "Permission request was cancelled before opening system UI."
+        )
+    }
+
+    /// `rawState` is the framework's own answer, reported alongside `state` for callers that need
+    /// to distinguish the underlying TCC result from any future presentation-layer mapping.
     private func permissionItem(
         id: String,
         title: String,
@@ -396,22 +504,6 @@ final class PermissionProvider {
             preview: preview ?? state,
             metadata: metadata
         )
-    }
-
-    private func verifiedState(key: String, state: String, canUseLastVerified: Bool) -> String {
-        if state == "denied" || state == "restricted" || state == "error" {
-            return state
-        }
-
-        if state == "authorized" || canUseLastVerified || defaults.bool(forKey: key) {
-            return "authorized"
-        }
-
-        return state
-    }
-
-    private func readableCalendarAccessLooksAvailable() -> Bool {
-        !eventStore.calendars(for: .event).isEmpty
     }
 
     private func eventKitState(_ status: EKAuthorizationStatus) -> String {
@@ -460,9 +552,25 @@ final class PermissionProvider {
     }
 }
 
-private extension DataItem {
-    func savingVerified(defaults: UserDefaults, key: String) -> DataItem {
-        defaults.set(metadata["state"] == "authorized", forKey: key)
-        return self
+/// Runs permission stages sequentially and stops before the next stage after task cancellation.
+///
+/// TCC callback APIs do not consistently resume or dismiss their system prompt when a Swift task is
+/// cancelled. The prompt already in flight may therefore finish normally, but disconnecting an MCP
+/// client must not cascade into *new* prompts for the remaining services.
+enum PermissionRequestSequence {
+    static func run<Value>(
+        _ stages: [() async -> Value]
+    ) async -> (items: [Value], cancelled: Bool) {
+        var items: [Value] = []
+        items.reserveCapacity(stages.count)
+
+        for stage in stages {
+            guard !Task.isCancelled else {
+                return (items, true)
+            }
+            items.append(await stage())
+        }
+
+        return (items, Task.isCancelled)
     }
 }

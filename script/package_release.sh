@@ -19,14 +19,16 @@
 # What goes in:
 #   M3MCP.app/Contents/MacOS/M3MCPApp      the SwiftUI app that holds the macOS privacy grants
 #   M3MCP.app/Contents/MacOS/M3MCPBridge   the stdio MCP bridge an MCP client launches
-#   M3MCP.app/Contents/Info.plist          with the version from CHANGELOG.md written in
+#   M3MCP.app/Contents/Info.plist          source metadata, parity-checked against CHANGELOG.md
+#   M3MCP.app/Contents/Resources/          Apache-2.0 and retained third-party notices
 #
 # The bridge ships inside the bundle on purpose. Without it the download is unusable: an MCP client
 # needs the bridge binary, and someone who takes the ZIP has no checkout to point at.
 #
-# Signing: ad hoc by default, or with the identity in M3MCP_CODESIGN_IDENTITY, the same variable
-# and the same rules script/install_local.sh uses (script/lib/codesign.sh). There is no Developer ID
-# and no notarisation here, so macOS warns on first launch either way.
+# Signing: ad hoc by default, or with the unique supported certificate fingerprint supplied in
+# M3MCP_CODESIGN_IDENTITY. Fingerprints are resolved through the same strict parser used by the
+# local installer. This script does not add hardened runtime, a trusted
+# timestamp, or notarisation; its output is a release candidate, not a production trust signal.
 #
 # Ad hoc is the default rather than "whatever certificate is in the keychain" for two reasons. A
 # release artifact goes to strangers, and picking up a personal Apple Development certificate would
@@ -52,6 +54,8 @@ FIXED_TIMESTAMP="202001010000.00"
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 # shellcheck source=lib/codesign.sh
 source "$ROOT_DIR/script/lib/codesign.sh"
+# shellcheck source=signing_identity.sh
+source "$ROOT_DIR/script/signing_identity.sh"
 
 if [[ $# -ne 1 ]]; then
   echo "usage: $0 <output-directory>" >&2
@@ -82,42 +86,65 @@ trap 'rm -rf "$STAGE_DIR"' EXIT
 APP_BUNDLE="$STAGE_DIR/$BUNDLE_NAME.app"
 
 mkdir -p "$APP_BUNDLE/Contents/MacOS"
+mkdir -p "$APP_BUNDLE/Contents/Resources"
 cp "$BIN_PATH/$APP_NAME" "$APP_BUNDLE/Contents/MacOS/$APP_NAME"
 cp "$BIN_PATH/$BRIDGE_NAME" "$APP_BUNDLE/Contents/MacOS/$BRIDGE_NAME"
 chmod 755 "$APP_BUNDLE/Contents/MacOS/$APP_NAME" "$APP_BUNDLE/Contents/MacOS/$BRIDGE_NAME"
 cp "$ROOT_DIR/Sources/$APP_NAME/Resources/Info.plist" "$APP_BUNDLE/Contents/Info.plist"
 chmod 644 "$APP_BUNDLE/Contents/Info.plist"
+cp "$ROOT_DIR/LICENSE" "$APP_BUNDLE/Contents/Resources/LICENSE"
+cp "$ROOT_DIR/docs/THIRD_PARTY.md" "$APP_BUNDLE/Contents/Resources/THIRD_PARTY.md"
+chmod 644 "$APP_BUNDLE/Contents/Resources/LICENSE" "$APP_BUNDLE/Contents/Resources/THIRD_PARTY.md"
 printf 'APPL????' > "$APP_BUNDLE/Contents/PkgInfo"
 chmod 644 "$APP_BUNDLE/Contents/PkgInfo"
 
-# The version is written here rather than kept in the source Info.plist, so CHANGELOG.md stays the
-# only place it is maintained. PlistBuddy's Add fails if the key is already there, which is the
-# point: putting a version into the source plist would create a second copy to keep in step, and
-# this step would stop rather than let the two drift apart.
-#
-# Package.swift also embeds the source Info.plist into the executable with -sectcreate; that copy
-# carries no version. macOS reads Contents/Info.plist for a bundled app, which is this one.
-/usr/libexec/PlistBuddy -c "Add :CFBundleShortVersionString string $VERSION" \
-                        -c "Add :CFBundleVersion string $VERSION" \
-                        "$APP_BUNDLE/Contents/Info.plist" >/dev/null
+# The source metadata is consumed by both macOS and Package.swift. Preserve it byte-for-byte and
+# stop if its user-visible version drifts from the release heading; script/check_docs.py separately
+# checks the MCP server version. CFBundleVersion remains an independent monotonically increasing
+# build number rather than being overwritten with the semantic release version.
+/usr/bin/plutil -lint "$APP_BUNDLE/Contents/Info.plist" >/dev/null
+PLIST_VERSION="$(
+  /usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' \
+    "$APP_BUNDLE/Contents/Info.plist"
+)"
+PLIST_BUILD="$(
+  /usr/libexec/PlistBuddy -c 'Print :CFBundleVersion' \
+    "$APP_BUNDLE/Contents/Info.plist"
+)"
+if [[ "$PLIST_VERSION" != "$VERSION" ]]; then
+  echo "Info.plist version $PLIST_VERSION does not match CHANGELOG.md version $VERSION." >&2
+  exit 1
+fi
+if [[ -z "$PLIST_BUILD" ]]; then
+  echo "Info.plist has no CFBundleVersion build number." >&2
+  exit 1
+fi
+cmp -s "$ROOT_DIR/Sources/$APP_NAME/Resources/Info.plist" "$APP_BUNDLE/Contents/Info.plist" \
+  || { echo "Packaging changed the source Info.plist unexpectedly." >&2; exit 1; }
 
 # Extended attributes would end up in the archive and can also make codesign refuse to sign.
 xattr -cr "$APP_BUNDLE" 2>/dev/null || true
 
 # --- sign -------------------------------------------------------------------------------------
 
-if [[ -n "${M3MCP_CODESIGN_IDENTITY:-}" ]]; then
-  IDENTITY="$(m3mcp_pick_identity)"
+if [[ -n "${M3MCP_CODESIGN_IDENTITY:-}" && "$M3MCP_CODESIGN_IDENTITY" != "-" ]]; then
+  if [[ ! "$M3MCP_CODESIGN_IDENTITY" =~ ^[[:xdigit:]]{40}$ ]]; then
+    echo "Release-candidate certificate signing requires a 40-hex certificate fingerprint." >&2
+    exit 1
+  fi
+  valid="$(security find-identity -p codesigning -v 2>/dev/null || true)"
+  all="$(security find-identity -p codesigning 2>/dev/null || true)"
+  IDENTITY="$(m3mcp_resolve_explicit_identity_from_listings "$M3MCP_CODESIGN_IDENTITY" "$valid" "$all")"
   SIGNATURE_KIND="certificate"
-  echo "Signing identity: $IDENTITY"
+  echo "Signing identity fingerprint: $IDENTITY"
   echo "Note: a certificate signature records a signing time, so this ZIP will not be byte-identical" >&2
   echo "to the next run. Leave M3MCP_CODESIGN_IDENTITY unset for a reproducible artifact." >&2
 else
   IDENTITY="-"
   SIGNATURE_KIND="ad hoc"
   echo "Signing ad hoc (no M3MCP_CODESIGN_IDENTITY set)."
-  echo "What that costs the user: the designated requirement is the binary hash, so the Full Disk"
-  echo "Access grant has to be given again after every update. Gatekeeper warns in either case."
+  echo "What that costs the user: macOS privacy grants may need to be given again after a binary"
+  echo "update, and this candidate carries no Developer ID or notarization trust signal."
 fi
 
 # --timestamp=none: no network, and no signing time in the signature, which is what lets two runs
@@ -128,7 +155,7 @@ codesign --force --timestamp=none --sign "$IDENTITY" "$APP_BUNDLE" >/dev/null
 codesign --verify --strict --deep "$APP_BUNDLE"
 
 if [[ "$SIGNATURE_KIND" == "certificate" ]]; then
-  m3mcp_reject_revoked_signature "$APP_BUNDLE" "$IDENTITY"
+  m3mcp_reject_expired_or_revoked_signature "$APP_BUNDLE" "$IDENTITY"
 fi
 
 # --- archive ----------------------------------------------------------------------------------
@@ -153,6 +180,7 @@ echo "Wrote $OUT_DIR/$ZIP_NAME"
 echo "      $OUT_DIR/$ZIP_NAME.sha256"
 echo
 echo "  version:   $VERSION"
+echo "  build:     $PLIST_BUILD"
 echo "  signature: $SIGNATURE_KIND"
 echo "  sha256:    $(cut -d' ' -f1 < "$ZIP_NAME.sha256")"
 echo "  size:      $(wc -c < "$ZIP_NAME" | tr -d ' ') bytes"

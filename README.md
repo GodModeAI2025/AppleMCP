@@ -2,284 +2,277 @@
 
 [![CI](https://github.com/GodModeAI2025/AppleMCP/actions/workflows/ci.yml/badge.svg)](https://github.com/GodModeAI2025/AppleMCP/actions/workflows/ci.yml)
 
-Native macOS 15+ MCP server that gives AI assistants local access to your Apple data and Apple Intelligence features. Most tools read. Those that write include five calendar tools that change your calendars, `ai_image_playground`, which writes a PNG per call, and `voicememos_transcribe`, which keeps the transcripts it produces under `~/Library/Application Support/M3MCP/transcripts/` and leaves a scratch audio file in the temporary directory whenever a recording has to be transcoded before recognition.
+AppleMCP is a native macOS 15+ MCP server for bounded access to local Apple data and selected Apple Intelligence APIs. It consists of a SwiftUI app that holds macOS privacy permissions and a `stdio` bridge used by MCP clients.
 
-AppleMCP consists of a SwiftUI app that bridges macOS privacy-controlled APIs and a `stdio` MCP server for Claude Desktop, Claude Code, and other MCP clients. It runs locally, with no cloud account and no sync of its own. That does not make every path local: `ai_translate` and `ai_writing_tools` hand your text to a Shortcut you built yourself, `voicememos_transcribe` lets Apple's speech service take the audio when the locale has no on-device model, and an event a calendar tool writes into an iCloud calendar syncs like any other. See [Limits](#limits).
+Version 0.3.0 starts in a **default-safe profile**. The bridge advertises 21 observation or local-processing tools. Calendar mutations, permission UI, and user-created Shortcuts are absent unless the corresponding launch-time environment variable is explicitly enabled. Calendar mutations and Shortcut invocations also require a one-call approval in the native app.
 
-## What It Does
+AppleMCP is local-first, but it is not an isolation boundary for every process running as you. Read [Security model](docs/SECURITY_MODEL.md) before granting Full Disk Access or enabling optional tools.
 
-| Source | Access Method | Permission |
+## Access methods and permissions
+
+| Source | Access method | macOS permission or requirement |
 |---|---|---|
-| **Mail** | Local Envelope Index (SQLite) + `.emlx` body parsing, AppleScript fallback | Full Disk Access or Mail Automation |
-| **Calendar** | EventKit, read and write | Calendar Access |
-| **Contacts** | Contacts.framework | Contacts Access |
-| **Reminders** | EventKit | Reminders Access |
-| **Notes** | Notes.app AppleScript Automation | Automation Permission |
-| **Photos** | Photos.framework | Photos Access |
-| **Voice Memos** | Local `CloudRecordings.db` + in-file transcripts, SpeechAnalyzer / SFSpeechRecognizer for recordings without one | Full Disk Access, Speech Recognition (only for `voicememos_transcribe`) |
-| **Apple Intelligence** | ImagePlayground framework for images; `shortcuts run` through AppleScript for Translation and Writing Tools | None |
-| **Foundation Models** | On-device language model via FoundationModels (macOS 26, weak-linked) | None |
+| Mail | Local Envelope Index (SQLite) and bounded `.emlx` parsing | Full Disk Access when the local Mail store is protected |
+| Calendar | EventKit | Full Calendar Access; optional writes are separately gated |
+| Contacts | Contacts.framework | Contacts |
+| Reminders | EventKit | Reminders |
+| Notes | Notes.app Apple Events | Automation for Notes |
+| Photos | Photos.framework | PhotoKit calls this `.readWrite`; AppleMCP's exposed Photos tools do not mutate the library |
+| Voice Memos | Local `CloudRecordings.db`, in-file transcripts, and on-device speech recognition | Full Disk Access; Speech Recognition only for the legacy recognizer fallback during a fresh transcription |
+| Foundation Models | Apple's on-device language model | Apple Intelligence availability on macOS 26 |
+| Image Playground | Native ImagePlayground API | Image Playground availability on macOS 15.4+ |
+| User Shortcuts | `/usr/bin/shortcuts` with JSON over standard input | Disabled by default; behavior depends on the user's Shortcut |
 
-## What AppleMCP Is Not
+All 21 default tools preflight any TCC state they require and do not request a permission or open System Settings. When fresh Voice Memos transcription reaches the legacy `SFSpeechRecognizer` fallback, missing Speech Recognition permission returns an error instead of prompting; the macOS 26 `SpeechAnalyzer` path does not use that legacy authorization callback. To let AppleMCP request permissions or open settings, launch both the app and bridge with `M3MCP_ENABLE_PERMISSION_UI=1`, or grant permissions manually in System Settings. An Apple framework can still present system behavior while acquiring an on-device model asset.
 
-- **No GUI automation.** It never clicks, types, or drives an app through its interface. Notes is reached through AppleScript, which is scripting, not the UI.
-- **No screenshots, no screen recording.** Nothing reads the display.
-- **No computer use.** There is no loop in which a model looks at the screen and acts on it.
-- **No mail sending.** The Mail tools read the local index and the `.emlx` files. They compose nothing and send nothing.
-- **No network.** The endpoint is a Unix domain socket, not a TCP port. The bridge does speak HTTP, but only across that socket. The sources open no connection to a remote host and contain no `URLSession`.
+`permissions_status` never launches Notes or enables an Automation prompt. An explicit
+`notes_search` or `notes_read` may start Notes hidden when it is closed, because macOS reports a
+closed Apple Event target as “process not found” even when access was previously granted. The tool
+then repeats the preflight with prompting still disabled. Cancellation is checked before that launch
+and again before AppleScript admission. The synchronous Automation determination itself runs on a
+background worker, not the app's main thread.
 
-## Download
+## Data freshness and refresh
 
-Each release carries `M3MCP.app.zip` and a checksum file. The ZIP holds the app and the bridge
-binary, so an MCP client can be pointed at the download without a checkout.
+There is no background polling interval. Each MCP data-tool call is the refresh: it performs a new
+provider query against the current local Calendar, Contacts, Mail, Notes, Photos, Reminders, or
+Voice Memos state. Framework-owned synchronization can still determine when an Apple data source
+observes an external change. Generated Voice Memo transcripts are the one persistent result cache;
+call transcription with `prefer_stored: false` to request fresh recognition.
+
+The native permissions view refreshes when it appears, after a permission request, and when its
+Refresh button is pressed. `permissions_status` itself performs a new status check on every MCP
+call. Launch-time tool opt-ins are intentionally immutable and require both app and bridge to be
+restarted.
+
+## Downloadable release candidates
+
+After a maintainer reviews and publishes a draft candidate, its GitHub release can contain
+`M3MCP.app.zip` and `M3MCP.app.zip.sha256`. The archive contains the app, MCP bridge, Apache-2.0
+license, and retained third-party notices. The automated candidate is Apple Silicon (`arm64`) only,
+ad-hoc signed, and unnotarized; it is not a production-grade macOS distribution.
 
 ```bash
 curl -LO https://github.com/GodModeAI2025/AppleMCP/releases/latest/download/M3MCP.app.zip
 curl -LO https://github.com/GodModeAI2025/AppleMCP/releases/latest/download/M3MCP.app.zip.sha256
 shasum -a 256 -c M3MCP.app.zip.sha256
+gh attestation verify M3MCP.app.zip \
+  --repo GodModeAI2025/AppleMCP \
+  --signer-workflow GodModeAI2025/AppleMCP/.github/workflows/release.yml  # optional
 unzip M3MCP.app.zip
-mv M3MCP.app /Applications/
 ```
 
-**Apple Silicon only.** The build has one architecture, `arm64`. On an Intel Mac it will not start,
-and building from source is the way in.
+The checksum detects a mismatch against the file recorded in that same GitHub release; by itself it
+does not establish independent publisher authenticity. The GitHub build-provenance attestation
+binds the ZIP to this repository's release workflow, but does not replace Apple Developer ID
+signing and notarization. If Gatekeeper blocks the app, review its origin and verification results
+before choosing **Open Anyway** in System Settings → Privacy & Security. Do not remove quarantine
+metadata merely to suppress the warning.
 
-**The app carries no Apple signature.** It is signed ad hoc: no Developer ID, no notarisation,
-nothing Apple has inspected. `spctl --assess --type execute` answers `rejected`, which is the
-ordinary verdict for a build like this one.
+An ad-hoc candidate may need Full Disk Access and other privacy grants again after each binary
+update. For a stable local development identity, build from source and use
+`script/create_local_identity.sh` plus `script/install_local.sh`. Public production distribution
+still requires a separately protected Developer ID, hardened-runtime, trusted-timestamp,
+notarization, and stapling pipeline.
 
-**On the path above, nothing checks it for you.** `curl` does not mark the download and `unzip` does
-not carry a mark into the bundle, so the app opens without a word from macOS. Verified: `xattr -l`
-on a file fetched with `curl` prints nothing. That is what makes the checksum line worth running.
+## Quick start
 
-**Through a browser it is different.** Safari marks the file, Archive Utility carries the mark into
-the unpacked app, and the first launch produces a dialog saying macOS cannot verify the app is free
-of malware. Open it once, dismiss the dialog, then go to System Settings, Privacy & Security, scroll
-to the note about M3MCP and choose **Open Anyway**. Right-click and Open stopped working for apps
-that are not notarised. The one-command version:
-
-```bash
-xattr -dr com.apple.quarantine /Applications/M3MCP.app
-```
-
-`-r`, because the mark sits on the files inside the bundle as well. Removing it means you are
-vouching for the file, so check the checksum first.
-
-**The Full Disk Access grant does not survive an update.** An ad-hoc signature pins the app's
-designated requirement to the binary hash, so the next release is a different app as far as macOS is
-concerned and the grant has to be given again. The source build avoids that: `install_local.sh`
-signs with a stable local certificate, and the grant then survives rebuilds.
-
-The ZIP also contains no launch agent, so the downloaded app starts when you start it, not at login.
-`script/install_local.sh` is what sets up the launchd side.
-
-After the first launch, click **Permissions** in the app, then point the MCP client at the bridge
-inside the bundle:
+### Build and test
 
 ```bash
-claude mcp add applemcp /Applications/M3MCP.app/Contents/MacOS/M3MCPBridge
-```
-
-## Quick Start
-
-### 1. Build
-
-```bash
-swift build -c release
+swift build
 swift test
 ```
 
-Release, not debug, because `script/install_local.sh` builds `-c release` and the MCP client config below points into `.build/release`. `script/build_and_run.sh` builds the debug configuration for a one-off run and does not produce that binary.
+Building requires a macOS 26 SDK because `Package.swift` weak-links `FoundationModels`; the
+resulting app keeps a macOS 15 deployment target.
 
-### 2. Run the App
-
-For a persistent install under launchd, with a stable signature so the Full Disk Access grant survives rebuilds:
-
-```bash
-./script/install_local.sh
-```
-
-That signature has to come from somewhere. Without a usable code-signing identity the script stops with "No usable code-signing identity found", so create a local one first:
-
-```bash
-./script/create_local_identity.sh
-```
-
-For a one-off run from the terminal:
+To build a signed local app bundle and launch the default-safe profile:
 
 ```bash
 ./script/build_and_run.sh
 ```
 
-Either way the app starts a local endpoint on a Unix domain socket at `~/Library/Application Support/M3MCP/mcp.sock`. Click **Permissions** on first launch to grant macOS access to Calendar, Contacts, Reminders, Photos, and Notes.
-
-Check that it is up:
+For a persistent release build and LaunchAgent, first create or provide a stable signing identity,
+then run the staged installer:
 
 ```bash
-curl --unix-socket ~/Library/Application\ Support/M3MCP/mcp.sock http://localhost/health
+./script/create_local_identity.sh
+./script/install_local.sh
 ```
 
-### 3. Connect Your MCP Client
+The installer builds the release configuration, validates the signed bundle, stages replacements,
+and commits them only after launchd and the Unix-socket health check succeed. Its bridge is at
+`.build/release/M3MCPBridge`; the one-off development commands below use `.build/debug/M3MCPBridge`.
 
-#### Claude Desktop
+The app listens on a Unix domain socket at:
 
-Add to your Claude Desktop MCP config (`~/Library/Application Support/Claude/claude_desktop_config.json`):
+```text
+~/Library/Application Support/M3MCP/mcp.sock
+```
+
+The parent directory is mode `0700` and the socket is mode `0600`. A minimal health check is:
+
+```bash
+curl --unix-socket "$HOME/Library/Application Support/M3MCP/mcp.sock" \
+  http://localhost/health
+```
+
+`/health` omits recent tool activity. `/status` includes recent inputs and bounded outputs and should be treated as sensitive local diagnostics.
+
+### Connect an MCP client
+
+Claude Desktop example:
 
 ```json
 {
   "mcpServers": {
     "applemcp": {
-      "command": "/path/to/AppleMCP/.build/release/M3MCPBridge"
+      "command": "/path/to/AppleMCP/.build/debug/M3MCPBridge"
     }
   }
 }
 ```
 
-#### Claude Code
+Claude Code example:
 
 ```bash
-claude mcp add applemcp /path/to/AppleMCP/.build/release/M3MCPBridge
+claude mcp add applemcp /path/to/AppleMCP/.build/debug/M3MCPBridge
 ```
 
-The M3MCP UI app must be running for MCP calls to work. The bridge talks to the app over a Unix domain socket in the user's Application Support directory.
+The app must be running while the bridge is in use. The app and bridge independently resolve their immutable security policy at process launch, so optional features must be enabled for both processes.
 
-## MCP Tools
+## Default-safe tools (21)
 
-### Data Access
+These tools are advertised with no security opt-in:
 
-| Tool | Description |
+| Area | Tools |
 |---|---|
-| `mail_search` | Search messages in the local Apple Mail index. Matches subject, sender and recipients by default, body on request; scoped to a mailbox with `mailbox`, narrowed with `unread_only` and `since_hours`, paged with `offset`, and `match` picks how a multi-word query applies: all, any, or phrase |
-| `mail_list_mailboxes` | List the mailboxes of the local Mail index with account, path, role, and message counts, so a `mail_search` can be scoped to a name that exists |
-| `mail_read` | Read full email content by ID (body, recipients, attachments metadata) |
-| `calendar_search` | Search calendar events via EventKit, optionally scoped to one calendar |
-| `calendar_read_event` | Read one event by ID, the way to confirm a write, since `calendar_search` only scans a date window |
-| `calendar_list_calendars` | List calendars with their source, ID, and whether they are writable |
-| `contacts_search` | Search contacts / address book |
-| `reminders_search` | Search reminders (incomplete, completed, or all) |
-| `notes_search` | Search Apple Notes by keyword |
-| `notes_read` | Read a single note by ID |
-| `photos_search` | Search Apple Photos library metadata |
-| `photos_albums` | List photo albums with counts |
-| `voicememos_search` | Search voice memos by title, date range, or transcript text |
-| `voicememos_read` | Read one recording including its stored transcript |
-| `voicememos_transcript` | Return a stored transcript as text, timestamped text, or JSON segments |
-| `voicememos_audio` | Return the recording as a local path or base64 audio |
-| `voicememos_transcribe` | Transcribe a recording: stored transcript, cache, SpeechAnalyzer (macOS 26), then SFSpeechRecognizer, which is on device only where the locale has a model |
+| Status | `source_status`, `permissions_status` |
+| Calendar reads | `calendar_search`, `calendar_read_event`, `calendar_list_calendars` |
+| Contacts | `contacts_search` |
+| Mail | `mail_search`, `mail_list_mailboxes`, `mail_read` |
+| Reminders | `reminders_search` |
+| Notes | `notes_search`, `notes_read` |
+| Photos | `photos_search`, `photos_albums` |
+| Voice Memos | `voicememos_search`, `voicememos_read`, `voicememos_transcript`, `voicememos_audio`, `voicememos_transcribe` |
+| Local generation | `ai_summarize`, `ai_image_playground` |
 
-### Calendar Writes
+"Default-safe" does not mean side-effect free at the filesystem level. Transcription can write an owner-only transcript cache, and Image Playground returns an owner-only temporary PNG. Returned PNGs remain available to the caller and are eligible for exact-name, same-owner stale cleanup after 24 hours. Default-safe means the catalog does not mutate the user's Calendar, display permission UI, or run arbitrary user-created automation.
 
-These change the user's calendar. There is no undo.
+Resource bounds that affect results:
 
-| Tool | Description |
-|---|---|
-| `calendar_create_event` | Create an event. Takes `project_slug`, stored as a `Project: <slug>` line in the notes and read back as `metadata.project_slug` |
-| `calendar_update_event` | Change an event. Only the fields passed are changed; anything omitted is left as it is |
-| `calendar_delete_event` | Delete an event by ID |
-| `calendar_create_calendar` | Create a calendar. Requires `source` unless a local ("On My Mac") source exists, so a new calendar never lands in an account by default |
-| `calendar_delete_calendar` | Delete a calendar and its events. `id` and `title` must both be given and must agree |
+- Local `.emlx` parsing reads at most 4 MiB of message source and limits returned body content to 8,000 characters; explicit truncation markers may be appended. Mail's SQLite connection rejects values above 256 KiB before Swift string construction; invalid UTF-8 and embedded NUL also fail closed. Recipient joins fail closed above 20,000 rows or 1,000,000 SQLite VM instructions. Mailbox listing probes one row past its 20,000-row scan budget and exposes `scan_capped` plus `total_exact`; search and detail reads fail closed rather than use an incomplete mailbox map. `mail_search` and `mail_list_mailboxes` keep their encoded `ToolResponse` at or below 7 MiB by returning only a complete prefix of items; `meta.response_budget_capped`, `has_more`, and `truncated` disclose that bound.
+- `notes_search` requests at most 1,200 AppleScript characters per body preview and then applies a 4,800-byte UTF-8 field ceiling. `notes_read` returns at most 65,536 characters and sets `metadata.content_truncated` when the note was longer.
+- `photos_albums` inspects at most 2,000 albums and returns 50 by default, at most 200. Its metadata distinguishes scan-budget, output-limit, and title-content truncation.
+- Notes Automation preflights and Notes AppleScripts share one process-wide synchronous Apple Event
+  slot. Each native Automation determination has a 30-second caller deadline, and AppleScripts have
+  an 8-second caller timeout. Because neither `AEDeterminePermissionToAutomateTarget` nor in-process
+  `NSAppleScript` execution has a safe cancellation primitive, a timed-out or cancelled native call
+  retains the slot until it actually returns; later permission checks and Notes calls fail fast
+  instead of accumulating blocked workers. The caller's cancelled or timed-out result is final, so
+  a late native result is ignored.
+- Voice Memo detail IDs must be canonical positive decimals returned by search, and search queries cannot exceed 4,096 UTF-8 bytes. Recording contents are opened no-follow through a verified directory descriptor and must retain the owner/type/link/device/inode identity observed during resolution. Snapshot SQLite values/rows are capped at 256 KiB before materialization, database text has smaller per-field byte caps, and returned title/filename/label/path values are independently bounded. Base64 audio reads default to 4,000,000 bytes and cannot exceed 5,000,000 bytes; use `format: "path"` for larger recordings. Transcript-cache entries cannot exceed 16 MiB, while any one returned transcript is capped at 750,000 UTF-8 bytes and reports truncation metadata. Timestamp-segment metadata is emitted as a complete JSON array of at most 40,000 UTF-8 bytes and reports both the returned count and whether later segments were omitted.
+- Voice Memo transcription accepts `timeout_seconds` from 10 through 1,800 (default 300). Analyzer and legacy fallback share that one monotonic budget; fallback receives only the remainder, including authorization/capability and audio-metadata preflight. Each native path is single-flight, and its slot plus verified input descriptor remain retained until cancellation-ignoring framework work actually exits. Legacy cleanup specifically waits for both serialized PCM feeder shutdown and `SFSpeechRecognitionTask.state == .completed`; `.canceling` does not release the slot. The bridge applies one absolute 1,830-second monotonic deadline across connect, request delivery, provider wait, and incremental response framing, preserving a 30-second delivery margin beyond the maximum provider deadline.
+- Local HTTP requests are bounded to 32 KiB of headers, 1,048,576 body bytes (1 MiB), and a 15-second absolute receive deadline. A persistent owner-only per-endpoint start lock serializes stale-socket handling and bind across competing app processes. An existing socket is probed nonblocking under one 250 ms monotonic deadline; timeout or an ambiguous error preserves the endpoint and aborts startup. App-to-bridge response bodies are capped at 8 MiB; an oversized provider result becomes a small HTTP 413 response rather than an unreadable success. A blocked response write has its own 15-second absolute deadline. If JSON-string escaping would still expand an otherwise valid result beyond the bridge's separate 16 MiB stdout limit, the bridge returns a small normal tool error for that request ID and keeps the writer usable.
 
-### Apple Intelligence
+## Optional tool groups
 
-| Tool | Description |
-|---|---|
-| `ai_summarize` | Summarize text and extract action items with the on-device foundation model (macOS 26). Needs no Shortcut |
-| `ai_writing_tools` | Summarize, rewrite, proofread, or change tone of text. Needs a Shortcut named "Writing Tools", see [Limits](#limits) |
-| `ai_translate` | Translate text using Apple system translation. Needs a Shortcut named "Translate" and `/usr/bin/python3`, see [Limits](#limits) |
-| `ai_image_playground` | Generate images from text descriptions (macOS 15.4+). Writes a PNG file and returns its path |
+Each group is disabled when its variable is absent, empty, malformed, or false. Accepted true values are `1`, `true`, `yes`, and `on` (case-insensitive).
 
-### System
+| Environment variable | Tools enabled | Additional control |
+|---|---|---|
+| `M3MCP_ENABLE_CALENDAR_MUTATIONS=1` | `calendar_create_event`, `calendar_update_event`, `calendar_delete_event`, `calendar_create_calendar`, `calendar_delete_calendar` | Native approval for every call |
+| `M3MCP_ENABLE_PERMISSION_UI=1` | `permissions_request`, `permissions_open_settings` | macOS owns the resulting prompt or settings UI |
+| `M3MCP_ENABLE_USER_SHORTCUTS=1` | `ai_writing_tools`, `ai_translate` | Native approval for every call; Shortcut behavior is open-world |
 
-| Tool | Description |
-|---|---|
-| `source_status` | List available providers and their states |
-| `permissions_status` | Report macOS permission state for all providers |
-| `permissions_request` | Request all required macOS permissions |
-| `permissions_open_settings` | Open System Settings for permission remediation |
+To launch a previously built app bundle with all three groups enabled:
+
+```bash
+/usr/bin/open -n \
+  --env M3MCP_ENABLE_CALENDAR_MUTATIONS=1 \
+  --env M3MCP_ENABLE_PERMISSION_UI=1 \
+  --env M3MCP_ENABLE_USER_SHORTCUTS=1 \
+  /path/to/AppleMCP/dist/M3MCP.app
+```
+
+For the persistent LaunchAgent installed by `script/install_local.sh`, prefix the installer command
+with only the groups to retain, for example
+`M3MCP_ENABLE_PERMISSION_UI=1 ./script/install_local.sh`. The installer persists only explicit true
+values for the three fixed policy variables; a later install run regenerates that policy from its own
+environment. Installation commits only after launchd reports the replacement job and its Unix-socket
+`GET /health` response parses with a top-level `ok: true` within a bounded startup window. Otherwise
+the installer restores the previous app bundle and LaunchAgent and attempts to restart the previous
+service.
+
+Pass the same variables to the bridge in the MCP client configuration:
+
+```json
+{
+  "mcpServers": {
+    "applemcp": {
+      "command": "/path/to/AppleMCP/.build/release/M3MCPBridge",
+      "env": {
+        "M3MCP_ENABLE_CALENDAR_MUTATIONS": "1",
+        "M3MCP_ENABLE_PERMISSION_UI": "1",
+        "M3MCP_ENABLE_USER_SHORTCUTS": "1"
+      }
+    }
+  }
+}
+```
+
+Enable only the groups you need. Environment opt-in makes tools available; it does not pre-approve Calendar or Shortcut calls. For those calls, the app displays the tool name and a bounded, credential-redacted argument preview. Denial, dismissal, timeout, cancellation, or the absence of a usable app window rejects that one call. Approval is not reusable.
+
+Cancellation is best-effort, cooperative interruption, not rollback. A client cancellation or disconnect is propagated to in-flight work where the underlying API supports interruption, but an already-raised macOS permission prompt, a running Automation determination, or a running in-process `NSAppleScript` call can remain until the system operation finishes. The caller still returns promptly, and the shared Apple Event slot remains held until that native operation actually ends. A Calendar save/delete or Shortcut action that already happened is not reversed. Read back Calendar state and inspect Shortcut effects before retrying a cancelled call.
+
+### User-created Shortcut contract
+
+The optional `ai_writing_tools` and `ai_translate` tools run Shortcuts named exactly `Writing Tools` and `Translate`. A Shortcut receives a versioned JSON document over standard input and must return non-empty UTF-8 plain text. Standard output and standard error are each limited to 1 MiB, and execution is limited to 60 seconds. A user-created Shortcut can make network requests, modify files, or perform any other action its author added; AppleMCP cannot constrain those actions.
+
+The complete input schemas and setup notes are in [User Shortcut contract](docs/SHORTCUTS.md).
+
+## Voice Memos and speech privacy
+
+Stored transcripts are read directly from a private `tsrp` atom inside each recording. For a fresh transcription, AppleMCP uses `SpeechAnalyzer` on macOS 26 when available and otherwise `SFSpeechRecognizer` with `requiresOnDeviceRecognition = true`.
+
+The legacy recognizer is checked before a recognition task starts. If the selected locale does not advertise on-device recognition, the tool fails; there is no cloud-recognition fallback. Apple may still need to download an on-device language-model asset. That asset download is distinct from sending the recording for remote recognition.
+
+See [Voice Memos access](docs/VOICE_MEMOS.md) for storage, cache, temporary-file, and troubleshooting details.
 
 ## Architecture
 
+```text
+MCP client <--stdio--> M3MCPBridge <--HTTP over Unix socket--> M3MCPApp
+                                                                  |
+                  EventKit / Contacts / Photos / local stores / Speech
+                         FoundationModels / ImagePlayground / Apple Events
 ```
-MCP Client (Claude) <--stdio--> M3MCPBridge <--HTTP over Unix socket--> M3MCPApp (SwiftUI)
-                                                                            |
-                                       EventKit / Contacts / Photos / Mail Index / Voice Memos Store / Speech / AppleScript
-```
 
-- **M3MCPApp** — SwiftUI app with macOS TCC permissions, provides the actual data access
-- **M3MCPBridge** — Lightweight `stdio` MCP server that translates MCP protocol to HTTP calls
-- **M3MCPCore** — Shared models and types
+- **M3MCPApp** holds macOS TCC permissions and enforces tool policy again at dispatch time.
+- **M3MCPBridge** validates the MCP/JSON-RPC lifecycle, bounds incoming stdio messages to 1 MiB, advertises only launch-enabled tools, and forwards allowed calls. It explicitly supports revisions `2024-11-05`, `2025-03-26`, `2025-06-18`, and `2025-11-25`. Results larger than 1,000,000 encoded bytes remain complete JSON text but omit the duplicate `structuredContent` copy. Stdout writes have a 15-second backpressure deadline; a failed or partial JSON line permanently closes admission to further tool work for that bridge process.
+- **M3MCPCore** contains shared models, parsers, security policy, and protocol validation.
 
-## Voice Memos
+## Security boundary
 
-Voice Memos are read straight from the local Core Data store (`~/Library/Group Containers/group.com.apple.VoiceMemos.shared/Recordings/CloudRecordings.db`) — Voice Memos.app is never driven through AppleEvents. Transcripts have no sidecar file: macOS writes them into a private `tsrp` atom inside each `.m4a`, so AppleMCP parses the recording itself.
+The Unix socket prevents browser access and restricts other macOS users. It is not authentication against an unsandboxed process running under the same user account: such a process can normally reach a `0600` socket owned by that user and would inherit whatever data access the app exposes. Treat every MCP client and every same-user unsandboxed process as inside the local trust boundary.
 
-- Open Voice Memos once so macOS creates the store, and grant Full Disk Access if the folder is protected.
-- On macOS Sequoia and later, opening a memo in Voice Memos makes macOS transcribe it. `voicememos_transcript` then returns that transcript without any recognition run.
-- `voicememos_transcribe` falls back to Speech.framework and prefers on-device recognition, so audio stays on the Mac. It returns an existing transcript first unless you pass `prefer_stored: false`.
-- `voicememos_search` matches titles by default. Pass `search_transcripts: true` to search spoken content instead; `max_candidates` bounds how many recordings are opened.
+The server rejects malformed or oversized framing, limits concurrent connections, enforces an absolute request-receive deadline plus I/O timeouts, and closes active work on shutdown. These controls reduce accidental and hostile resource consumption but do not turn the endpoint into a multi-tenant service.
 
-See [docs/VOICE_MEMOS.md](docs/VOICE_MEMOS.md) for the store layout, the transcript format, and troubleshooting.
-
-## Privacy
-
-What the app reads stays on the Mac, except where a tool hands it on: `ai_translate` and `ai_writing_tools` to a Shortcut you built, `voicememos_transcribe` to Apple's speech service on locales without an on-device model, see [Limits](#limits). The app uses macOS TCC (Transparency, Consent, and Control) for every data source. AppleMCP opens no remote connection: the endpoint is a Unix domain socket rather than a TCP port, and the HTTP the bridge speaks travels only over that socket.
-
-Because the app holds Full Disk Access, anything that can reach the endpoint inherits that reach. The socket lives in a `0700` directory and is itself `0600`, so a sandboxed app — the case macOS TCC exists to stop — cannot connect, and a web page cannot reach it under any circumstances. An unsandboxed process running as you is a different case, see [Limits](#limits). Mail reads the local SQLite index directly, it never sends emails or modifies any data. Voice Memos are opened read-only. Speech recognition runs on device where the locale has a model for it; where it does not, the audio goes to Apple's speech service instead.
-
-## Security
-
-The security policy and the threat model live in `SECURITY.md`, currently in review as [PR #14](https://github.com/GodModeAI2025/AppleMCP/pull/14). They are not repeated here, so there is one place to correct when the architecture moves.
-
-## Limits
-
-- **The socket does not check who connects.** File permissions keep out sandboxed apps and web pages. They do not distinguish one unsandboxed process of yours from another, so any local process running as you can call the endpoint and use the app's Full Disk Access. Tracked as [issue #9](https://github.com/GodModeAI2025/AppleMCP/issues/9).
-- **`ai_translate` has prerequisites nothing sets up for you.** The provider pipes the text through `/usr/bin/python3` into `shortcuts run Translate`. You need a Shortcut named "Translate" that you created yourself, and the system Python 3 at `/usr/bin/python3`. Without either the tool answers that translation is not reachable. Whether the translation itself stays on the Mac depends on whether the language pair is downloaded, which the Shortcuts and Translate apps decide, not AppleMCP.
-- **`ai_writing_tools` needs a Shortcut named "Writing Tools"** for the same reason, and the same open question follows: the text goes into that Shortcut, and where it goes from there is the Shortcut's business, not AppleMCP's. `ai_summarize` does not; it calls FoundationModels directly and needs macOS 26.
-- **`ai_image_playground` leaves files behind.** Each call writes a PNG into the process temporary directory and returns the path. AppleMCP never deletes them; they stay until macOS clears that directory.
-- **`voicememos_transcribe` keeps what it recognizes.** Every recognition run writes the text to `~/Library/Application Support/M3MCP/transcripts/<digest>.txt`, mode `0600` in a `0700` directory, which is what makes the second call for the same recording cheap. Nothing deletes those files afterwards, and unlike the PNG files they do not sit in a directory macOS clears. Recognition is only on device where the locale has a model: `LegacySpeechRecognizer` sets `requiresOnDeviceRecognition` to whatever `SFSpeechRecognizer` reports as supported (line 72), so on every other locale the audio goes to Apple.
-- **Calendar writes cannot be undone.** `calendar_delete_calendar` removes a calendar with its events. It refuses unless `id` and `title` agree and the calendar is mutable, and that is the whole safety net: there is no dry-run mode and no confirmation step.
-- **Test coverage is narrow.** The suite covers the Voice Memos transcript parser and the calendar project slug. Providers, the local HTTP server, and the bridge have no tests, so CI proves that the package builds and those two units work, not that a provider still returns what it used to.
-- **The release build carries no Apple signature.** It is signed ad hoc: no Developer ID, no
-  notarisation, `spctl --assess` answers `rejected`, and because the designated requirement is the
-  binary hash, Full Disk Access has to be granted again after every update. It ships one
-  architecture, `arm64`. It is built and checked on macOS 26 runners; `LSMinimumSystemVersion` claims
-  15.0 and nothing tests that claim.
-- **The published checksum is not a reproducibility claim.** `script/package_release.sh` is
-  deterministic, and CI compares two packaging runs byte for byte. `swift build` is not: two clean
-  release builds of the same commit with the same toolchain produce different binaries, measured here
-  at 746 differing bytes and different `LC_UUID`s. The SHA256 tells you the download arrived intact,
-  not that you can rebuild it.
-- **Building needs the macOS 26 SDK.** `Package.swift` weak-links `FoundationModels`, which exists only in that SDK. Without it the link step fails with `ld: framework 'FoundationModels' not found`, even though the built app runs on macOS 15.
-
-## Roadmap
-
-Tracked in the issue tracker:
-
-- Verify the connecting process on the socket, so an unsandboxed local process cannot borrow the app's Full Disk Access ([issue #9](https://github.com/GodModeAI2025/AppleMCP/issues/9))
-- Bring the threat model into the repo, updated for the current architecture ([issue #10](https://github.com/GodModeAI2025/AppleMCP/issues/10), in review as [PR #14](https://github.com/GodModeAI2025/AppleMCP/pull/14))
-
-Wanted, no issue open yet:
-
-- A safety layer for the write tools: dry-run, and a confirmation for the destructive ones
-- Tests for the providers and the bridge, so CI covers more than the parser
-- A build macOS does not warn about: Developer ID signing and notarisation. The release build is
-  signed ad hoc, so every download costs the user a trip through System Settings
+For vulnerability reporting and supported versions, see [SECURITY.md](SECURITY.md). For the detailed
+threat model, network caveats, diagnostics, data retention, and release checklist, see
+[docs/SECURITY_MODEL.md](docs/SECURITY_MODEL.md) and [docs/BEST_PRACTICES.md](docs/BEST_PRACTICES.md).
 
 ## Requirements
 
-- macOS 15.0+ to run
-- Xcode 26 or the matching Command Line Tools to build, for the macOS 26 SDK that carries the weak-linked `FoundationModels`
-- Swift 5.9+ tools version
-- Apple Intelligence features require macOS 15.4+ with Apple Silicon
+- macOS 15.0+
+- Swift 5.9+
+- macOS 26 SDK to build (the app deployment target remains macOS 15)
+- Image Playground requires macOS 15.4+
+- Foundation Models and SpeechAnalyzer paths require macOS 26; strict on-device `SFSpeechRecognizer` remains available on supported earlier systems and locales
 
-## Changelog
+## Attribution and license
 
-See [CHANGELOG.md](CHANGELOG.md). Note for 0.1.0 users: the endpoint moved to a Unix domain socket, so the app and the bridge have to be rebuilt together.
+Voice Memos support includes a Swift port derived from [jwulff/apple-voice-memo-mcp](https://github.com/jwulff/apple-voice-memo-mcp) (MIT). Exact provenance and the retained license are in [docs/THIRD_PARTY.md](docs/THIRD_PARTY.md).
 
-## Credits
-
-The Voice Memos support is a native Swift port of [jwulff/apple-voice-memo-mcp](https://github.com/jwulff/apple-voice-memo-mcp) (MIT). See [docs/THIRD_PARTY.md](docs/THIRD_PARTY.md).
-
-## License
-
-Apache License 2.0 — see [LICENSE](LICENSE).
+AppleMCP is licensed under Apache License 2.0; see [LICENSE](LICENSE). Release history is in [CHANGELOG.md](CHANGELOG.md).

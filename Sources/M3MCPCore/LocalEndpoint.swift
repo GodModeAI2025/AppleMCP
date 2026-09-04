@@ -14,11 +14,10 @@ public enum M3MCPEndpoint {
     /// Environment variable that relocates the socket, so a second build can run beside an installed
     /// one instead of taking its socket over.
     ///
-    /// `LocalHTTPServer.start()` has to `unlink` the socket path before it binds — a file left behind
-    /// by a crash would otherwise make `bind` fail with `EADDRINUSE` forever. That makes the path a
-    /// single-occupancy resource: starting a development build on the default path silently
-    /// disconnects the installed app's bridge. Pointing this variable at a scratch directory is what
-    /// makes testing a change safe while the installed app keeps serving.
+    /// The socket path is a single-occupancy resource. `LocalHTTPServer.start()` probes an existing
+    /// socket and refuses to replace a live listener; it removes only a stale socket that is owned by
+    /// the current user and has the expected file type. Pointing this variable at a private scratch
+    /// directory keeps development and test builds isolated from an installed app.
     ///
     /// Both the app and the bridge read it, so they must be given the same value.
     public static let directoryEnvironmentKey = "M3MCP_SOCKET_DIR"

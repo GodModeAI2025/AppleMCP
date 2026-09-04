@@ -7,6 +7,7 @@ struct DetailView: View {
     let permissionItems: [DataItem]
     let permissionMessage: String?
     let serverState: String
+    let securityPolicy: M3MCPSecurityPolicy
     let onPermissions: () -> Void
     let onPermissionRefresh: () -> Void
     let onOpenPermissionSettings: (String) -> Void
@@ -29,12 +30,13 @@ struct DetailView: View {
                         PermissionCenterView(
                             items: permissionItems,
                             message: permissionMessage,
+                            permissionUIEnabled: securityPolicy.allowsPermissionUI,
                             onRequest: onPermissions,
                             onRefresh: onPermissionRefresh,
                             onOpenSettings: onOpenPermissionSettings
                         )
                     } else {
-                        EndpointListView()
+                        EndpointListView(securityPolicy: securityPolicy)
                     }
 
                     ActivityTableView(activity: activity)
@@ -60,7 +62,8 @@ struct DetailView: View {
             Button(action: onPermissions) {
                 Label("Permissions", systemImage: "key.fill")
             }
-            .help("Request macOS permissions")
+            .disabled(!securityPolicy.allowsPermissionUI)
+            .help(permissionUIHelp)
 
             Button(action: onStart) {
                 Label("Start", systemImage: "play.fill")
@@ -81,6 +84,13 @@ struct DetailView: View {
         }
         .padding(.horizontal, 20)
         .padding(.vertical, 12)
+    }
+
+    private var permissionUIHelp: String {
+        if securityPolicy.allowsPermissionUI {
+            return "Request macOS permissions"
+        }
+        return "Permission UI is disabled. Relaunch M3MCP with \(M3MCPSecurityPolicy.permissionUIEnvironmentVariable)=1 to enable it."
     }
 }
 
@@ -116,34 +126,19 @@ private struct ServiceSummaryView: View {
 }
 
 private struct EndpointListView: View {
-    private let tools: [(String, String)] = [
-        ("source_status", "/tools/source_status"),
-        ("permissions_status", "/tools/permissions_status"),
-        ("permissions_request", "/tools/permissions_request"),
-        ("permissions_open_settings", "/tools/permissions_open_settings"),
-        ("calendar_search", "/tools/calendar_search"),
-        ("contacts_search", "/tools/contacts_search"),
-        ("mail_search", "/tools/mail_search"),
-        ("mail_read", "/tools/mail_read"),
-        ("reminders_search", "/tools/reminders_search"),
-        ("notes_search", "/tools/notes_search"),
-        ("notes_read", "/tools/notes_read"),
-        ("photos_search", "/tools/photos_search"),
-        ("photos_albums", "/tools/photos_albums"),
-        ("voicememos_search", "/tools/voicememos_search"),
-        ("voicememos_read", "/tools/voicememos_read"),
-        ("voicememos_transcript", "/tools/voicememos_transcript"),
-        ("voicememos_audio", "/tools/voicememos_audio"),
-        ("voicememos_transcribe", "/tools/voicememos_transcribe"),
-        ("ai_summarize", "/tools/ai_summarize"),
-        ("ai_writing_tools", "/tools/ai_writing_tools"),
-        ("ai_translate", "/tools/ai_translate"),
-        ("ai_image_playground", "/tools/ai_image_playground")
-    ]
+    let securityPolicy: M3MCPSecurityPolicy
+
+    private var tools: [M3MCPSecurityPolicy.ToolAvailability] {
+        securityPolicy.toolAvailability
+    }
+
+    private var enabledCount: Int {
+        tools.lazy.filter(\.isEnabled).count
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text("MCP Tools")
+            Text("MCP Tools (\(enabledCount) enabled)")
                 .font(.headline)
 
             Text(M3MCPEndpoint.healthCommand)
@@ -151,14 +146,15 @@ private struct EndpointListView: View {
                 .foregroundStyle(.secondary)
                 .textSelection(.enabled)
             Grid(alignment: .leading, horizontalSpacing: 18, verticalSpacing: 6) {
-                ForEach(tools, id: \.0) { name, endpoint in
+                ForEach(tools) { tool in
                     GridRow {
-                        Text(name)
+                        Text(tool.name)
                             .font(.system(.body, design: .monospaced))
-                        Text(endpoint)
+                        Text(tool.endpointPath)
                             .font(.system(.body, design: .monospaced))
                             .foregroundStyle(.secondary)
                             .textSelection(.enabled)
+                        ToolAvailabilityLabel(tool: tool)
                     }
                 }
             }
@@ -166,9 +162,28 @@ private struct EndpointListView: View {
     }
 }
 
+private struct ToolAvailabilityLabel: View {
+    let tool: M3MCPSecurityPolicy.ToolAvailability
+
+    var body: some View {
+        if tool.isEnabled {
+            Text(tool.requiresOptIn ? "Enabled (opt-in)" : "Enabled")
+                .foregroundStyle(tool.requiresOptIn ? .orange : .green)
+        } else if let variable = tool.requiredEnvironmentVariable {
+            Text("Disabled - \(variable)=1")
+                .foregroundStyle(.secondary)
+                .textSelection(.enabled)
+        } else {
+            Text("Disabled by policy")
+                .foregroundStyle(.secondary)
+        }
+    }
+}
+
 private struct PermissionCenterView: View {
     let items: [DataItem]
     let message: String?
+    let permissionUIEnabled: Bool
     let onRequest: () -> Void
     let onRefresh: () -> Void
     let onOpenSettings: (String) -> Void
@@ -189,7 +204,15 @@ private struct PermissionCenterView: View {
                 Button(action: onRequest) {
                     Label("Request", systemImage: "key.fill")
                 }
-                .help("Request macOS permissions")
+                .disabled(!permissionUIEnabled)
+                .help(permissionUIHelp)
+            }
+
+            if !permissionUIEnabled {
+                Label(permissionUIHelp, systemImage: "lock.fill")
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+                    .textSelection(.enabled)
             }
 
             if let message, !message.isEmpty {
@@ -200,15 +223,27 @@ private struct PermissionCenterView: View {
 
             VStack(spacing: 8) {
                 ForEach(items) { item in
-                    PermissionRowView(item: item, onOpenSettings: onOpenSettings)
+                    PermissionRowView(
+                        item: item,
+                        permissionUIEnabled: permissionUIEnabled,
+                        onOpenSettings: onOpenSettings
+                    )
                 }
             }
         }
+    }
+
+    private var permissionUIHelp: String {
+        if permissionUIEnabled {
+            return "Request macOS permissions"
+        }
+        return "Permission requests and Settings links are disabled by launch policy. Relaunch M3MCP with \(M3MCPSecurityPolicy.permissionUIEnvironmentVariable)=1 to enable them."
     }
 }
 
 private struct PermissionRowView: View {
     let item: DataItem
+    let permissionUIEnabled: Bool
     let onOpenSettings: (String) -> Void
 
     private var state: String {
@@ -253,7 +288,12 @@ private struct PermissionRowView: View {
                     Image(systemName: "gearshape")
                 }
                 .buttonStyle(.borderless)
-                .help("Open System Settings")
+                .disabled(!permissionUIEnabled)
+                .help(
+                    permissionUIEnabled
+                        ? "Open System Settings"
+                        : "Settings links require \(M3MCPSecurityPolicy.permissionUIEnvironmentVariable)=1 at launch."
+                )
             }
         }
         .padding(10)

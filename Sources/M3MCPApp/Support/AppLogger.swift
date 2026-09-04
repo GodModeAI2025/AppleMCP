@@ -1,17 +1,13 @@
 import Foundation
+import OSLog
 
 enum AppLogger {
-    private static let logPath = "/tmp/m3mcpapp.log"
+    /// Application diagnostics can contain local paths, Voice Memo filenames, and framework error
+    /// strings. Keep them in Unified Logging as private data instead of appending to a predictable
+    /// file in the world-writable `/tmp` directory.
+    private static let logger = Logger(subsystem: "de.markzimmermann.m3mcp", category: "application")
 
     static func log(_ message: String) {
-        let line = "[M3MCP] \(message)\n"
-        FileHandle.standardError.write(Data(line.utf8))
-        if let handle = try? FileHandle(forWritingTo: URL(fileURLWithPath: logPath)) {
-            _ = try? handle.seekToEnd()
-            try? handle.write(contentsOf: Data(line.utf8))
-            try? handle.close()
-        } else {
-            try? line.write(to: URL(fileURLWithPath: logPath), atomically: true, encoding: .utf8)
-        }
+        logger.info("\(message, privacy: .private(mask: .hash))")
     }
 }

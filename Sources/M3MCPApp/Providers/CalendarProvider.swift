@@ -1,14 +1,31 @@
-import AppKit
 import EventKit
 import Foundation
 import M3MCPCore
 
 final class CalendarProvider {
+    static let maximumQueryUTF8Bytes = 4_096
+    static let defaultSearchCandidates = 2_000
+    static let maximumSearchCandidates = 5_000
+    static let maximumSearchFieldUTF8Bytes = 16 * 1_024
+    static let maximumListedCalendars = 400
+    static let maximumIdentifierUTF8Bytes = 512
+    static let maximumTitleUTF8Bytes = 1_024
+    static let maximumSubtitleUTF8Bytes = 1_024
+    static let maximumPreviewUTF8Bytes = 4_096
+    static let maximumURLUTF8Bytes = 2_048
+
     private let store = EKEventStore()
 
     // MARK: - Read
 
     func search(input: [String: JSONValue]) async -> ToolResponse {
+        guard !Task.isCancelled else {
+            return failure("Calendar request was cancelled.")
+        }
+        let rawQuery = input.string("query")
+        guard rawQuery.utf8.count <= Self.maximumQueryUTF8Bytes else {
+            return failure("Calendar query exceeds the \(Self.maximumQueryUTF8Bytes)-byte work limit.")
+        }
         switch await access(need: .read) {
         case .denied(let response):
             return response
@@ -16,10 +33,14 @@ final class CalendarProvider {
             break
         }
 
-        let query = StringSanitizer.lower(input.string("query"))
+        let query = StringSanitizer.lower(rawQuery)
         let limit = max(1, min(input.int("limit", default: 25), 100))
-        let startDays = input.int("start_days", default: -7)
-        let endDays = input.int("end_days", default: 60)
+        let maxCandidates = Self.searchCandidateLimit(input: input)
+        let startDays = max(-3_650, min(input.int("start_days", default: -7), 3_650))
+        let endDays = max(-3_650, min(input.int("end_days", default: 60), 3_650))
+        guard endDays > startDays else {
+            return failure("'end_days' must be greater than 'start_days'.")
+        }
         let start = Calendar.current.date(byAdding: .day, value: startDays, to: Date()) ?? Date()
         let end = Calendar.current.date(byAdding: .day, value: endDays, to: Date())
             ?? Date().addingTimeInterval(60 * 60 * 24 * 60)
@@ -27,33 +48,99 @@ final class CalendarProvider {
         let calendars: [EKCalendar]?
         if let named = input["calendar"]?.stringValue ?? input["calendar_id"]?.stringValue,
            !named.isEmpty {
-            guard let calendar = resolveCalendar(idOrTitle: named) else {
+            switch resolveCalendar(idOrTitle: named) {
+            case .found(let resolved):
+                calendars = [resolved]
+            case .notFound:
                 return failure("No calendar matches '\(named)'. Use calendar_list_calendars to see the available ones.")
+            case .ambiguous:
+                return failure("More than one calendar is titled '\(named)'. Pass the exact calendar_id from calendar_list_calendars.")
             }
-            calendars = [calendar]
         } else {
             calendars = nil
         }
 
-        let predicate = store.predicateForEvents(withStart: start, end: end, calendars: calendars)
-        let events = store.events(matching: predicate)
-            .filter { event in
-                guard !query.isEmpty else { return true }
-                let haystack = [
-                    event.title,
-                    event.location,
-                    event.notes,
-                    event.calendar.title
-                ]
-                .compactMap { $0 }
-                .joined(separator: " ")
-                .localizedLowercase
-                return haystack.contains(query)
-            }
-            .sorted { $0.startDate < $1.startDate }
-            .prefix(limit)
+        var cursor = start
+        var scanned = 0
+        var scanCapped = false
+        var searchContentCapped = false
+        var matched: [EKEvent] = []
+        var seen = Set<String>()
 
-        return ToolResponse(ok: true, source: "EventKit", items: events.map(item(for:)))
+        // EventKit cannot limit `events(matching:)`. Seven-day chunks bound each framework result
+        // much more tightly than the former single twenty-year query, while the provider stops
+        // inspecting after an absolute candidate budget and reports a partial result.
+        while cursor < end, scanned < maxCandidates {
+            guard !Task.isCancelled else { return failure("Calendar request was cancelled.") }
+            let proposedEnd = Calendar.current.date(byAdding: .day, value: 7, to: cursor) ?? end
+            let chunkEnd = min(proposedEnd, end)
+            let predicate = store.predicateForEvents(
+                withStart: cursor,
+                end: chunkEnd,
+                calendars: calendars
+            )
+            let chunk = store.events(matching: predicate)
+
+            for (index, event) in chunk.enumerated() {
+                guard !Task.isCancelled else { return failure("Calendar request was cancelled.") }
+                guard scanned < maxCandidates else {
+                    scanCapped = true
+                    break
+                }
+                scanned += 1
+                let key = "\(event.calendarItemIdentifier)|\(event.startDate.timeIntervalSinceReferenceDate)|\(event.endDate.timeIntervalSinceReferenceDate)"
+                guard seen.insert(key).inserted else { continue }
+
+                if !query.isEmpty {
+                    let fields = [event.title, event.location, event.notes, event.calendar.title]
+                        .compactMap { $0 }
+                        .map {
+                            ProviderOutputBudget.text(
+                                $0,
+                                maximumUTF8Bytes: Self.maximumSearchFieldUTF8Bytes
+                            )
+                        }
+                    searchContentCapped = searchContentCapped || fields.contains(where: \.truncated)
+                    let haystack = fields.map(\.text).joined(separator: " ").localizedLowercase
+                    guard haystack.contains(query) else { continue }
+                }
+                matched.append(event)
+
+                if scanned == maxCandidates,
+                   index + 1 < chunk.count || chunkEnd < end {
+                    scanCapped = true
+                }
+            }
+            cursor = chunkEnd
+        }
+        if cursor < end { scanCapped = true }
+
+        matched.sort { $0.startDate < $1.startDate }
+        let selected = Array(matched.prefix(limit))
+        let items = selected.map(item(for:))
+        let hasMore = matched.count > items.count || scanCapped
+        let message = scanCapped
+            ? "Calendar search reached its \(maxCandidates)-event scan budget; narrow the date range, query, or calendar."
+            : (searchContentCapped
+                ? "Some event fields exceeded the per-field search budget; matches beyond those prefixes were not inspected."
+                : (matched.count > items.count ? "More events matched; increase limit." : nil))
+        return ToolResponse(
+            ok: true,
+            source: "EventKit",
+            items: items,
+            message: message,
+            meta: [
+                "returned": String(items.count),
+                "matching_in_scan": String(matched.count),
+                "scanned": String(scanned),
+                "scan_budget": String(maxCandidates),
+                "scan_capped": String(scanCapped),
+                "search_content_capped": String(searchContentCapped),
+                "total_exact": String(!scanCapped),
+                "has_more": String(hasMore),
+                "truncated": String(hasMore || searchContentCapped)
+            ]
+        )
     }
 
     /// Reads one event by the identifier `calendar_search` and the write tools return.
@@ -80,6 +167,13 @@ final class CalendarProvider {
     }
 
     func listCalendars(input: [String: JSONValue]) async -> ToolResponse {
+        guard !Task.isCancelled else {
+            return failure("Calendar request was cancelled.")
+        }
+        let rawQuery = input.string("query")
+        guard rawQuery.utf8.count <= Self.maximumQueryUTF8Bytes else {
+            return failure("Calendar query exceeds the \(Self.maximumQueryUTF8Bytes)-byte work limit.")
+        }
         switch await access(need: .read) {
         case .denied(let response):
             return response
@@ -87,11 +181,13 @@ final class CalendarProvider {
             break
         }
 
-        let query = StringSanitizer.lower(input.string("query"))
+        let query = StringSanitizer.lower(rawQuery)
         let writableOnly = input.bool("writable_only", default: false)
         let defaultCalendarID = store.defaultCalendarForNewEvents?.calendarIdentifier
 
-        let calendars = store.calendars(for: .event)
+        let allCalendars = store.calendars(for: .event)
+        let scanCapped = allCalendars.count > Self.maximumListedCalendars
+        let calendars = allCalendars.prefix(Self.maximumListedCalendars)
             .filter { calendar in
                 if writableOnly, !calendar.allowsContentModifications { return false }
                 guard !query.isEmpty else { return true }
@@ -100,25 +196,23 @@ final class CalendarProvider {
             }
             .sorted { $0.title.localizedLowercase < $1.title.localizedLowercase }
 
-        let items = calendars.map { calendar in
-            DataItem(
-                id: calendar.calendarIdentifier,
-                title: calendar.title,
-                subtitle: calendar.source.title,
-                kind: "calendar",
-                source: "EventKit",
-                preview: calendar.allowsContentModifications ? "writable" : "read-only",
-                metadata: [
-                    "source": calendar.source.title,
-                    "source_type": describe(calendar.source.sourceType),
-                    "writable": String(calendar.allowsContentModifications),
-                    "immutable": String(calendar.isImmutable),
-                    "is_default_for_new_events": String(calendar.calendarIdentifier == defaultCalendarID)
-                ]
-            )
-        }
+        let items = calendars.map { calendarItem(for: $0, defaultCalendarID: defaultCalendarID) }
 
-        return ToolResponse(ok: true, source: "EventKit", items: items)
+        return ToolResponse(
+            ok: true,
+            source: "EventKit",
+            items: items,
+            message: scanCapped
+                ? "Calendar listing inspected only the first \(Self.maximumListedCalendars) framework-provided calendars; later calendars are not reachable in this call."
+                : nil,
+            meta: [
+                "returned": String(items.count),
+                "framework_returned": String(allCalendars.count),
+                "scan_budget": String(Self.maximumListedCalendars),
+                "scan_capped": String(scanCapped),
+                "truncated": String(scanCapped)
+            ]
+        )
     }
 
     // MARK: - Write: events
@@ -142,32 +236,44 @@ final class CalendarProvider {
             return failure("'start' is required and must be an ISO 8601 timestamp, or YYYY-MM-DD when all_day is true.")
         }
 
-        let end: Date
-        if let parsed = date(from: input.string("end"), allDay: isAllDay) {
-            end = parsed
-        } else if let minutes = input["duration_minutes"]?.intValue, minutes > 0 {
-            end = start.addingTimeInterval(TimeInterval(minutes * 60))
-        } else if isAllDay {
-            end = start
-        } else {
+        let durationMinutes = input["duration_minutes"]?.intValue
+        if let durationMinutes, !(1...525_600).contains(durationMinutes) {
+            return failure("'duration_minutes' must be between 1 and 525600.")
+        }
+        let explicitEnd: Date?
+        switch explicitEndValue(from: input["end"]?.stringValue, allDay: isAllDay) {
+        case .omitted:
+            explicitEnd = nil
+        case .parsed(let parsed):
+            explicitEnd = parsed
+        case .invalid:
+            return failure("When supplied, 'end' must be a valid ISO 8601 timestamp, or YYYY-MM-DD when all_day is true. Omit it to use duration_minutes or the all-day default.")
+        }
+        guard let end = CalendarEventTiming.resolvedEnd(
+            start: start,
+            explicitEnd: explicitEnd,
+            durationMinutes: durationMinutes,
+            isAllDay: isAllDay
+        ) else {
             return failure("Supply 'end' as an ISO 8601 timestamp, or 'duration_minutes' as a positive integer.")
         }
 
-        guard end >= start else {
-            return failure("'end' is before 'start'.")
+        guard CalendarEventTiming.isValid(start: start, end: end) else {
+            return failure("'end' must be after 'start'. For all-day events, 'end' is the exclusive following date.")
         }
 
+        guard let named = input["calendar_id"]?.stringValue ?? input["calendar"]?.stringValue,
+              !named.isEmpty else {
+            return failure("'calendar_id' is required for creation so an event cannot land in a default account by accident.")
+        }
         let calendar: EKCalendar
-        if let named = input["calendar_id"]?.stringValue ?? input["calendar"]?.stringValue,
-           !named.isEmpty {
-            guard let resolved = resolveCalendar(idOrTitle: named) else {
-                return failure("No calendar matches '\(named)'. Use calendar_list_calendars to see the available ones.")
-            }
+        switch resolveCalendar(idOrTitle: named) {
+        case .found(let resolved):
             calendar = resolved
-        } else if let fallback = store.defaultCalendarForNewEvents {
-            calendar = fallback
-        } else {
-            return failure("There is no default calendar for new events. Pass 'calendar' or 'calendar_id'.")
+        case .notFound:
+            return failure("No calendar matches '\(named)'. Use calendar_list_calendars to see the available ones.")
+        case .ambiguous:
+            return failure("More than one calendar is titled '\(named)'. Pass the exact calendar_id from calendar_list_calendars.")
         }
 
         guard calendar.allowsContentModifications else {
@@ -191,7 +297,10 @@ final class CalendarProvider {
             event.url = url
         }
         if let minutes = input["alarm_minutes_before"]?.intValue {
-            event.addAlarm(EKAlarm(relativeOffset: TimeInterval(-minutes * 60)))
+            guard (0...525_600).contains(minutes) else {
+                return failure("'alarm_minutes_before' must be between 0 and 525600.")
+            }
+            event.addAlarm(EKAlarm(relativeOffset: -TimeInterval(minutes) * 60))
         }
 
         let suppliedNotes = input["notes"]?.stringValue
@@ -204,6 +313,9 @@ final class CalendarProvider {
             event.notes = suppliedNotes
         }
 
+        guard !Task.isCancelled else {
+            return cancelledBeforeWrite("event creation")
+        }
         do {
             try store.save(event, span: .thisEvent, commit: true)
         } catch {
@@ -226,6 +338,10 @@ final class CalendarProvider {
             return response
         case .granted:
             break
+        }
+
+        guard let recurrenceSpan = recurrenceSpan(from: input) else {
+            return failure("'span' must be either 'this_event' or 'future_events'.")
         }
 
         let id = input.string("id")
@@ -270,13 +386,16 @@ final class CalendarProvider {
             }
             event.endDate = end
             changed.append("end")
-        } else if let minutes = input["duration_minutes"]?.intValue, minutes > 0 {
-            event.endDate = event.startDate.addingTimeInterval(TimeInterval(minutes * 60))
+        } else if let minutes = input["duration_minutes"]?.intValue {
+            guard (1...525_600).contains(minutes) else {
+                return failure("'duration_minutes' must be between 1 and 525600.")
+            }
+            event.endDate = event.startDate.addingTimeInterval(TimeInterval(minutes) * 60)
             changed.append("end")
         }
 
-        guard event.endDate >= event.startDate else {
-            return failure("The resulting 'end' is before 'start'.")
+        guard CalendarEventTiming.isValid(start: event.startDate, end: event.endDate) else {
+            return failure("The resulting 'end' must be after 'start'.")
         }
 
         if let location = input["location"]?.stringValue {
@@ -324,8 +443,14 @@ final class CalendarProvider {
 
         if let named = input["calendar_id"]?.stringValue ?? input["calendar"]?.stringValue,
            !named.isEmpty {
-            guard let target = resolveCalendar(idOrTitle: named) else {
+            let target: EKCalendar
+            switch resolveCalendar(idOrTitle: named) {
+            case .found(let resolved):
+                target = resolved
+            case .notFound:
                 return failure("No calendar matches '\(named)'. Use calendar_list_calendars to see the available ones.")
+            case .ambiguous:
+                return failure("More than one calendar is titled '\(named)'. Pass the exact calendar_id from calendar_list_calendars.")
             }
             guard target.allowsContentModifications else {
                 return failure("Calendar '\(target.title)' is read-only.")
@@ -338,8 +463,11 @@ final class CalendarProvider {
             return failure("Nothing to change. Pass at least one of title, start, end, duration_minutes, all_day, location, url, notes, project_slug, calendar.")
         }
 
+        guard !Task.isCancelled else {
+            return cancelledBeforeWrite("event update")
+        }
         do {
-            try store.save(event, span: span(from: input), commit: true)
+            try store.save(event, span: recurrenceSpan, commit: true)
         } catch {
             return failure("Could not save the event: \(error.localizedDescription)")
         }
@@ -360,6 +488,10 @@ final class CalendarProvider {
             break
         }
 
+        guard let recurrenceSpan = recurrenceSpan(from: input) else {
+            return failure("'span' must be either 'this_event' or 'future_events'.")
+        }
+
         let id = input.string("id")
         guard !id.isEmpty else {
             return failure("'id' is required.")
@@ -374,8 +506,11 @@ final class CalendarProvider {
         let title = event.title ?? "(untitled event)"
         let calendarTitle = event.calendar.title
 
+        guard !Task.isCancelled else {
+            return cancelledBeforeWrite("event deletion")
+        }
         do {
-            try store.remove(event, span: span(from: input), commit: true)
+            try store.remove(event, span: recurrenceSpan, commit: true)
         } catch {
             return failure("Could not delete the event: \(error.localizedDescription)")
         }
@@ -444,6 +579,9 @@ final class CalendarProvider {
         calendar.title = title
         calendar.source = source
 
+        guard !Task.isCancelled else {
+            return cancelledBeforeWrite("calendar creation")
+        }
         do {
             try store.saveCalendar(calendar, commit: true)
         } catch {
@@ -500,6 +638,9 @@ final class CalendarProvider {
             return failure("Calendar '\(calendar.title)' is immutable and cannot be deleted.")
         }
 
+        guard !Task.isCancelled else {
+            return cancelledBeforeWrite("calendar deletion")
+        }
         do {
             try store.removeCalendar(calendar, commit: true)
         } catch {
@@ -521,41 +662,19 @@ final class CalendarProvider {
         case denied(ToolResponse)
     }
 
-    private enum RequestOutcome {
-        case granted
-        case refused
-        case timedOut
-        case failed(String)
-    }
-
-    /// How long to wait for the macOS permission dialog before giving up.
-    ///
-    /// A TCC request whose dialog nobody answers never calls its completion handler. Left unbounded
-    /// that hangs the MCP call for as long as the client will wait, which reads as a broken server
-    /// rather than as a missing permission. Bounding it turns the hang into an error that names the
-    /// fix. Override with `M3MCP_TCC_REQUEST_TIMEOUT_SECONDS`.
-    private var requestTimeout: TimeInterval {
-        let key = "M3MCP_TCC_REQUEST_TIMEOUT_SECONDS"
-        if let raw = ProcessInfo.processInfo.environment[key], let value = TimeInterval(raw), value > 0 {
-            return value
-        }
-        return 20
-    }
-
-    /// Gates every call on the authorization status, and only prompts when the status is undetermined.
-    ///
-    /// The previous version called `requestFullAccessToEvents` on every search. That re-activated the
-    /// app on each call, and after a denial it asked an already-answered question instead of saying
-    /// what was wrong.
+    /// Gates calls on current authorization without ever displaying a TCC prompt. Prompting is an
+    /// externally visible side effect and is confined to the separately policy-gated
+    /// `permissions_request` tool.
     private func access(need: Need) async -> Access {
         switch EKEventStore.authorizationStatus(for: .event) {
         case .fullAccess:
             return .granted
 
         case .writeOnly:
-            // Write-only is enough to add an event and not enough to read one back.
             if need == .write {
-                return .granted
+                return .denied(failure(
+                    "Calendar access is write-only. These guarded write tools first resolve and verify existing calendars or events, so they require full access: System Settings › Privacy & Security › Calendars."
+                ))
             }
             return .denied(failure("Calendar access is write-only. Reading events needs full access: System Settings › Privacy & Security › Calendars."))
 
@@ -566,67 +685,12 @@ final class CalendarProvider {
             return .denied(failure("Calendar access is restricted by a device policy."))
 
         case .notDetermined:
-            return await requestAccess(need: need)
+            return .denied(failure(
+                "Calendar access is not determined. Grant it in System Settings, or explicitly enable and call permissions_request."
+            ))
 
         @unknown default:
             return .denied(failure("Calendar authorization status is not recognised by this build."))
-        }
-    }
-
-    @MainActor
-    private func requestAccess(need: Need) async -> Access {
-        NSApp.setActivationPolicy(.regular)
-        NSApp.activate(ignoringOtherApps: true)
-
-        let timeout = requestTimeout
-        let outcome: RequestOutcome = await withCheckedContinuation { continuation in
-            let gate = OneShotContinuation(continuation)
-
-            store.requestFullAccessToEvents { granted, error in
-                if let error {
-                    gate.resume(.failed(error.localizedDescription))
-                } else {
-                    gate.resume(granted ? .granted : .refused)
-                }
-            }
-
-            DispatchQueue.global().asyncAfter(deadline: .now() + timeout) {
-                gate.resume(.timedOut)
-            }
-        }
-
-        switch outcome {
-        case .granted:
-            return .granted
-        case .refused:
-            return .denied(failure("Calendar access was not granted."))
-        case .failed(let message):
-            return .denied(failure("Requesting Calendar access failed: \(message)"))
-        case .timedOut:
-            let requested = need == .write ? "write" : "read"
-            return .denied(failure(
-                "Calendar access is still undetermined after \(Int(timeout))s — the macOS permission "
-                + "dialog was not answered. Approve it, or grant M3MCP access under System Settings › "
-                + "Privacy & Security › Calendars, then retry. (Requested: \(requested).)"
-            ))
-        }
-    }
-
-    /// Resumes a continuation exactly once, so the timeout and the completion handler can race.
-    private final class OneShotContinuation: @unchecked Sendable {
-        private let lock = NSLock()
-        private var continuation: CheckedContinuation<RequestOutcome, Never>?
-
-        init(_ continuation: CheckedContinuation<RequestOutcome, Never>) {
-            self.continuation = continuation
-        }
-
-        func resume(_ outcome: RequestOutcome) {
-            lock.lock()
-            let pending = continuation
-            continuation = nil
-            lock.unlock()
-            pending?.resume(returning: outcome)
         }
     }
 
@@ -636,21 +700,73 @@ final class CalendarProvider {
         ToolResponse(ok: false, source: "EventKit", message: message)
     }
 
+    static func searchCandidateLimit(input: [String: JSONValue]) -> Int {
+        max(
+            1,
+            min(input.int("max_candidates", default: defaultSearchCandidates), maximumSearchCandidates)
+        )
+    }
+
+    private func cancelledBeforeWrite(_ operation: String) -> ToolResponse {
+        ToolResponse(
+            ok: false,
+            source: "EventKit",
+            message: "Cancelled before the \(operation) write began."
+        )
+    }
+
     private func invalidSlugMessage(_ slug: String) -> String {
         "'project_slug' must be 1-64 characters, start with a lowercase letter or digit, and hold only a-z, 0-9, '-', '_' and '.'; got '\(slug)'."
     }
 
-    private func resolveCalendar(idOrTitle: String) -> EKCalendar? {
-        if let byID = store.calendar(withIdentifier: idOrTitle) {
-            return byID
-        }
-        let calendars = store.calendars(for: .event)
-        return calendars.first { $0.title == idOrTitle }
-            ?? calendars.first { $0.title.localizedLowercase == idOrTitle.localizedLowercase }
+    private enum CalendarResolution {
+        case found(EKCalendar)
+        case notFound
+        case ambiguous
     }
 
-    private func span(from input: [String: JSONValue]) -> EKSpan {
-        input.string("span", default: "this_event") == "future_events" ? .futureEvents : .thisEvent
+    private func resolveCalendar(idOrTitle: String) -> CalendarResolution {
+        if let byID = store.calendar(withIdentifier: idOrTitle) {
+            return .found(byID)
+        }
+        let calendars = store.calendars(for: .event)
+        let exact = calendars.filter { $0.title == idOrTitle }
+        if exact.count == 1, let calendar = exact.first { return .found(calendar) }
+        if exact.count > 1 { return .ambiguous }
+
+        let folded = calendars.filter {
+            $0.title.localizedCaseInsensitiveCompare(idOrTitle) == .orderedSame
+        }
+        if folded.count == 1, let calendar = folded.first { return .found(calendar) }
+        return folded.isEmpty ? .notFound : .ambiguous
+    }
+
+    private func recurrenceSpan(from input: [String: JSONValue]) -> EKSpan? {
+        switch input.string("span", default: "this_event") {
+        case "this_event":
+            return .thisEvent
+        case "future_events":
+            return .futureEvents
+        default:
+            return nil
+        }
+    }
+
+    enum ExplicitEndValue: Equatable {
+        case omitted
+        case parsed(Date)
+        case invalid
+    }
+
+    /// Presence matters: a malformed approved value must not silently turn into an omitted value
+    /// and activate the duration/all-day fallback.
+    func explicitEndValue(from raw: String?, allDay: Bool) -> ExplicitEndValue {
+        guard let raw else { return .omitted }
+        guard !raw.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+              let parsed = date(from: raw, allDay: allDay) else {
+            return .invalid
+        }
+        return .parsed(parsed)
     }
 
     /// Accepts an ISO 8601 timestamp, a zone-less local timestamp, and `YYYY-MM-DD` for all-day.
@@ -686,30 +802,102 @@ final class CalendarProvider {
         return local.date(from: trimmed)
     }
 
-    private func item(for event: EKEvent) -> DataItem {
+    func item(for event: EKEvent) -> DataItem {
         let formatter = ISO8601DateFormatter()
+        let identifier = ProviderOutputBudget.text(
+            event.eventIdentifier ?? UUID().uuidString,
+            maximumUTF8Bytes: Self.maximumIdentifierUTF8Bytes
+        )
+        let title = ProviderOutputBudget.text(
+            event.title ?? "(untitled event)",
+            maximumUTF8Bytes: Self.maximumTitleUTF8Bytes
+        )
+        let location = ProviderOutputBudget.text(
+            event.location ?? "",
+            maximumUTF8Bytes: Self.maximumSubtitleUTF8Bytes
+        )
+        let calendarTitle = ProviderOutputBudget.text(
+            event.calendar.title,
+            maximumUTF8Bytes: Self.maximumSubtitleUTF8Bytes
+        )
+        let calendarIdentifier = ProviderOutputBudget.text(
+            event.calendar.calendarIdentifier,
+            maximumUTF8Bytes: Self.maximumIdentifierUTF8Bytes
+        )
+        let notesSource = ProviderOutputBudget.text(
+            event.notes ?? "",
+            maximumUTF8Bytes: Self.maximumSearchFieldUTF8Bytes
+        )
+        // Keep the pre-hardening preview contract (single-line, at most 900 characters), but bound
+        // the source before normalization so compacting cannot allocate from an arbitrary field.
+        let notes = ProviderOutputBudget.text(
+            StringSanitizer.compact(notesSource.text, limit: 900),
+            maximumUTF8Bytes: Self.maximumPreviewUTF8Bytes
+        )
+        let url = event.url.map {
+            ProviderOutputBudget.text(
+                $0.absoluteString,
+                maximumUTF8Bytes: Self.maximumURLUTF8Bytes
+            )
+        }
         var metadata: [String: String] = [
-            "calendar": event.calendar.title,
-            "calendar_id": event.calendar.calendarIdentifier,
+            "calendar": calendarTitle.text,
+            "calendar_id": calendarIdentifier.text,
             "start": formatter.string(from: event.startDate),
             "end": formatter.string(from: event.endDate),
-            "all_day": String(event.isAllDay)
+            "all_day": String(event.isAllDay),
+            "content_truncated": String(
+                identifier.truncated || title.truncated || location.truncated
+                    || calendarTitle.truncated || calendarIdentifier.truncated
+                    || notesSource.truncated || notes.truncated || url?.truncated == true
+            )
         ]
-        if let url = event.url?.absoluteString {
-            metadata["url"] = url
+        if let url {
+            metadata["url"] = url.text
         }
-        if let slug = CalendarProjectSlug.extract(from: event.notes) {
+        if let slug = CalendarProjectSlug.extract(from: notes.text) {
             metadata["project_slug"] = slug
         }
 
         return DataItem(
-            id: event.eventIdentifier ?? UUID().uuidString,
-            title: event.title ?? "(untitled event)",
-            subtitle: event.location,
+            id: identifier.text,
+            title: title.text.isEmpty ? "(untitled event)" : title.text,
+            subtitle: location.text.isEmpty ? nil : location.text,
             kind: "calendar_event",
             source: "EventKit",
-            preview: StringSanitizer.compact(event.notes ?? "", limit: 900),
+            preview: notes.text.isEmpty ? nil : notes.text,
             metadata: metadata
+        )
+    }
+
+    func calendarItem(for calendar: EKCalendar, defaultCalendarID: String?) -> DataItem {
+        let identifier = ProviderOutputBudget.text(
+            calendar.calendarIdentifier,
+            maximumUTF8Bytes: Self.maximumIdentifierUTF8Bytes
+        )
+        let title = ProviderOutputBudget.text(
+            calendar.title,
+            maximumUTF8Bytes: Self.maximumTitleUTF8Bytes
+        )
+        let source = ProviderOutputBudget.text(
+            calendar.source.title,
+            maximumUTF8Bytes: Self.maximumSubtitleUTF8Bytes
+        )
+        return DataItem(
+            id: identifier.text,
+            title: title.text,
+            subtitle: source.text,
+            kind: "calendar",
+            source: "EventKit",
+            preview: calendar.allowsContentModifications ? "writable" : "read-only",
+            metadata: [
+                "source": source.text,
+                "source_type": describe(calendar.source.sourceType),
+                "writable": String(calendar.allowsContentModifications),
+                "immutable": String(calendar.isImmutable),
+                "is_default_for_new_events": String(calendar.calendarIdentifier == defaultCalendarID),
+                "content_truncated": String(identifier.truncated || title.truncated || source.truncated)
+            ]
         )
     }
 
