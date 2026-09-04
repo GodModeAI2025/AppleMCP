@@ -11,6 +11,13 @@ import Foundation
 /// work out which binary its bridge is, the connecting process is checked against that binary's code
 /// directory hash. `SocketAuthorizer` holds the rules, `PeerIdentity` reads the peer.
 ///
+/// Availability is part of that access control, because authorization cannot happen before the
+/// request has been read whole — the token is a header. So an accepted connection is read through a
+/// dispatch source rather than by a thread parked in `read`: until a complete request arrives it
+/// costs a descriptor and a deadline, and nothing else. A thread is spent only once there is
+/// something to answer. Without that, 120 connections that say nothing were enough for any local
+/// process to take the endpoint away from the client that holds the token, `/health` included.
+///
 /// This type lives in M3MCPCore rather than in the app target so the authorization path can be
 /// exercised by `swift test`. Security code that only runs inside a GUI app is security code nobody
 /// checks.
@@ -34,18 +41,61 @@ public final class LocalHTTPServer {
 
     private let maximumRequestBytes = 1_000_000
 
+    /// How long a connection may take to deliver a complete request, and how long a reply may take
+    /// to go out.
+    ///
+    /// Authorization happens *after* the request has been read whole — it has to, the token is a
+    /// header — so until then an unauthenticated connection costs a thread. Without a deadline a
+    /// process that connects and says nothing keeps that thread until someone notices. Both a
+    /// per-read timeout and a deadline across the whole request are needed: the first ends a silent
+    /// connection, the second ends one that dribbles a byte at a time.
+    private let requestTimeout: TimeInterval
+
+    /// How many accepted connections may be waiting for a request at once.
+    ///
+    /// A waiting connection costs a descriptor and a dispatch source, so this bounds the endpoint's
+    /// share of the process's file descriptors rather than its threads.
+    private let maximumOpenConnections: Int
+
+    /// How many complete requests may be served at once.
+    ///
+    /// `connectionQueue` is concurrent and `serve` blocks on it, so every request in flight holds a
+    /// thread out of a pool not much larger than 64. Only a connection that has already delivered a
+    /// whole request gets one — which is the difference between this cap and the one above, and the
+    /// reason a process that connects and stays silent can no longer take the endpoint away from a
+    /// client that has the token.
+    private let maximumConcurrentRequests: Int
+
+    private let connectionCountLock = NSLock()
+    fileprivate var openConnections = 0
+    fileprivate var requestsInFlight = 0
+
+    /// Serial: every pending connection's reads, its deadline and its teardown run here, so the
+    /// state of a connection needs no lock of its own.
+    private let readQueue = DispatchQueue(label: "de.markzimmermann.m3mcp.reads")
+
+    /// Only ever touched on `readQueue`. `stop()` needs it: a connection waiting for a request holds
+    /// a descriptor, and nothing else would close it before its deadline.
+    private var pendingConnections: [PendingConnection] = []
+
     public init(
         socketURL: URL,
         authorizer: SocketAuthorizer,
         toolHandler: @escaping ToolHandler,
         statusHandler: @escaping StatusHandler,
-        auditHandler: AuditHandler? = nil
+        auditHandler: AuditHandler? = nil,
+        requestTimeout: TimeInterval = 10,
+        maximumOpenConnections: Int = 128,
+        maximumConcurrentRequests: Int = 32
     ) {
         self.socketURL = socketURL
         self.authorizer = authorizer
         self.toolHandler = toolHandler
         self.statusHandler = statusHandler
         self.auditHandler = auditHandler
+        self.requestTimeout = requestTimeout
+        self.maximumOpenConnections = max(1, maximumOpenConnections)
+        self.maximumConcurrentRequests = max(1, maximumConcurrentRequests)
     }
 
     public struct StartFailure: LocalizedError {
@@ -143,6 +193,13 @@ public final class LocalHTTPServer {
         acceptSource = nil
         listeningDescriptor = -1
         unlink(socketURL.path)
+
+        readQueue.async { [weak self] in
+            guard let self else { return }
+            for connection in self.pendingConnections {
+                self.finish(connection, writing: nil)
+            }
+        }
     }
 
     private func prepareDirectory() throws {
@@ -166,6 +223,24 @@ public final class LocalHTTPServer {
 
     // MARK: - Accepting
 
+    /// One connection that has been accepted and has not yet delivered a complete request.
+    ///
+    /// It costs a file descriptor and a dispatch source. It does not cost a thread — that is the
+    /// whole point of reading through a source instead of blocking on `read`.
+    private final class PendingConnection {
+        let descriptor: Int32
+        let peer: PeerIdentity
+        var buffer = Data()
+        var readSource: DispatchSourceRead?
+        var timer: DispatchSourceTimer?
+        var closed = false
+
+        init(descriptor: Int32, peer: PeerIdentity) {
+            self.descriptor = descriptor
+            self.peer = peer
+        }
+    }
+
     private func acceptPendingConnections() {
         while true {
             let client = accept(listeningDescriptor, nil, nil)
@@ -173,76 +248,222 @@ public final class LocalHTTPServer {
                 return
             }
 
-            // Without this a client that hangs up mid-response would kill the app with SIGPIPE.
-            var on: Int32 = 1
-            setsockopt(client, SOL_SOCKET, SO_NOSIGPIPE, &on, socklen_t(MemoryLayout<Int32>.size))
+            prepare(client)
 
-            // Darwin does not pass O_NONBLOCK on to accepted sockets, but be explicit: the read and
-            // write helpers below are written for blocking descriptors.
-            let clientFlags = fcntl(client, F_GETFL, 0)
-            if clientFlags >= 0 {
-                _ = fcntl(client, F_SETFL, clientFlags & ~O_NONBLOCK)
+            // Past the cap the connection is dropped here, on the accept queue, before anything is
+            // committed to it. The refusal is written best-effort on a non-blocking descriptor: a
+            // client that will not read it must not be able to stall the accept loop in turn.
+            guard claimSlot(\.openConnections, limit: maximumOpenConnections) else {
+                refuse(client, status: 503, reason: "Too many open connections")
+                continue
             }
 
             // Read while the connection is still open and before any work is queued: the audit
             // token identifies the process that connected, and a pid alone could be recycled.
             let peer = PeerIdentity.resolve(descriptor: client)
 
-            connectionQueue.async { [weak self] in
-                self?.serve(client, peer: peer)
+            // Onto the read queue, which owns everything about a pending connection from here on.
+            readQueue.async { [weak self] in
+                guard let self else {
+                    close(client)
+                    return
+                }
+                self.beginReading(client, peer: peer)
             }
         }
     }
 
-    private func serve(_ client: Int32, peer: PeerIdentity) {
-        defer { close(client) }
+    /// Non-blocking, no SIGPIPE, and a send timeout for the reply.
+    ///
+    /// Non-blocking is what keeps a silent client cheap: the request is collected by a dispatch
+    /// source, and a connection that sends nothing simply never fires one.
+    private func prepare(_ client: Int32) {
+        var on: Int32 = 1
+        setsockopt(client, SOL_SOCKET, SO_NOSIGPIPE, &on, socklen_t(MemoryLayout<Int32>.size))
 
-        switch readRequest(from: client) {
-        case .request(let request):
-            // The handlers are async; this connection thread waits for them.
-            let done = DispatchSemaphore(value: 0)
-            Task { [weak self] in
-                await self?.respond(to: request, on: client, peer: peer)
-                done.signal()
-            }
-            done.wait()
-        case .tooLarge:
-            send(status: 413, body: ["error": "Request too large"], to: client)
-        case .failed:
-            send(status: 400, body: ["error": "Malformed request"], to: client)
+        let flags = fcntl(client, F_GETFL, 0)
+        if flags >= 0 {
+            _ = fcntl(client, F_SETFL, flags | O_NONBLOCK)
         }
+
+        var deadline = Self.timeval(for: requestTimeout)
+        setsockopt(client, SOL_SOCKET, SO_SNDTIMEO, &deadline, socklen_t(MemoryLayout<timeval>.size))
     }
 
-    private enum ReadOutcome {
-        case request(HTTPRequest)
-        case tooLarge
-        case failed
+    private static func timeval(for interval: TimeInterval) -> Darwin.timeval {
+        let seconds = max(0.001, interval)
+        let whole = Int(seconds)
+        return Darwin.timeval(
+            tv_sec: whole,
+            tv_usec: Int32((seconds - Double(whole)) * 1_000_000)
+        )
     }
 
-    private func readRequest(from client: Int32) -> ReadOutcome {
-        var buffer = Data()
+    // MARK: - Reading a request without holding a thread
+
+    /// Runs on `readQueue`.
+    private func beginReading(_ client: Int32, peer: PeerIdentity) {
+        let connection = PendingConnection(descriptor: client, peer: peer)
+
+        let readSource = DispatchSource.makeReadSource(fileDescriptor: client, queue: readQueue)
+        readSource.setEventHandler { [weak self] in
+            self?.readAvailable(on: connection)
+        }
+        // The descriptor belongs to the source from here on, so nothing else closes it.
+        readSource.setCancelHandler { close(client) }
+        connection.readSource = readSource
+
+        // The deadline is what an idle connection actually costs: this long, then the slot is back.
+        let timer = DispatchSource.makeTimerSource(queue: readQueue)
+        timer.schedule(deadline: .now() + requestTimeout)
+        timer.setEventHandler { [weak self] in
+            guard let self else { return }
+            self.finish(
+                connection,
+                writing: self.response(
+                    status: 408,
+                    body: ["error": "No complete request within \(Int(self.requestTimeout)) seconds"]
+                )
+            )
+        }
+        connection.timer = timer
+        pendingConnections.append(connection)
+
+        timer.resume()
+        readSource.resume()
+    }
+
+    /// Runs on `readQueue`, so everything it touches on the connection is serialized by the queue.
+    private func readAvailable(on connection: PendingConnection) {
+        guard !connection.closed else { return }
+
         var chunk = [UInt8](repeating: 0, count: 64 * 1024)
-
         while true {
             let count = chunk.withUnsafeMutableBytes { raw in
-                read(client, raw.baseAddress, raw.count)
+                read(connection.descriptor, raw.baseAddress, raw.count)
             }
 
-            if count <= 0 {
-                return .failed
+            if count < 0 {
+                if errno == EINTR { continue }
+                if errno == EAGAIN || errno == EWOULDBLOCK { return }
+                finish(connection, writing: nil)
+                return
             }
 
-            buffer.append(contentsOf: chunk[0..<count])
-
-            if let request = parseRequest(buffer) {
-                return .request(request)
+            if count == 0 {
+                // The peer hung up before finishing its request.
+                finish(connection, writing: nil)
+                return
             }
 
-            if buffer.count > maximumRequestBytes {
-                return .tooLarge
+            connection.buffer.append(contentsOf: chunk[0..<count])
+
+            if let request = parseRequest(connection.buffer) {
+                hand(request, of: connection)
+                return
+            }
+
+            if connection.buffer.count > maximumRequestBytes {
+                finish(connection, writing: response(status: 413, body: ["error": "Request too large"]))
+                return
             }
         }
     }
+
+    /// A complete request has arrived: only now is a thread worth spending on it.
+    private func hand(_ request: HTTPRequest, of connection: PendingConnection) {
+        // `dup` hands the open connection to the serving thread while the source keeps ownership of
+        // the descriptor it was created with. Without it, cancelling the source would close the
+        // socket out from under the reply.
+        let served = dup(connection.descriptor)
+        let peer = connection.peer
+        finish(connection, writing: nil)
+
+        guard served >= 0 else { return }
+
+        // Back to blocking for the reply: `writeAll` is written for a blocking descriptor, and
+        // SO_SNDTIMEO keeps it bounded.
+        let flags = fcntl(served, F_GETFL, 0)
+        if flags >= 0 {
+            _ = fcntl(served, F_SETFL, flags & ~O_NONBLOCK)
+        }
+
+        guard claimSlot(\.requestsInFlight, limit: maximumConcurrentRequests) else {
+            refuse(served, status: 503, reason: "Too many requests in flight")
+            return
+        }
+
+        connectionQueue.async { [weak self] in
+            guard let self else {
+                close(served)
+                return
+            }
+            defer { self.releaseSlot(\.requestsInFlight) }
+            self.serve(request, on: served, peer: peer)
+        }
+    }
+
+    /// Ends a pending connection: cancels its timer and its read source, writes an optional last
+    /// reply, and gives the slot back. Idempotent, and only ever called on `readQueue`.
+    private func finish(_ connection: PendingConnection, writing reply: Data?) {
+        guard !connection.closed else { return }
+        connection.closed = true
+
+        if let reply {
+            writeBestEffort(reply, to: connection.descriptor)
+        }
+
+        connection.timer?.cancel()
+        connection.readSource?.cancel()
+        connection.timer = nil
+        connection.readSource = nil
+        pendingConnections.removeAll { $0 === connection }
+        releaseSlot(\.openConnections)
+    }
+
+    // MARK: - Limits
+
+    private func claimSlot(_ counter: ReferenceWritableKeyPath<LocalHTTPServer, Int>, limit: Int) -> Bool {
+        connectionCountLock.lock()
+        defer { connectionCountLock.unlock() }
+        guard self[keyPath: counter] < limit else { return false }
+        self[keyPath: counter] += 1
+        return true
+    }
+
+    private func releaseSlot(_ counter: ReferenceWritableKeyPath<LocalHTTPServer, Int>) {
+        connectionCountLock.lock()
+        self[keyPath: counter] = max(0, self[keyPath: counter] - 1)
+        connectionCountLock.unlock()
+    }
+
+    private func refuse(_ client: Int32, status: Int, reason: String) {
+        writeBestEffort(response(status: status, body: ["error": reason]), to: client)
+        close(client)
+    }
+
+    /// One write on a non-blocking descriptor. What does not go out is dropped: this path exists to
+    /// explain a refusal, not to guarantee delivery of one.
+    private func writeBestEffort(_ data: Data, to client: Int32) {
+        _ = data.withUnsafeBytes { raw in
+            raw.baseAddress.map { write(client, $0, raw.count) }
+        }
+    }
+
+    // MARK: - Serving
+
+    private func serve(_ request: HTTPRequest, on client: Int32, peer: PeerIdentity) {
+        defer { close(client) }
+
+        // The handlers are async; this connection thread waits for them.
+        let done = DispatchSemaphore(value: 0)
+        Task { [weak self] in
+            await self?.respond(to: request, on: client, peer: peer)
+            done.signal()
+        }
+        done.wait()
+    }
+
 
     // MARK: - Request model
 
@@ -431,6 +652,15 @@ public final class LocalHTTPServer {
     }
 
     private func send(status: Int, data: Data, to client: Int32) {
+        writeAll(response(status: status, data: data), to: client)
+    }
+
+    private func response(status: Int, body: [String: String]) -> Data {
+        let data = (try? JSONSerialization.data(withJSONObject: body, options: [.sortedKeys])) ?? Data()
+        return response(status: status, data: data)
+    }
+
+    private func response(status: Int, data: Data) -> Data {
         let reason: String
         switch status {
         case 200: reason = "OK"
@@ -438,7 +668,9 @@ public final class LocalHTTPServer {
         case 401: reason = "Unauthorized"
         case 403: reason = "Forbidden"
         case 404: reason = "Not Found"
+        case 408: reason = "Request Timeout"
         case 413: reason = "Payload Too Large"
+        case 503: reason = "Service Unavailable"
         default: reason = "Internal Server Error"
         }
 
@@ -448,8 +680,7 @@ public final class LocalHTTPServer {
         response.append(Data("Content-Length: \(data.count)\r\n".utf8))
         response.append(Data("Connection: close\r\n\r\n".utf8))
         response.append(data)
-
-        writeAll(response, to: client)
+        return response
     }
 
     private func writeAll(_ data: Data, to client: Int32) {

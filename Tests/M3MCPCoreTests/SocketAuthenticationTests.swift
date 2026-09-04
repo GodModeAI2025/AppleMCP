@@ -36,7 +36,10 @@ final class SocketAuthenticationTests: XCTestCase {
     private var socketURL: URL { directory.appendingPathComponent("mcp.sock", isDirectory: false) }
 
     @discardableResult
-    private func startServer(pinnedTo hashes: Set<String> = []) throws -> LocalHTTPServer {
+    private func startServer(
+        pinnedTo hashes: Set<String> = [],
+        requestTimeout: TimeInterval = 10
+    ) throws -> LocalHTTPServer {
         let server = LocalHTTPServer(
             socketURL: socketURL,
             authorizer: SocketAuthorizer(token: token, trustedCodeDirectoryHashes: hashes),
@@ -67,7 +70,8 @@ final class SocketAuthenticationTests: XCTestCase {
                         )
                     ]
                 )
-            }
+            },
+            requestTimeout: requestTimeout
         )
         try server.start()
         self.server = server
@@ -352,6 +356,94 @@ final class SocketAuthenticationTests: XCTestCase {
         return String(data: data, encoding: .utf8)?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
     }
 
+    // MARK: - Availability
+
+    /// A process with no token must not be able to take the endpoint away from one that has it.
+    ///
+    /// 120 connections that connect and then send nothing. Authorization happens after the request
+    /// has been read whole, so these are never refused by the token check — they simply occupy the
+    /// server. `/health` and an authorised tool call have to keep answering while they sit there.
+    func testIdleConnectionsCannotStarveTheEndpoint() throws {
+        try startServer()
+
+        var idle: [Int32] = []
+        defer { for descriptor in idle { close(descriptor) } }
+
+        // The listen backlog is small, so a burst outruns the accept loop and the kernel starts
+        // refusing. Retrying gives the loop a chance to drain, which is what an attacker with a
+        // loop of their own would do too.
+        for _ in 0..<120 {
+            for attempt in 0..<40 {
+                let descriptor = socket(AF_UNIX, SOCK_STREAM, 0)
+                guard descriptor >= 0 else { break }
+                var address = Self.address(for: socketURL.path)
+                let connected = withUnsafePointer(to: &address) { pointer in
+                    pointer.withMemoryRebound(to: sockaddr.self, capacity: 1) { addressPointer in
+                        connect(descriptor, addressPointer, socklen_t(MemoryLayout<sockaddr_un>.size))
+                    }
+                }
+                if connected == 0 {
+                    idle.append(descriptor)
+                    break
+                }
+                close(descriptor)
+                usleep(useconds_t(2_000 * (attempt + 1)))
+            }
+        }
+        XCTAssertGreaterThan(idle.count, 100, "only \(idle.count) connections were accepted")
+
+        let started = Date()
+        let health = try request(method: "GET", path: "/health", body: nil, token: nil, timeout: 8)
+        XCTAssertEqual(health.status, 200, health.statusLine)
+
+        let tool = try request(
+            method: "POST", path: "/tools/source_status", body: Data("{}".utf8), token: token, timeout: 8
+        )
+        XCTAssertEqual(tool.status, 200, tool.statusLine)
+
+        let elapsed = Date().timeIntervalSince(started)
+        XCTAssertLessThan(elapsed, 8, "the endpoint took \(elapsed)s to answer behind \(idle.count) idle connections")
+    }
+
+    /// A request that never ends is answered and dropped, instead of being waited on.
+    ///
+    /// A header without its blank line is the cheapest way to hold a connection open. The deadline
+    /// is what turns that from an open-ended cost into a bounded one.
+    func testAnUnfinishedRequestIsDroppedWhenTheDeadlinePasses() throws {
+        try startServer(requestTimeout: 1)
+
+        let descriptor = socket(AF_UNIX, SOCK_STREAM, 0)
+        XCTAssertGreaterThanOrEqual(descriptor, 0)
+        defer { close(descriptor) }
+
+        var address = Self.address(for: socketURL.path)
+        let connected = withUnsafePointer(to: &address) { pointer in
+            pointer.withMemoryRebound(to: sockaddr.self, capacity: 1) { addressPointer in
+                connect(descriptor, addressPointer, socklen_t(MemoryLayout<sockaddr_un>.size))
+            }
+        }
+        XCTAssertEqual(connected, 0)
+
+        var deadline = timeval(tv_sec: 6, tv_usec: 0)
+        setsockopt(descriptor, SOL_SOCKET, SO_RCVTIMEO, &deadline, socklen_t(MemoryLayout<timeval>.size))
+
+        // A request line and no terminator: complete enough to look like a client, never complete.
+        let partial = Data("GET /health HTTP/1.1\r\nHost: localhost\r\n".utf8)
+        _ = partial.withUnsafeBytes { raw in
+            raw.baseAddress.map { write(descriptor, $0, raw.count) }
+        }
+
+        let started = Date()
+        var buffer = [UInt8](repeating: 0, count: 4096)
+        let count = buffer.withUnsafeMutableBytes { raw in read(descriptor, raw.baseAddress, raw.count) }
+        let elapsed = Date().timeIntervalSince(started)
+
+        XCTAssertGreaterThan(count, 0, "the server never answered: \(String(cString: strerror(errno)))")
+        let reply = String(decoding: buffer[0..<max(0, count)], as: UTF8.self)
+        XCTAssertTrue(reply.contains("408"), reply)
+        XCTAssertLessThan(elapsed, 5, "the deadline was 1 second, the answer took \(elapsed)s")
+    }
+
     // MARK: - Raw HTTP over the socket
 
     private struct Reply {
@@ -360,10 +452,25 @@ final class SocketAuthenticationTests: XCTestCase {
         let body: Data
     }
 
-    private func request(method: String, path: String, body: Data?, token: String?) throws -> Reply {
+    private func request(
+        method: String,
+        path: String,
+        body: Data?,
+        token: String?,
+        timeout: TimeInterval = 20
+    ) throws -> Reply {
         let descriptor = socket(AF_UNIX, SOCK_STREAM, 0)
         guard descriptor >= 0 else { throw Failure("socket() failed") }
         defer { close(descriptor) }
+
+        // Without this a server that accepts and then never answers turns a failing test into a
+        // hanging one, and a hang says nothing about what went wrong.
+        var deadline = timeval(
+            tv_sec: Int(timeout),
+            tv_usec: Int32((timeout - Double(Int(timeout))) * 1_000_000)
+        )
+        setsockopt(descriptor, SOL_SOCKET, SO_RCVTIMEO, &deadline, socklen_t(MemoryLayout<timeval>.size))
+        setsockopt(descriptor, SOL_SOCKET, SO_SNDTIMEO, &deadline, socklen_t(MemoryLayout<timeval>.size))
 
         var address = Self.address(for: socketURL.path)
         let connected = withUnsafePointer(to: &address) { pointer in
@@ -399,7 +506,9 @@ final class SocketAuthenticationTests: XCTestCase {
         while true {
             let count = chunk.withUnsafeMutableBytes { raw in read(descriptor, raw.baseAddress, raw.count) }
             if count == 0 { break }
-            guard count > 0 else { throw Failure("read() failed") }
+            guard count > 0 else {
+                throw Failure("read() failed: \(String(cString: strerror(errno)))")
+            }
             buffer.append(contentsOf: chunk[0..<count])
         }
 

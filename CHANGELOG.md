@@ -59,6 +59,17 @@ reads it.
 
 ### Fixed
 
+- **A local process with no token could take the endpoint away from one that had it.** Every accepted
+  connection was handed to a thread that then blocked in `read` with no timeout, and authorization
+  happens after the request has been read whole, so 120 connections that connected and said nothing
+  were enough: `/health` and authenticated tool calls both ran into their timeouts. A connection
+  waiting for a request is now read through a dispatch source and costs a descriptor and a deadline
+  rather than a thread; the deadline answers `408` and drops it. A thread is committed only once a
+  complete request exists, and both counts are capped — 128 connections waiting, 32 requests being
+  served, anything past that is `503` straight away.
+  `SocketAuthenticationTests.testIdleConnectionsCannotStarveTheEndpoint` measures it: with 120 idle
+  connections in place, `/health` and a tool call used to hit an eight second timeout and now answer
+  in 0.04 seconds.
 - **`mail_search` lost body-only matches without saying so.** With `fields` containing `body`
   alongside anything else, the SQL term clause narrowed the candidate rows to subject, sender and
   recipient hits, and the body was then read from those rows only. A message carrying the search term
