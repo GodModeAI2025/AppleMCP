@@ -83,18 +83,61 @@ public enum CapabilityToken {
 
     // MARK: - Client side
 
-    /// The token a client presents, or nil when none is configured. Never creates one: a client that
-    /// invents a token would only ever be refused, and the error should say what to configure.
-    public static func existing(service: String? = nil, account: String = defaultAccount) -> Resolution? {
+    /// What a client found, and when it found nothing, why.
+    ///
+    /// The reason matters because the two ways of finding nothing want different fixes: no item at
+    /// all means the app has not run yet, while a refused item means this binary is not the one that
+    /// created it and the token belongs in the client's configuration instead.
+    public enum ClientToken: Sendable {
+        case resolved(Resolution)
+        case missing(reason: String)
+
+        public var resolution: Resolution? {
+            if case .resolved(let value) = self { return value }
+            return nil
+        }
+    }
+
+    /// The token a client presents. Never creates one: a client that invents a token would only ever
+    /// be refused, and the error should say what to configure.
+    ///
+    /// The keychain read here refuses interaction on purpose. An MCP client starts the bridge with
+    /// no window session of its own, and a keychain item created by another binary — which the app's
+    /// item is, from the bridge's point of view — otherwise puts up an authorization panel: measured
+    /// on a bridge started from a shell, `SecItemCopyMatching` had not returned after 25 seconds and
+    /// nothing had been printed. To the MCP client that is a server that never answers.
+    /// `kSecUseAuthenticationUIFail` turns that into `errSecInteractionNotAllowed` straight away, and
+    /// the message says to put the token in the client's configuration.
+    public static func forClient(service: String? = nil, account: String = defaultAccount) -> ClientToken {
         if let fromEnvironment = environmentToken() {
-            return Resolution(token: fromEnvironment, origin: "\(environmentKey) environment variable")
+            return .resolved(Resolution(token: fromEnvironment, origin: "\(environmentKey) environment variable"))
         }
 
         let service = service ?? self.service
-        guard let stored = ((try? read(service: service, account: account)) ?? nil) else {
-            return nil
+        do {
+            if let stored = try read(service: service, account: account, allowingInteraction: false) {
+                return .resolved(Resolution(token: stored, origin: "keychain item \(service)"))
+            }
+            return .missing(
+                reason: "there is no keychain item \(service). The M3MCP app creates it on its first start."
+            )
+        } catch CapabilityToken.Failure.keychain(let status, _)
+            where status == errSecInteractionNotAllowed || status == errSecAuthFailed
+                || status == errSecUserCanceled {
+            // errSecAuthFailed is what the file-based keychain returns for "I would have asked, and
+            // I was told not to". It reads like a wrong password and means a refused ACL.
+            return .missing(
+                reason: "the keychain item \(service) exists, but this binary may not read it without asking "
+                    + "you first, and a bridge started by an MCP client has no way to ask."
+            )
+        } catch {
+            return .missing(reason: error.localizedDescription)
         }
-        return Resolution(token: stored, origin: "keychain item \(service)")
+    }
+
+    /// The token a client presents, or nil when none is configured.
+    public static func existing(service: String? = nil, account: String = defaultAccount) -> Resolution? {
+        forClient(service: service, account: account).resolution
     }
 
     // MARK: - Primitives
@@ -134,7 +177,26 @@ public enum CapabilityToken {
 
     // MARK: - Keychain
 
-    public static func read(service: String, account: String) throws -> String? {
+    /// `allowingInteraction: false` is what keeps a read bounded.
+    ///
+    /// Without it `SecItemCopyMatching` waits for the authorization panel with no deadline of its
+    /// own. That is right in an app with a window and is a hang anywhere else — measured on the
+    /// bridge reading an item another binary created: no answer after 25 seconds and nothing on
+    /// stdout, which an MCP client sees as a server that never replies.
+    ///
+    /// What does the bounding is `SecKeychainSetUserInteractionAllowed`, deprecated since 10.10 and
+    /// still the only thing that works here. `kSecUseAuthenticationUI` was tried first and measured:
+    /// with `…UIFail` and with `…UISkip` alike the call still had not returned after 20 seconds,
+    /// because those govern the modern authentication path and not the ACL prompt of the file-based
+    /// login keychain, which is the keychain an app without entitlements gets. With the legacy switch
+    /// the same read comes back in 15 milliseconds as `errSecAuthFailed`.
+    ///
+    /// The switch is process-wide, so the previous value goes back before returning.
+    public static func read(
+        service: String,
+        account: String,
+        allowingInteraction: Bool = true
+    ) throws -> String? {
         let query: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrService as String: service,
@@ -144,7 +206,9 @@ public enum CapabilityToken {
         ]
 
         var item: CFTypeRef?
-        let status = SecItemCopyMatching(query as CFDictionary, &item)
+        let status = allowingInteraction
+            ? SecItemCopyMatching(query as CFDictionary, &item)
+            : copyWithoutInteraction(query, into: &item)
         switch status {
         case errSecSuccess:
             guard let data = item as? Data, let token = String(data: data, encoding: .utf8) else {
@@ -197,6 +261,21 @@ public enum CapabilityToken {
         guard status == errSecSuccess || status == errSecItemNotFound else {
             throw Failure.keychain(status, "delete")
         }
+    }
+
+    /// The one place the deprecated switch is touched, and deprecated itself so the warning lands
+    /// here, once, next to the explanation instead of three times inside it.
+    @available(
+        macOS,
+        deprecated: 10.10,
+        message: "SecKeychainSetUserInteractionAllowed has no replacement that covers the file-based login keychain. Measured, not assumed: see read(service:account:allowingInteraction:)."
+    )
+    private static func copyWithoutInteraction(_ query: [String: Any], into item: inout CFTypeRef?) -> OSStatus {
+        var wasAllowed: DarwinBoolean = true
+        _ = SecKeychainGetUserInteractionAllowed(&wasAllowed)
+        _ = SecKeychainSetUserInteractionAllowed(false)
+        defer { _ = SecKeychainSetUserInteractionAllowed(wasAllowed.boolValue) }
+        return SecItemCopyMatching(query as CFDictionary, &item)
     }
 
     private static func environmentToken() -> String? {

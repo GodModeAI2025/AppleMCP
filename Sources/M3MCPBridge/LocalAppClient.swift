@@ -21,6 +21,9 @@ final class LocalAppClient {
     /// bridge on a machine with no app, no keychain item and no token.
     private var credentials: CapabilityToken.Resolution??
 
+    /// Why there is no token, kept so the refusal can say it.
+    private var missingTokenReason: String?
+
     /// Speech recognition and transcript searches can take minutes; a short timeout would report the
     /// app as unreachable while it is still working.
     init(socketURL: URL = M3MCPEndpoint.socketURL, timeout: TimeInterval = 600) {
@@ -32,9 +35,15 @@ final class LocalAppClient {
         if let credentials {
             return credentials
         }
-        let resolved = CapabilityToken.existing()
-        credentials = resolved
-        return resolved
+        switch CapabilityToken.forClient() {
+        case .resolved(let resolution):
+            credentials = .some(resolution)
+            return resolution
+        case .missing(let reason):
+            missingTokenReason = reason
+            credentials = .some(nil)
+            return nil
+        }
     }
 
     func call(tool: String, arguments: [String: Any]) async -> ToolResponse {
@@ -44,10 +53,11 @@ final class LocalAppClient {
             return ToolResponse(
                 ok: false,
                 source: "M3MCPBridge",
-                message: "No capability token, so M3MCPApp will refuse this call. Open the M3MCP app, "
-                    + "choose Server › Copy MCP Client Token, and add it to this client's configuration "
-                    + "as \"env\": {\"\(CapabilityToken.environmentKey)\": \"<token>\"}. The bridge otherwise "
-                    + "reads it from the login keychain, which needs the app to have run at least once."
+                message: "No capability token, so M3MCPApp will refuse this call: "
+                    + (missingTokenReason ?? "none is configured.")
+                    + " Open the M3MCP app, choose Server › Copy MCP Client Token, and add it to this "
+                    + "client's configuration as \"env\": {\"\(CapabilityToken.environmentKey)\": "
+                    + "\"<token>\"}. That path needs no keychain access at all."
             )
         }
 

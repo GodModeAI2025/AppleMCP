@@ -230,6 +230,62 @@ final class SocketAuthenticationTests: XCTestCase {
         XCTAssertNil(first.rangeOfCharacter(from: CharacterSet(charactersIn: "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_").inverted))
     }
 
+    /// The keychain path of a client, which is the default for anyone without `M3MCP_TOKEN`.
+    ///
+    /// The item is written here, so its ACL belongs to this test binary and not to the bridge — the
+    /// same relationship the bridge has with the item the app writes. Measured before this test
+    /// existed: `SecItemCopyMatching` had not returned after 25 seconds and the bridge had printed
+    /// nothing, which an MCP client cannot tell from a server that is broken. What is asserted is
+    /// therefore the answer, not its content: the bridge has to come back, and quickly.
+    func testTheBridgeAnswersWhenItMayNotReadTheKeychainItem() throws {
+        let bridge = try XCTUnwrap(Self.bridgeExecutable(), "M3MCPBridge is not built; run swift build first")
+        let service = "de.markzimmermann.m3mcp.test.\(UUID().uuidString)"
+
+        do {
+            try CapabilityToken.write(token: try CapabilityToken.generate(), service: service, account: "default")
+        } catch {
+            throw XCTSkip("Keychain is not writable here: \(error.localizedDescription)")
+        }
+        defer { try? CapabilityToken.delete(service: service, account: "default") }
+
+        let started = Date()
+        let output = try run(
+            bridge,
+            input: #"{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"source_status","arguments":{}}}"#,
+            environment: [
+                M3MCPEndpoint.directoryEnvironmentKey: directory.path,
+                CapabilityToken.serviceEnvironmentKey: service
+            ],
+            timeout: 20
+        )
+        let elapsed = Date().timeIntervalSince(started)
+
+        XCTAssertFalse(output.isEmpty, "the bridge answered nothing in \(elapsed)s")
+        XCTAssertLessThan(elapsed, 15, "the bridge took \(elapsed)s to answer")
+        if output.contains("No capability token") {
+            // Whatever the keychain said, the way out has to be in the message.
+            XCTAssertTrue(output.contains(CapabilityToken.environmentKey), output)
+        }
+    }
+
+    /// The other half: refusing interaction must not break the case that needs none.
+    func testAnItemThisBinaryWroteIsReadableWithoutInteraction() throws {
+        let service = "de.markzimmermann.m3mcp.test.\(UUID().uuidString)"
+        let token = try CapabilityToken.generate()
+
+        do {
+            try CapabilityToken.write(token: token, service: service, account: "default")
+        } catch {
+            throw XCTSkip("Keychain is not writable here: \(error.localizedDescription)")
+        }
+        defer { try? CapabilityToken.delete(service: service, account: "default") }
+
+        let started = Date()
+        let read = try CapabilityToken.read(service: service, account: "default", allowingInteraction: false)
+        XCTAssertEqual(read, token)
+        XCTAssertLessThan(Date().timeIntervalSince(started), 5)
+    }
+
     func testKeychainRoundTrip() throws {
         let service = "de.markzimmermann.m3mcp.test.\(UUID().uuidString)"
         let account = "test"
@@ -572,7 +628,14 @@ final class SocketAuthenticationTests: XCTestCase {
         return nil
     }
 
-    private func run(_ executable: URL, input: String, environment: [String: String]) throws -> String {
+    /// Bounded on purpose: a child that never answers has to fail the test, not hang it. That is the
+    /// whole subject of `testTheBridgeAnswersWhenItMayNotReadTheKeychainItem`.
+    private func run(
+        _ executable: URL,
+        input: String,
+        environment: [String: String],
+        timeout: TimeInterval = 60
+    ) throws -> String {
         let process = Process()
         process.executableURL = executable
         var environmentForRun = ProcessInfo.processInfo.environment
@@ -592,8 +655,13 @@ final class SocketAuthenticationTests: XCTestCase {
         stdin.fileHandleForWriting.write(Data((input + "\n").utf8))
         try? stdin.fileHandleForWriting.close()
 
+        let watchdog = DispatchWorkItem {
+            if process.isRunning { process.terminate() }
+        }
+        DispatchQueue.global().asyncAfter(deadline: .now() + timeout, execute: watchdog)
         let output = stdout.fileHandleForReading.readDataToEndOfFile()
         process.waitUntilExit()
+        watchdog.cancel()
         return String(data: output, encoding: .utf8) ?? ""
     }
 }

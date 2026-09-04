@@ -70,6 +70,17 @@ reads it.
   `SocketAuthenticationTests.testIdleConnectionsCannotStarveTheEndpoint` measures it: with 120 idle
   connections in place, `/health` and a tool call used to hit an eight second timeout and now answer
   in 0.04 seconds.
+- **The bridge hung instead of answering when it was not allowed to read the keychain item.** With no
+  `M3MCP_TOKEN` set, the bridge reads the token from the login keychain — an item the app created, so
+  the ACL names the app and a read from the bridge needs the user's confirmation. Measured with an
+  item written by one binary and read by `M3MCPBridge`: `SecItemCopyMatching` had not returned after
+  25 seconds and nothing had been printed, because the panel was waiting in a session an MCP client
+  does not have. `kSecUseAuthenticationUI` turned out not to govern that panel at all — with
+  `…UIFail` and with `…UISkip` the call still hung past 20 seconds — so the client path now turns
+  interaction off with `SecKeychainSetUserInteractionAllowed`, deprecated and the only thing that
+  works on the file-based login keychain. The same read comes back in 15 milliseconds, and the
+  refusal names `M3MCP_TOKEN` and says the keychain item exists but may not be read without asking.
+  The app's own read is untouched and still prompts.
 - **`mail_search` lost body-only matches without saying so.** With `fields` containing `body`
   alongside anything else, the SQL term clause narrowed the candidate rows to subject, sender and
   recipient hits, and the body was then read from those rows only. A message carrying the search term
