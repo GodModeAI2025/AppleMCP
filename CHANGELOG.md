@@ -48,8 +48,26 @@ reads it.
   `ToolCatalog` all the same — the schemas set `additionalProperties: false`, and a client that
   validates its arguments would otherwise drop the parameter and never get past step one.
 
+### Fixed
+
+- **`mail_search` lost body-only matches without saying so.** With `fields` containing `body`
+  alongside anything else, the SQL term clause narrowed the candidate rows to subject, sender and
+  recipient hits, and the body was then read from those rows only. A message carrying the search term
+  solely in its body never became a candidate, was never opened, and the reply still reported
+  `total_exact: true`. The candidate set is now the union of two queries: every row the term clause
+  matches on the indexed fields, which stays exact, and the newest `max_candidates` rows in scope
+  regardless of terms, which is the window the body is read from.
+
 ### Changed
 
+- **`body` is in the default `fields` of `mail_search`.** It was opt-in, so a plain
+  `mail_search("Rechnung")` searched subject, sender and recipients and never opened a message. That
+  costs one file read per message in the scan window, and it is what makes the tool a full-text search
+  rather than a header search.
+- **Honest body-scan metadata.** `meta.body_searchable` was the constant `"true"`, which said nothing.
+  It is replaced by `body_searched`, `body_scan_limit`, `body_scan_capped` and `body_messages_read`.
+  `total_exact` is false exactly when the scan window was full, so an incomplete answer no longer
+  looks like a complete one.
 - **`/health` no longer carries the call history.** It was the same reply as `/status`, so
   `recentActivity` — the last 30 calls with their arguments and results — was readable by anything
   that could open the socket. `/health` stays free of a token because it is the documented probe, and

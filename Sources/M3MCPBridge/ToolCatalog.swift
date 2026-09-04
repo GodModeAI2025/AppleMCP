@@ -141,7 +141,7 @@ enum ToolCatalog {
         ),
         MCPTool(
             name: "mail_search",
-            description: "Read/search messages across every mailbox in the local Apple Mail index — Sent, Archive and user folders included — without driving Mail.app. Always read the response's `meta`: `total` is how many messages match, `has_more`/`truncated` say whether this is the whole set, and `recipients_searchable` says whether recipient matching was available. Page with `offset`. Requires Full Disk Access if the Mail store is protected.",
+            description: "Read/search messages across every mailbox in the local Apple Mail index — Sent, Archive and user folders included — without driving Mail.app. Searches subject, sender, recipients and the message body by default. Always read the response's `meta`: `total` is how many messages match, `has_more`/`truncated` say whether this is the whole set, `recipients_searchable` says whether recipient matching was available, and `body_scan_capped` says whether the body scan stopped before the oldest message in scope. Page with `offset`. Requires Full Disk Access if the Mail store is protected.",
             schema: querySchema(extra: [
                 "offset": ["type": "integer", "description": "Number of matches to skip, for paging. Default 0. Compare with meta.total to know when to stop."],
                 "mailbox": [
@@ -151,7 +151,7 @@ enum ToolCatalog {
                 "fields": [
                     "type": "array",
                     "items": ["type": "string"],
-                    "description": "Which fields to match against: subject, sender, recipients, body. Default [subject, sender, recipients]. sender and recipients match the display name AND the address, so a firstname.lastname query works. body reads message files and is bounded by max_candidates."
+                    "description": "Which fields to match against: subject, sender, recipients, body. All four by default, so a term that appears only inside a message is found without asking for it. sender and recipients match the display name AND the address, so a firstname.lastname query works. body opens message files, which is the slow part: it is bounded by max_candidates, and meta.body_scan_capped says whether that bound was reached. Narrow the list to [subject, sender, recipients] for a fast index-only search."
                 ],
                 "match": [
                     "type": "string",
@@ -166,7 +166,7 @@ enum ToolCatalog {
                     "description": "When true (default), words like 'unread', 'ungelesen', 'today' or '24h' in the query also set the matching filter. Set false to search those words literally; meta.query_rewritten reports whether it fired."
                 ],
                 "since_hours": ["type": "integer", "description": "Only return messages received within the last N hours, e.g. 24. Applied in the query, not after the page was cut."],
-                "max_candidates": ["type": "integer", "description": "Upper bound on messages inspected when body matching is requested. Default 500. meta.scan_capped says whether the bound was reached."]
+                "max_candidates": ["type": "integer", "description": "How many messages the body scan opens, newest first, when body is among the fields. Default 500, maximum 5000. Matches on subject, sender and recipients are not bounded by it — they come from the index. meta.body_scan_capped says whether older messages were left unopened."]
             ])
         ),
         MCPTool(

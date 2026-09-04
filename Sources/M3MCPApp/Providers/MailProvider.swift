@@ -193,11 +193,14 @@ final class MailProvider {
                     .filter { !$0.isEmpty }
             }
 
-            let asked = MailProvider.stringList(input, "fields") ?? ["subject", "sender", "recipients"]
+            // body is in the default. It was not, which meant a plain mail_search("Rechnung") never
+            // opened a single message and said nothing about it: the caller had to know that body
+            // was opt-in to get a full-text search at all.
+            let asked = MailProvider.stringList(input, "fields") ?? SearchRequest.allFields
             let normalised = asked
                 .map { StringSanitizer.lower($0) }
                 .filter { SearchRequest.allFields.contains($0) }
-            fields = normalised.isEmpty ? ["subject", "sender", "recipients"] : normalised
+            fields = normalised.isEmpty ? SearchRequest.allFields : normalised
 
             // 500, not 50. The old ceiling was low enough that a week of mail did not fit in one
             // response, and nothing said so.
@@ -213,6 +216,12 @@ final class MailProvider {
         }
 
         var searchesBody: Bool { fields.contains("body") && !terms.isEmpty }
+
+        /// Whether any field is one SQL can match on. When none is, the candidate set is the scan
+        /// window alone and the second query would only repeat the first.
+        var searchesIndexedFields: Bool {
+            fields.contains { $0 == "subject" || $0 == "sender" || $0 == "recipients" }
+        }
     }
 
     // MARK: - Search
@@ -246,15 +255,56 @@ final class MailProvider {
 
         let clause = try buildWhere(request, schema: schema, mailboxIDs: selected)
 
-        // Body matching cannot be expressed in SQL — the text is in the .emlx files. So a body search
-        // reads a bounded candidate window and filters it here, and says both things in the metadata:
-        // how many rows it looked at, and whether that window was itself cut short.
+        // Body matching cannot be expressed in SQL — the text is in the .emlx files — so a body search
+        // reads candidate messages and filters them here. Which rows become candidates is the whole
+        // question, and getting it wrong was silent.
+        //
+        // It used to be "the rows the SQL term clause matched". With fields = [subject, body] that
+        // clause only matches subjects, so a message carrying the word solely in its body never became
+        // a candidate, was never read, and the reply still said total_exact: true. A miss that reports
+        // itself as a complete answer is worse than a miss.
+        //
+        // The candidate set is now the union of two queries:
+        //   * every row the term clause matches on the indexed fields, which stays exact and cheap;
+        //   * the newest `max_candidates` rows in scope regardless of terms, which is the window the
+        //     body is actually read from.
+        // Only the second can be cut short, and when it is, `meta.body_scan_capped` says so and
+        // `meta.total_exact` turns false.
         if request.searchesBody {
-            let candidates = try fetchRows(
-                request, schema: schema, clause: clause, database: database,
+            let scanClause = try buildWhere(
+                request, schema: schema, mailboxIDs: selected, includeTermPredicates: false
+            )
+
+            let indexMatches: [MailRow]
+            if request.searchesIndexedFields, clause.sql != scanClause.sql {
+                indexMatches = try fetchRows(
+                    request, schema: schema, clause: clause, database: database,
+                    limit: request.maxCandidates, offset: 0
+                )
+            } else {
+                indexMatches = []
+            }
+
+            let scanWindow = try fetchRows(
+                request, schema: schema, clause: scanClause, database: database,
                 limit: request.maxCandidates, offset: 0
             )
-            let scanCapped = candidates.count >= request.maxCandidates
+            let bodyScanCapped = scanWindow.count >= request.maxCandidates
+            let indexCapped = indexMatches.count >= request.maxCandidates
+            let scanCapped = bodyScanCapped || indexCapped
+
+            var seen = Set<String>()
+            var candidates: [MailRow] = []
+            for row in indexMatches + scanWindow where seen.insert(row.id).inserted {
+                candidates.append(row)
+            }
+            candidates.sort { lhs, rhs in
+                let left = lhs.receivedDate ?? .distantPast
+                let right = rhs.receivedDate ?? .distantPast
+                if left != right { return left > right }
+                return (Int(lhs.id) ?? 0) > (Int(rhs.id) ?? 0)
+            }
+
             let recipientText = request.fields.contains("recipients") || request.includeRecipients
                 ? try readRecipients(database: database, schema: schema, messageIDs: candidates.map { $0.id })
                 : [:]
@@ -292,7 +342,13 @@ final class MailProvider {
                 meta: baseMeta(request, schema: schema, mailboxes: mailboxes, total: matched.count,
                                returned: items.count, totalExact: !scanCapped, hasMore: hasMore,
                                scanned: candidates.count, scanCapped: scanCapped,
-                               mailboxFilterMatched: mailboxFilterMatched)
+                               mailboxFilterMatched: mailboxFilterMatched,
+                               bodyScan: BodyScan(
+                                   performed: true,
+                                   limit: request.maxCandidates,
+                                   capped: bodyScanCapped,
+                                   messagesRead: candidates.count
+                               ))
             )
         }
 
@@ -344,7 +400,8 @@ final class MailProvider {
         hasMore: Bool,
         scanned: Int,
         scanCapped: Bool,
-        mailboxFilterMatched: Int
+        mailboxFilterMatched: Int,
+        bodyScan: BodyScan = .notPerformed
     ) -> [String: String] {
         [
             "returned": String(returned),
@@ -367,8 +424,24 @@ final class MailProvider {
             "mailbox_filter_matched": String(mailboxFilterMatched),
             "mailboxes_known": String(mailboxes.count),
             "recipients_searchable": String(schema.canSearchRecipients),
-            "body_searchable": "true"
+            // Was hardcoded "true", which said nothing: it was true whether or not a body had been
+            // opened. These four report what actually happened.
+            "body_searched": String(bodyScan.performed),
+            "body_scan_limit": String(bodyScan.limit),
+            "body_scan_capped": String(bodyScan.capped),
+            "body_messages_read": String(bodyScan.messagesRead)
         ]
+    }
+
+    /// What a body search did, for `meta`. A body search is bounded by `max_candidates`; when the
+    /// window is full there are older messages nobody looked inside, and the caller has to be told.
+    private struct BodyScan {
+        let performed: Bool
+        let limit: Int
+        let capped: Bool
+        let messagesRead: Int
+
+        static let notPerformed = BodyScan(performed: false, limit: 0, capped: false, messagesRead: 0)
     }
 
     private func message(items: [DataItem], hasMore: Bool, scanCapped: Bool, request: SearchRequest) -> String? {
@@ -379,7 +452,7 @@ final class MailProvider {
             return "No matching messages found in the local Mail index."
         }
         if scanCapped {
-            return "Body search inspected \(request.maxCandidates) candidate messages; meta.scan_capped is true and meta.total is a lower bound. Raise max_candidates to search further back."
+            return "Body search read the newest \(request.maxCandidates) messages in scope; older ones were not opened, so meta.total is a lower bound and meta.body_scan_capped is true. Raise max_candidates, or narrow the search with mailbox or since_hours."
         }
         if hasMore {
             return "meta.has_more is true: this is not the whole result set. Page with offset."
@@ -490,10 +563,15 @@ final class MailProvider {
         let bindings: [String]
     }
 
+    /// `includeTermPredicates: false` drops the search terms and keeps only the scope filters —
+    /// deleted, junk, unread, time window, mailbox. That is the window a body search reads from: the
+    /// terms cannot be applied in SQL for the body, so applying them to the candidates is what threw
+    /// body-only matches away.
     private func buildWhere(
         _ request: SearchRequest,
         schema: MailSchema,
-        mailboxIDs: Set<String>?
+        mailboxIDs: Set<String>?,
+        includeTermPredicates: Bool = true
     ) throws -> WhereClause {
         var predicates: [String] = []
         var bindings: [String] = []
@@ -534,7 +612,7 @@ final class MailProvider {
         // One clause per term, ORed across the requested fields and ANDed across the terms — so
         // "Graph API" means both words somewhere in the scoped fields rather than that exact string,
         // which returned nothing.
-        if !request.terms.isEmpty {
+        if includeTermPredicates, !request.terms.isEmpty {
             var termClauses: [String] = []
             for term in request.terms {
                 var fieldClauses: [String] = []
