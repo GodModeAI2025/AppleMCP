@@ -2,12 +2,21 @@
 
 ## apple-voice-memo-mcp
 
-The Voice Memos provider (`Sources/M3MCPApp/Providers/VoiceMemosProvider.swift`,
-`Sources/M3MCPApp/Support/VoiceMemoTranscript.swift`, and
-`Sources/M3MCPApp/Support/SpeechTranscriber.swift`) is a Swift port of
-[apple-voice-memo-mcp](https://github.com/jwulff/apple-voice-memo-mcp) by John Wulff. The original
-project is a TypeScript MCP server with a Swift transcription helper; the store layout, the `tsrp`
-transcript format, and the shape of the tools are derived from it.
+Parts of the Voice Memos store access, transcript parser, and tool design are derived from
+[apple-voice-memo-mcp](https://github.com/jwulff/apple-voice-memo-mcp) by John Wulff. The current
+derived implementation is primarily in:
+
+- `Sources/M3MCPApp/Providers/VoiceMemosProvider.swift`
+- `Sources/M3MCPCore/VoiceMemoTranscript.swift`
+- `Tests/M3MCPCoreTests/VoiceMemoTranscriptTests.swift`
+
+The original project is a TypeScript MCP server with a Swift transcription helper. AppleMCP's
+subsequent WAL snapshot, parser hardening, macOS 26 speech path, cache, temporary-file controls, and
+security policy are later AppleMCP work rather than claims about upstream behavior.
+
+Repository provenance records the initial AppleMCP import in commit
+[`56ec977f4bcc7ef79f1ac4590e9ba69dce19100b`](https://github.com/GodModeAI2025/AppleMCP/commit/56ec977f4bcc7ef79f1ac4590e9ba69dce19100b).
+That import did not record an exact upstream commit, so this notice does not invent one.
 
 ```
 MIT License

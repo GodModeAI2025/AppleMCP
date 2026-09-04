@@ -1,53 +1,96 @@
-name: Release
+name: Release candidate
 
-# A v* tag builds the artifact and attaches it to a draft release. Publishing is a separate,
-# deliberate act by a human, which is why the release is created as a draft.
+# A v* tag runs the complete CI contract and attests the checked ZIP. Repository administrators
+# must separately protect tag creation and the release environment. Draft creation also requires an
+# explicit repository-variable opt-in; publication remains a separate human decision because the
+# default artifact is ad-hoc signed and unnotarized.
 on:
   push:
     tags:
       - 'v*'
 
-permissions:
-  contents: read
+permissions: {}
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
 
 jobs:
-  release:
-    name: Package and attach
-    # macos-26 for the same reason ci.yml uses it: Package.swift weak-links FoundationModels, which
-    # only exists in the macOS 26 SDK, so an older image fails at the link step.
-    runs-on: macos-26
+  verify:
+    uses: ./.github/workflows/ci.yml
     permissions:
+      contents: read
+
+  attest:
+    needs: verify
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      actions: read
+      attestations: write
+      contents: read
+      id-token: write
+    steps:
+      - name: Download checked payload
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: m3mcp-release-${{ github.sha }}
+          path: ${{ runner.temp }}/release-payload
+
+      - name: Attest ZIP provenance
+        uses: actions/attest-build-provenance@977bb373ede98d70efdf65b84cb5f73e068dcc2a # v3.0.0
+        with:
+          subject-path: ${{ runner.temp }}/release-payload/M3MCP.app.zip
+
+  draft-release:
+    needs: [verify, attest]
+    if: vars.M3MCP_ENABLE_DRAFT_RELEASE == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment: release
+    permissions:
+      actions: read
       contents: write
     steps:
-      - uses: actions/checkout@v4
+      - name: Download checked payload
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: m3mcp-release-${{ github.sha }}
+          path: ${{ runner.temp }}/release-payload
 
-      # Every step below calls a script in the repository. Nothing here embeds packaging logic,
-      # because logic that lives only in a workflow can only be tested by pushing a tag.
-      - name: Tag matches the version in CHANGELOG.md
+      - name: Verify transferred checksum
+        working-directory: ${{ runner.temp }}/release-payload
+        run: sha256sum -c M3MCP.app.zip.sha256
+
+      # This is the only job with a repository write token. It has no checkout and does not execute
+      # the candidate or a repository script. Re-runs replace assets only while the release is a draft.
+      - name: Create opt-in draft candidate
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
         run: |
           set -euo pipefail
-          tag="${GITHUB_REF_NAME}"
-          changelog="$(script/version.sh)"
-          echo "tag: $tag, CHANGELOG.md: $changelog"
-          if [ "${tag#v}" != "$changelog" ]; then
-            echo "::error::Tag $tag does not match the version CHANGELOG.md names ($changelog). Move the Unreleased entries under a '## ${tag#v}' heading, or tag v$changelog." >&2
-            exit 1
+          payload="$RUNNER_TEMP/release-payload"
+          title="$GITHUB_REF_NAME (ad-hoc, unnotarized candidate)"
+          if existing_draft="$(gh release view "$GITHUB_REF_NAME" --json isDraft --jq .isDraft 2>/dev/null)"; then
+            if [ "$existing_draft" != "true" ]; then
+              echo "::error::Refusing to replace assets on an already-published release." >&2
+              exit 1
+            fi
+            gh release edit "$GITHUB_REF_NAME" \
+              --draft \
+              --title "$title" \
+              --notes-file "$payload/release-notes.md"
+            gh release upload "$GITHUB_REF_NAME" \
+              "$payload/M3MCP.app.zip" \
+              "$payload/M3MCP.app.zip.sha256" \
+              --clobber
+          else
+            gh release create "$GITHUB_REF_NAME" \
+              "$payload/M3MCP.app.zip" \
+              "$payload/M3MCP.app.zip.sha256" \
+              --draft \
+              --verify-tag \
+              --title "$title" \
+              --notes-file "$payload/release-notes.md"
           fi
-
-      - name: Package
-        run: script/package_release.sh dist
-
-      - name: Check the artifact
-        run: script/check_release_artifact.sh dist
-
-      - name: Release notes from CHANGELOG.md
-        run: script/version.sh --section > dist/release-notes.md
-
-      - uses: softprops/action-gh-release@v2
-        with:
-          # A draft, so the owner reads the notes and the checksum before anything is public.
-          draft: true
-          body_path: dist/release-notes.md
-          files: |
-            dist/M3MCP.app.zip
-            dist/M3MCP.app.zip.sha256

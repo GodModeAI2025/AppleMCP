@@ -6,7 +6,7 @@ APP_NAME="M3MCPApp"
 BUNDLE_NAME="M3MCP"
 BUNDLE_ID="de.markzimmermann.m3mcp"
 MIN_SYSTEM_VERSION="15.0"
-SIGN_IDENTITY="${M3MCP_CODESIGN_IDENTITY:-}"
+SIGN_IDENTITY=""
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 DIST_DIR="$ROOT_DIR/dist"
@@ -16,6 +16,22 @@ APP_MACOS="$APP_CONTENTS/MacOS"
 APP_BINARY="$APP_MACOS/$APP_NAME"
 INFO_PLIST="$APP_CONTENTS/Info.plist"
 SOURCE_INFO_PLIST="$ROOT_DIR/Sources/M3MCPApp/Resources/Info.plist"
+source "$ROOT_DIR/script/signing_identity.sh"
+# shellcheck source=lib/codesign.sh
+source "$ROOT_DIR/script/lib/codesign.sh"
+
+pick_identity() {
+  # The verified listing supplies Apple-issued identities. The unfiltered listing is consulted only
+  # for the exact intentionally self-signed local identity and its expected NOT_TRUSTED state.
+  local valid all
+  valid="$(security find-identity -p codesigning -v 2>/dev/null || true)"
+  all="$(security find-identity -p codesigning 2>/dev/null || true)"
+  if [[ -n "${M3MCP_CODESIGN_IDENTITY:-}" ]]; then
+    m3mcp_resolve_explicit_identity_from_listings "$M3MCP_CODESIGN_IDENTITY" "$valid" "$all"
+    return
+  fi
+  m3mcp_pick_identity_from_listings "$valid" "$all" || true
+}
 
 pkill -x "$APP_NAME" >/dev/null 2>&1 || true
 
@@ -29,9 +45,7 @@ chmod +x "$APP_BINARY"
 cp "$SOURCE_INFO_PLIST" "$INFO_PLIST"
 /usr/bin/xattr -cr "$APP_BUNDLE" >/dev/null 2>&1 || true
 
-if [[ -z "$SIGN_IDENTITY" ]]; then
-  SIGN_IDENTITY="$(/usr/bin/security find-identity -p codesigning -v 2>/dev/null | /usr/bin/awk -F '"' '/M3MCP Local Development|Apple Development|Developer ID Application/ { print $2; exit }')"
-fi
+SIGN_IDENTITY="$(pick_identity)"
 
 if [[ -n "$SIGN_IDENTITY" ]]; then
   echo "Signing with identity: $SIGN_IDENTITY"
@@ -42,6 +56,10 @@ else
 fi
 
 /usr/bin/codesign --verify --deep --strict "$APP_BUNDLE"
+
+if [[ -n "$SIGN_IDENTITY" ]]; then
+  m3mcp_reject_expired_or_revoked_signature "$APP_BUNDLE" "$SIGN_IDENTITY"
+fi
 
 open_app() {
   /usr/bin/open -n "$APP_BUNDLE"

@@ -3,8 +3,8 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>AppleMCP — Local Apple Data for AI Assistants</title>
-    <meta name="description" content="Native macOS MCP server giving AI assistants local access to Mail, Calendar, Contacts, Notes, Photos, Reminders, Voice Memos, and Apple Intelligence.">
+    <title>AppleMCP — Bounded Local Apple Data for AI Assistants</title>
+    <meta name="description" content="Native macOS MCP server with safe defaults and bounded access to local Mail, Calendar, Contacts, Notes, Photos, Reminders, Voice Memos, and selected Apple Intelligence APIs.">
     <style>
         :root {
             --bg: #0d1117;
@@ -143,13 +143,13 @@
     <div class="container">
         <header>
             <h1>AppleMCP</h1>
-            <p>Native macOS MCP server that gives AI assistants local access to your Apple data and Apple Intelligence.</p>
+            <p>Native macOS MCP server with a default-safe tool set, bounded local data access, and native approval for optional Calendar mutations and user Shortcuts.</p>
             <div class="badge-row">
                 <span class="badge blue">macOS 15+</span>
                 <span class="badge blue">Swift</span>
                 <span class="badge">MCP Protocol</span>
                 <span class="badge">Local-first</span>
-                <span class="badge">Unix socket, no TCP port</span>
+                <span class="badge">Safe defaults</span>
             </div>
         </header>
 
@@ -158,11 +158,11 @@
             <div class="grid">
                 <div class="card">
                     <h3>Mail</h3>
-                    <p>Search and read emails from the local Mail index. Full body, sender, recipients, dates. AppleScript fallback when Full Disk Access is unavailable.</p>
+                    <p>Search and read the local Mail index and <code>.emlx</code> files. No Mail Automation fallback; source and returned body sizes are bounded.</p>
                 </div>
                 <div class="card">
                     <h3>Calendar</h3>
-                    <p>Search events via EventKit. Titles, locations, times, notes, all-day status, and calendar membership. Five tools also write: create, update and delete events, create and delete calendars. There is no undo.</p>
+                    <p>Search events via EventKit. Calendar mutations are a separate launch-time opt-in and require native approval for every call.</p>
                 </div>
                 <div class="card">
                     <h3>Contacts</h3>
@@ -170,19 +170,19 @@
                 </div>
                 <div class="card">
                     <h3>Notes</h3>
-                    <p>Search and read Apple Notes via Automation. Full note content, folder structure, modification dates.</p>
+                    <p>Search and read Apple Notes via Automation. Direct reads are capped at 65,536 characters and report truncation.</p>
                 </div>
                 <div class="card">
                     <h3>Reminders</h3>
-                    <p>Search reminders via EventKit. The query matches title, notes and list name, and completion status is the one filter. Due date and priority come back as metadata; results are sorted by due date.</p>
+                    <p>Search reminder titles, notes, and list names via EventKit; filter by completion status. Due date and priority are returned as metadata, not filter arguments.</p>
                 </div>
                 <div class="card">
                     <h3>Photos</h3>
-                    <p>Search Photos library metadata via Photos.framework. Albums, media types, dimensions, dates.</p>
+                    <p>Search Photos library metadata via Photos.framework. PhotoKit calls the required TCC level read/write; these tools do not mutate the library.</p>
                 </div>
                 <div class="card">
                     <h3>Voice Memos</h3>
-                    <p>Search recordings in the local CloudRecordings store, read the transcript macOS stores inside each <code>.m4a</code>, or transcribe with Speech.framework, on device where the locale has a model and through Apple's speech service where it does not. What it recognizes is written to Application Support, which makes a second call for the same recording cheap. Nothing removes those files afterwards.</p>
+                    <p>Search the local CloudRecordings store, read in-file transcripts, or transcribe only when an on-device speech model is available. Fresh non-empty transcripts are cached owner-only in Application Support without automatic expiry.</p>
                 </div>
             </div>
         </section>
@@ -192,19 +192,41 @@
             <div class="grid">
                 <div class="card">
                     <h3>Writing Tools</h3>
-                    <p>Summarize, rewrite, proofread, or change tone. The text goes through a Shortcut named Writing Tools that you create yourself; without it the tool reports that Writing Tools is not reachable.</p>
+                    <p>Optional user-created <code>Writing Tools</code> Shortcut. Disabled by default, open-world, and approved one call at a time.</p>
                 </div>
                 <div class="card">
                     <h3>Translation</h3>
-                    <p>Translate text between languages through a Shortcut named Translate that you create yourself, driven by <code>/usr/bin/python3</code>. Whether the translation stays on the Mac depends on the language pair Shortcuts and Translate have downloaded.</p>
+                    <p>Optional user-created <code>Translate</code> Shortcut with a versioned JSON contract and one-call native approval.</p>
                 </div>
                 <div class="card">
                     <h3>Image Playground</h3>
-                    <p>Generate images from text via the native ImagePlayground API. No app launch, pure API. Each call writes a PNG into the temporary directory and returns its path.</p>
+                    <p>Generate an owner-only temporary PNG through the native ImagePlayground API. The caller can consume it before exact-name stale cleanup after 24 hours.</p>
                 </div>
                 <div class="card">
                     <h3>On-Device Summaries</h3>
-                    <p>Summarize text and extract action items with the Apple Intelligence language model. Runs locally, needs no Shortcut, pairs with voice-memo transcripts. macOS 26.</p>
+                    <p>Summarize text and extract action items with the on-device Foundation Models API. No user Shortcut; macOS 26.</p>
+                </div>
+            </div>
+        </section>
+
+        <section>
+            <h2>Safe by Default</h2>
+            <div class="grid">
+                <div class="card">
+                    <h3>21 default tools</h3>
+                    <p>Observation and bounded local processing are available. Calendar mutation, permission UI, and user Shortcuts are absent.</p>
+                </div>
+                <div class="card">
+                    <h3>Three separate opt-ins</h3>
+                    <p><code>M3MCP_ENABLE_CALENDAR_MUTATIONS</code>, <code>M3MCP_ENABLE_PERMISSION_UI</code>, and <code>M3MCP_ENABLE_USER_SHORTCUTS</code> are resolved only at launch.</p>
+                </div>
+                <div class="card">
+                    <h3>One-call approval</h3>
+                    <p>Every enabled Calendar mutation and Shortcut call gets its own default-deny native sheet. Approval is never reused.</p>
+                </div>
+                <div class="card">
+                    <h3>Honest local boundary</h3>
+                    <p>The socket is owner-only, but an unsandboxed process running as the same user can normally connect. Full Disk Access raises that trust requirement.</p>
                 </div>
             </div>
         </section>
@@ -217,52 +239,53 @@
         |
    M3MCPBridge (lightweight CLI)
         |
-   HTTP over Unix socket (0600)
+   bounded HTTP over Unix socket (0600)
         |
    M3MCPApp (SwiftUI, holds TCC permissions)
         |
    EventKit / Contacts / Photos / Mail Index / Voice Memos Store
-   Speech / FoundationModels / AppleScript</div>
+   Speech / FoundationModels / ImagePlayground / Apple Events</div>
         </section>
 
         <section>
             <h2>Download</h2>
-            <p>Each release carries <code>M3MCP.app.zip</code> and a checksum file. The ZIP holds the app and the bridge binary, so an MCP client can be pointed at the download without a checkout.</p>
+            <p>After maintainer review and publication, a GitHub release may provide <code>M3MCP.app.zip</code> and <code>M3MCP.app.zip.sha256</code>. The ZIP contains the app, MCP bridge, Apache-2.0 license, and retained third-party notices.</p>
 <pre><code>curl -LO https://github.com/GodModeAI2025/AppleMCP/releases/latest/download/M3MCP.app.zip
 curl -LO https://github.com/GodModeAI2025/AppleMCP/releases/latest/download/M3MCP.app.zip.sha256
 shasum -a 256 -c M3MCP.app.zip.sha256
+gh attestation verify M3MCP.app.zip \
+  --repo GodModeAI2025/AppleMCP \
+  --signer-workflow GodModeAI2025/AppleMCP/.github/workflows/release.yml  # optional
 unzip M3MCP.app.zip
-mv M3MCP.app /Applications/
 
 # Point the MCP client at the bridge inside the bundle
-claude mcp add applemcp /Applications/M3MCP.app/Contents/MacOS/M3MCPBridge</code></pre>
-            <p style="margin-top: 16px;"><strong>Apple Silicon only.</strong> The build has one architecture, <code>arm64</code>. On an Intel Mac it will not start, and building from source is the way in.</p>
-            <p style="margin-top: 12px;"><strong>The app carries no Apple signature.</strong> It is signed ad hoc: no Developer ID, no notarisation, nothing Apple has inspected. <code>spctl --assess --type execute</code> answers <code>rejected</code>.</p>
-            <p style="margin-top: 12px;"><strong>On the path above, nothing checks it for you.</strong> <code>curl</code> does not mark the download and <code>unzip</code> does not carry a mark into the bundle, so the app opens without a word from macOS. That is what makes the checksum line worth running. Through a browser it is different: Safari marks the file, Archive Utility carries the mark into the unpacked app, and the first launch produces a dialog saying macOS cannot verify the app. Open it once, dismiss the dialog, then go to System Settings, Privacy &amp; Security and choose <strong>Open Anyway</strong>. Right-click and Open stopped working for apps that are not notarised.</p>
-            <p style="margin-top: 12px;"><strong>The Full Disk Access grant does not survive an update.</strong> An ad-hoc signature pins the designated requirement to the binary hash, so the next release is a different app as far as macOS is concerned. The source build below signs with a stable local certificate and keeps the grant.</p>
+claude mcp add applemcp /absolute/path/M3MCP.app/Contents/MacOS/M3MCPBridge</code></pre>
+            <p style="margin-top: 16px;"><strong>Candidate status.</strong> The automated build is Apple Silicon only (<code>arm64</code>), ad-hoc signed, and unnotarized. It is not a production-grade macOS distribution.</p>
+            <p style="margin-top: 12px;"><strong>Verification has limits.</strong> The checksum detects a mismatch against the asset recorded in the same GitHub release; alone it does not establish independent publisher authenticity. GitHub provenance binds the ZIP to this repository's workflow, but does not replace Apple Developer ID signing and notarization.</p>
+            <p style="margin-top: 12px;"><strong>Respect Gatekeeper.</strong> If macOS blocks the app, verify its origin first and use System Settings, Privacy &amp; Security → <strong>Open Anyway</strong> only when you trust the candidate. Do not remove quarantine metadata merely to bypass the warning.</p>
+            <p style="margin-top: 12px;"><strong>Privacy grants may need renewal after an update.</strong> The source installer below uses a stable local certificate to preserve a consistent development identity. Public production distribution still needs a protected Developer ID, hardened runtime, trusted timestamp, notarization, and stapling pipeline.</p>
         </section>
 
         <section>
             <h2>Setup</h2>
-<pre><code># Build (release, the configuration install_local.sh uses)
-swift build -c release
+<pre><code># Build (requires the macOS 26 SDK; deployment target remains macOS 15)
+swift build
 swift test
 
-# Install and start it under launchd
-# (needs a code-signing identity: ./script/create_local_identity.sh)
-./script/install_local.sh
+# Run the app
+./script/build_and_run.sh
 
 # Add to Claude Desktop (~/Library/Application Support/Claude/claude_desktop_config.json)
 {
   "mcpServers": {
     "applemcp": {
-      "command": "/path/to/AppleMCP/.build/release/M3MCPBridge"
+      "command": "/path/to/AppleMCP/.build/debug/M3MCPBridge"
     }
   }
 }
 
 # Or add to Claude Code
-claude mcp add applemcp /path/to/AppleMCP/.build/release/M3MCPBridge
+claude mcp add applemcp /path/to/AppleMCP/.build/debug/M3MCPBridge
 
 # Check the endpoint
 curl --unix-socket ~/Library/Application\ Support/M3MCP/mcp.sock \
@@ -274,7 +297,8 @@ curl --unix-socket ~/Library/Application\ Support/M3MCP/mcp.sock \
         </div>
 
         <footer>
-            <p>AppleMCP is open source under the Apache 2.0 license. What it reads stays on your device, apart from ai_translate and ai_writing_tools, which pass text to a Shortcut you built, and transcription on locales without an on-device speech model.</p>
+            <p>AppleMCP is open source under Apache 2.0 and local-first. Optional user Shortcuts can network or cause side effects.</p>
+            <p style="margin-top: 8px;"><a href="SECURITY.md" style="color: var(--muted);">Security policy</a> · <a href="docs/SECURITY_MODEL.md" style="color: var(--muted);">Detailed security model</a></p>
             <p style="margin-top: 8px;"><a href="https://godmodeai2025.github.io/MarkZimmermann/" style="color: var(--muted); text-decoration: none;">Impressum</a></p>
         </footer>
     </div>

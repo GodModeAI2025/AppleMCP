@@ -2,6 +2,8 @@ import Foundation
 import M3MCPCore
 
 final class LocalMCPService {
+    typealias ApprovalHandler = @Sendable (M3MCPToolApprovalRequest) async -> Bool
+
     private let calendarProvider = CalendarProvider()
     private let contactsProvider = ContactsProvider()
     private let mailProvider = MailProvider()
@@ -12,6 +14,18 @@ final class LocalMCPService {
     private let appleIntelligenceProvider = AppleIntelligenceProvider()
     private let foundationModelsProvider = FoundationModelsProvider()
     private let permissionProvider = PermissionProvider()
+    private let securityPolicy: M3MCPSecurityPolicy
+    private let approvalHandler: ApprovalHandler?
+
+    /// Resolve the environment once when the service starts. Tests and trusted in-process callers
+    /// can inject a fixed policy without mutating global process state.
+    init(
+        securityPolicy: M3MCPSecurityPolicy = .fromProcessEnvironment(),
+        approvalHandler: ApprovalHandler? = nil
+    ) {
+        self.securityPolicy = securityPolicy
+        self.approvalHandler = approvalHandler
+    }
 
     var services: [ServiceHealth] {
         [
@@ -30,7 +44,7 @@ final class LocalMCPService {
                 // reason is the useful part, and source_status is where a caller looks for it.
                 state: SpeechTranscription.statusDescription
             ),
-            ServiceHealth(name: "Apple Intelligence", endpoint: "macos://intelligence", mode: "AppleScript/Shortcuts/URL scheme", state: "on-demand"),
+            ServiceHealth(name: "Apple Intelligence", endpoint: "macos://intelligence", mode: "ImageCreator + explicitly enabled user Shortcuts", state: "on-demand"),
             ServiceHealth(
                 name: "Foundation Models",
                 endpoint: "macos://foundationmodels",
@@ -43,9 +57,76 @@ final class LocalMCPService {
     }
 
     func handle(tool: String, input: [String: JSONValue]) async -> ToolResponse {
+        guard !Task.isCancelled else {
+            return cancellationResponse(tool: tool)
+        }
+
+        guard let toolName = M3MCPToolName(rawValue: tool) else {
+            return ToolResponse(ok: false, source: "M3MCP", message: "Unknown tool: \(tool)")
+        }
+
+        // The app service is an independent authorization boundary: trusted in-process callers and
+        // the private HTTP endpoint do not get to rely on bridge-side validation. Reject schema
+        // smuggling before launch-policy checks, native approval UI, or any provider call.
+        if let validationError = M3MCPToolArgumentPolicy
+            .forTool(toolName)
+            .validationError(for: input, tool: toolName) {
+            return ToolResponse(
+                ok: false,
+                source: "M3MCP Argument Validation",
+                message: validationError.clientMessage
+            )
+        }
+
+        guard securityPolicy.allows(toolName) else {
+            let variable = M3MCPSecurityPolicy.requiredEnvironmentVariable(for: toolName)
+                ?? "an explicit launch policy"
+            return ToolResponse(
+                ok: false,
+                source: "M3MCP Security Policy",
+                message: "Tool '\(tool)' is disabled by the default-safe policy. Set \(variable)=1 before launching M3MCP to opt in."
+            )
+        }
+
+        // Do not enter an approval flow for a request whose transport has already disappeared.
+        guard !Task.isCancelled else {
+            return cancellationResponse(tool: tool)
+        }
+
+        if M3MCPInteractiveApproval.requiresApproval(for: toolName) {
+            guard let approvalHandler else {
+                return ToolResponse(
+                    ok: false,
+                    source: "M3MCP Interactive Approval",
+                    message: "Tool '\(tool)' requires explicit local approval for every call, but no approval UI is available. Request denied."
+                )
+            }
+
+            let request = M3MCPToolApprovalRequest(tool: toolName, input: input)
+            let approved = await approvalHandler(request)
+            // Cancellation wins over an approval result. In particular, a late click cannot start a
+            // mutation after the requesting bridge has disconnected.
+            guard !Task.isCancelled else {
+                return cancellationResponse(tool: tool)
+            }
+            guard approved else {
+                return ToolResponse(
+                    ok: false,
+                    source: "M3MCP Interactive Approval",
+                    message: "Tool '\(tool)' was not approved in the M3MCP app. No action was performed."
+                )
+            }
+        }
+
+        // This is the last common gate before provider dispatch. Destructive and open-world
+        // providers repeat the check immediately before their own external/irreversible call.
+        guard !Task.isCancelled else {
+            return cancellationResponse(tool: tool)
+        }
+
         let response: ToolResponse
-        switch tool {
-        case "source_status":
+        switch toolName {
+        case .sourceStatus:
             response = ToolResponse(
                 ok: true,
                 source: "M3MCP",
@@ -61,68 +142,74 @@ final class LocalMCPService {
                     )
                 }
             )
-        case "permissions_status":
+        case .permissionsStatus:
             response = await permissionProvider.status()
-        case "permissions_request":
+        case .permissionsRequest:
             response = await permissionProvider.requestAll()
-        case "permissions_open_settings":
+        case .permissionsOpenSettings:
             response = await permissionProvider.openSettings(input: input)
-        case "calendar_search":
+        case .calendarSearch:
             response = await calendarProvider.search(input: input)
-        case "calendar_read_event":
+        case .calendarReadEvent:
             response = await calendarProvider.readEvent(input: input)
-        case "calendar_list_calendars":
+        case .calendarListCalendars:
             response = await calendarProvider.listCalendars(input: input)
-        case "calendar_create_event":
+        case .calendarCreateEvent:
             response = await calendarProvider.createEvent(input: input)
-        case "calendar_update_event":
+        case .calendarUpdateEvent:
             response = await calendarProvider.updateEvent(input: input)
-        case "calendar_delete_event":
+        case .calendarDeleteEvent:
             response = await calendarProvider.deleteEvent(input: input)
-        case "calendar_create_calendar":
+        case .calendarCreateCalendar:
             response = await calendarProvider.createCalendar(input: input)
-        case "calendar_delete_calendar":
+        case .calendarDeleteCalendar:
             response = await calendarProvider.deleteCalendar(input: input)
-        case "contacts_search":
+        case .contactsSearch:
             response = await contactsProvider.search(input: input)
-        case "mail_search":
+        case .mailSearch:
             response = await mailProvider.search(input: input)
-        case "mail_read":
+        case .mailRead:
             response = await mailProvider.read(input: input)
-        case "mail_list_mailboxes":
+        case .mailListMailboxes:
             response = await mailProvider.listMailboxes(input: input)
-        case "reminders_search":
+        case .remindersSearch:
             response = await remindersProvider.search(input: input)
-        case "notes_search":
+        case .notesSearch:
             response = await notesProvider.search(input: input)
-        case "notes_read":
+        case .notesRead:
             response = await notesProvider.read(input: input)
-        case "photos_search":
+        case .photosSearch:
             response = await photosProvider.search(input: input)
-        case "photos_albums":
+        case .photosAlbums:
             response = await photosProvider.getAlbums(input: input)
-        case "voicememos_search":
+        case .voiceMemosSearch:
             response = await voiceMemosProvider.search(input: input)
-        case "voicememos_read":
+        case .voiceMemosRead:
             response = await voiceMemosProvider.read(input: input)
-        case "voicememos_transcript":
+        case .voiceMemosTranscript:
             response = await voiceMemosProvider.transcript(input: input)
-        case "voicememos_audio":
+        case .voiceMemosAudio:
             response = await voiceMemosProvider.audio(input: input)
-        case "voicememos_transcribe":
+        case .voiceMemosTranscribe:
             response = await voiceMemosProvider.transcribe(input: input)
-        case "ai_summarize":
+        case .aiSummarize:
             response = await foundationModelsProvider.summarize(input: input)
-        case "ai_writing_tools":
+        case .aiWritingTools:
             response = await appleIntelligenceProvider.writingTool(input: input)
-        case "ai_translate":
+        case .aiTranslate:
             response = await appleIntelligenceProvider.translate(input: input)
-        case "ai_image_playground":
+        case .aiImagePlayground:
             response = await appleIntelligenceProvider.imagePlayground(input: input)
-        default:
-            response = ToolResponse(ok: false, source: "M3MCP", message: "Unknown tool: \(tool)")
         }
 
         return response
+    }
+
+    private func cancellationResponse(tool: String) -> ToolResponse {
+        ToolResponse(
+            ok: false,
+            source: "M3MCP Cancellation",
+            message: "Tool '\(tool)' was cancelled because its client disconnected. No new action was started after cancellation."
+        )
     }
 }

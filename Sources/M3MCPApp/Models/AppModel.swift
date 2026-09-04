@@ -11,12 +11,25 @@ final class AppModel: ObservableObject {
     @Published private(set) var serverState = "stopped"
     @Published var selectedServiceName: String?
 
-    private let service = LocalMCPService()
+    let securityPolicy: M3MCPSecurityPolicy
+    private let approvalCoordinator: NativeToolApprovalCoordinator
+    private let service: LocalMCPService
+    private let startupCleanupTask = AppStartupCleanupTask()
     private var server: LocalHTTPServer?
 
-    init() {
+    init(securityPolicy: M3MCPSecurityPolicy = .fromProcessEnvironment()) {
+        let approvalCoordinator = NativeToolApprovalCoordinator()
+        self.securityPolicy = securityPolicy
+        self.approvalCoordinator = approvalCoordinator
+        self.service = LocalMCPService(
+            securityPolicy: securityPolicy,
+            approvalHandler: { request in
+                await approvalCoordinator.requestApproval(for: request)
+            }
+        )
         services = service.services
         selectedServiceName = services.first?.name
+
         AppLogger.log("AppModel init")
     }
 
@@ -31,14 +44,18 @@ final class AppModel: ObservableObject {
                 let started = Date()
                 let response = await localService.handle(tool: tool, input: input)
                 let elapsed = Int(Date().timeIntervalSince(started) * 1_000)
-                await MainActor.run {
-                    self?.record(tool: tool, input: input, response: response, durationMilliseconds: elapsed)
+                // A disconnected bridge cancels the connection task. Do not make slot recovery wait
+                // for UI bookkeeping, and do not retain request details for an abandoned call.
+                if !Task.isCancelled {
+                    await MainActor.run {
+                        self?.record(tool: tool, input: input, response: response, durationMilliseconds: elapsed)
+                    }
                 }
                 return response
             },
-            statusHandler: { [weak self] in
+            statusHandler: { [weak self] includeActivity in
                 await MainActor.run {
-                    self?.statusResponse() ?? StatusResponse(
+                    self?.statusResponse(includeActivity: includeActivity) ?? StatusResponse(
                         ok: false,
                         version: m3mcpVersion,
                         endpoint: M3MCPEndpoint.socketURL.path,
@@ -69,6 +86,10 @@ final class AppModel: ObservableObject {
                 durationMilliseconds: 0
             )
         }
+
+        // Socket startup is attempted first. Cleanup is a single, retained application-lifecycle
+        // utility task, not synchronous MainActor work or a side effect of a read-only provider.
+        startupCleanupTask.startIfNeeded()
     }
 
     func stop() {
@@ -116,13 +137,13 @@ final class AppModel: ObservableObject {
         }
     }
 
-    func statusResponse() -> StatusResponse {
+    func statusResponse(includeActivity: Bool = true) -> StatusResponse {
         StatusResponse(
             ok: serverState == "running",
             version: m3mcpVersion,
             endpoint: M3MCPEndpoint.socketURL.path,
             services: services,
-            recentActivity: Array(activity.prefix(30))
+            recentActivity: includeActivity ? Array(activity.prefix(30)) : []
         )
     }
 
@@ -132,20 +153,24 @@ final class AppModel: ObservableObject {
             let wrapped = JSONValue.object(input)
             guard let data = try? JSONEncoder().encode(wrapped),
                   let text = String(data: data, encoding: .utf8) else { return nil }
-            return text
+            let limit = 8_000
+            return text.count <= limit ? text : String(text.prefix(limit)) + "\n[activity input truncated]"
         }()
 
         let outputJSON: String? = {
             guard let data = try? JSONEncoder().encode(response),
                   let text = String(data: data, encoding: .utf8) else { return nil }
-            return String(text.prefix(8_000))
+            let limit = 8_000
+            return text.count <= limit ? text : String(text.prefix(limit)) + "\n[activity output truncated]"
         }()
 
         let entry = ActivityEntry(
             endpoint: endpoint(for: tool),
             provider: response.source,
             status: response.ok ? "ok" : "error",
-            detail: response.ok ? "\(response.items.count) item(s)" : (response.message ?? "error"),
+            detail: response.ok
+                ? "\(response.items.count) item(s)"
+                : String((response.message ?? "error").prefix(2_000)),
             durationMilliseconds: durationMilliseconds,
             toolName: tool,
             inputJSON: inputJSON,

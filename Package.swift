@@ -42,6 +42,16 @@ let package = Package(
             name: "M3MCPCoreTests",
             dependencies: ["M3MCPCore"],
             path: "Tests/M3MCPCoreTests"
+        ),
+        .testTarget(
+            name: "M3MCPBridgeTests",
+            dependencies: ["M3MCPBridge", "M3MCPCore"],
+            path: "Tests/M3MCPBridgeTests"
+        ),
+        .testTarget(
+            name: "M3MCPAppTests",
+            dependencies: ["M3MCPApp", "M3MCPCore"],
+            path: "Tests/M3MCPAppTests"
         )
     ]
 )

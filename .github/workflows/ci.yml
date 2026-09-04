@@ -6,65 +6,133 @@ on:
   pull_request:
     branches: [main]
   workflow_dispatch:
+  workflow_call:
 
 permissions:
   contents: read
 
 concurrency:
-  group: ci-${{ github.ref }}
-  cancel-in-progress: true
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ !startsWith(github.ref, 'refs/tags/') }}
 
 jobs:
-  swift:
+  test-and-build:
     name: Build and tests
-    # macos-26, not macos-14 or macos-15: Package.swift weak-links FoundationModels
-    # unconditionally, and that framework only exists in the macOS 26 SDK. On an older SDK
-    # the link step fails with "ld: framework 'FoundationModels' not found". macos-14 is
-    # also deprecated in actions/runner-images.
+    # Package.swift weak-links FoundationModels at link time, so the build SDK must contain the
+    # macOS 26 framework even though the finished app keeps a macOS 15 deployment target.
     runs-on: macos-26
-    steps:
-      - uses: actions/checkout@v4
+    timeout-minutes: 45
 
-      - name: SDK carries FoundationModels
+    env:
+      CLANG_MODULE_CACHE_PATH: ${{ runner.temp }}/applemcp-clang-module-cache
+      SWIFTPM_MODULECACHE_OVERRIDE: ${{ runner.temp }}/applemcp-swiftpm-module-cache
+
+    steps:
+      - name: Check out source
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+
+      - name: Verify Swift toolchain and FoundationModels import
         run: |
           set -euo pipefail
-          swift --version
-          sdk="$(xcrun --show-sdk-path)"
+          xcrun swiftc --version
+          sdk="$(xcrun --sdk macosx --show-sdk-path)"
           echo "SDK: $sdk"
-          if [ ! -d "$sdk/System/Library/Frameworks/FoundationModels.framework" ]; then
-            echo "::error::This SDK has no FoundationModels. Package.swift passes -weak_framework FoundationModels, so the link step would fail. Use a runner image whose default Xcode ships the macOS 26 SDK." >&2
-            exit 1
-          fi
+          test -d "$sdk/System/Library/Frameworks/FoundationModels.framework"
 
-      - name: swift build
-        run: swift build
+          probe="$RUNNER_TEMP/foundation-models-import.swift"
+          module_cache="$RUNNER_TEMP/foundation-models-import-module-cache"
+          mkdir -p "$module_cache"
+          printf '%s\n' \
+            '#if canImport(FoundationModels)' \
+            'import FoundationModels' \
+            '#else' \
+            '#error("FoundationModels is not importable by the active Swift toolchain")' \
+            '#endif' \
+            > "$probe"
+          xcrun swiftc -typecheck \
+            -module-cache-path "$module_cache" \
+            -sdk "$sdk" \
+            -target "$(uname -m)-apple-macosx15.0" \
+            "$probe"
 
-      - name: swift test
+      - name: Verify dependency surface
+        run: swift package show-dependencies
+
+      - name: Run full test suite
         run: swift test
 
-      # install_local.sh, the documented install path, builds with -c release. Release uses
-      # whole-module optimization, so it catches what a debug build lets through.
-      - name: swift build -c release
+      - name: Run concurrency security tests with ThreadSanitizer
+        run: >-
+          swift test --sanitize=thread --filter
+          'PermissionProviderCancellationTests|RemindersProviderCancellationTests|LegacySpeechRecognizerCancellationTests|SpeechPrivacyPolicyTests|NativeToolApprovalCoordinatorTests|AppleScriptRunnerCancellationTests|AutomationPermissionPreflightTests|MailProviderCancellationTests|MailProviderSQLiteSecurityTests|LocalHTTPServerCancellationTests|LocalHTTPServerStartLockTests|MCPServerFormattingTests|LocalHTTPResponseTests|InFlightRequestRegistryTests|BoundedProcessRunnerTests|SensitiveTemporaryArtifactsTests|AppStartupCleanupTests|ShortcutRunnerTests|VoiceMemosRecordingSecurityTests|VoiceMemosSnapshotSecurityTests'
+
+      - name: Build release binaries
         run: swift build -c release
 
-      # The release artifact is built on every push, not only when a tag is set. A package that
-      # ships the wrong files, loses its signature or stops being reproducible then fails here,
-      # while it is still someone's pull request, instead of after the first tag is public.
-      - name: Package the release artifact
-        run: script/package_release.sh dist
+      - name: Validate bundle metadata
+        run: |
+          plutil -lint Sources/M3MCPApp/Resources/Info.plist
+          test "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' Sources/M3MCPApp/Resources/Info.plist)" = "0.3.0"
+          test "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleVersion' Sources/M3MCPApp/Resources/Info.plist)" = "3"
 
-      - name: Check the release artifact
-        run: script/check_release_artifact.sh dist
+      - name: Validate shell scripts
+        run: |
+          for file in script/*.sh script/lib/*.sh Tests/Installer/*.sh; do
+            bash -n "$file"
+          done
+
+      - name: Verify installer identity and rollback gates
+        run: |
+          Tests/Installer/create_local_identity_status_test.sh
+          Tests/Installer/signing_identity_picker_test.sh
+          Tests/Installer/install_local_readiness_test.sh
+
+      - name: Package release candidate
+        run: script/package_release.sh "$RUNNER_TEMP/release-dist"
+
+      - name: Check release candidate
+        run: script/check_release_artifact.sh "$RUNNER_TEMP/release-dist"
+
+      - name: Validate release tag and prepare notes
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: |
+          set -euo pipefail
+          if [ "${GITHUB_REF_PROTECTED:-false}" != "true" ]; then
+            echo "::error::Release tags must match an active protected-tag rule or ruleset." >&2
+            exit 1
+          fi
+          test "$GITHUB_REF_NAME" = "v$(script/version.sh)"
+          git show-ref --verify --quiet refs/remotes/origin/main
+          git merge-base --is-ancestor "$GITHUB_SHA" refs/remotes/origin/main
+          script/version.sh --section > "$RUNNER_TEMP/release-dist/release-notes.md"
+          test -s "$RUNNER_TEMP/release-dist/release-notes.md"
+
+      - name: Transfer checked release payload
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: m3mcp-release-${{ github.sha }}
+          path: |
+            ${{ runner.temp }}/release-dist/M3MCP.app.zip
+            ${{ runner.temp }}/release-dist/M3MCP.app.zip.sha256
+            ${{ runner.temp }}/release-dist/release-notes.md
+          if-no-files-found: error
+          retention-days: 7
+          compression-level: 0
 
   docs:
     name: Docs against code
     runs-on: ubuntu-latest
+    timeout-minutes: 5
+
     steps:
-      - uses: actions/checkout@v4
-
-      - uses: actions/setup-python@v5
+      - name: Check out source
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
-          python-version: '3.12'
+          persist-credentials: false
 
-      - name: README and landing page match the code
+      - name: Check documentation contracts
         run: python3 script/check_docs.py

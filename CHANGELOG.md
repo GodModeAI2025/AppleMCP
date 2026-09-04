@@ -1,64 +1,148 @@
 # Changelog
 
-The version of this project is the first `## X.Y.Z` heading below. Nothing else in the repository
-carries a version number: `script/package_release.sh` writes this one into the app bundle's
-`Info.plist`, and the release workflow refuses a tag that does not match it. `script/version.sh`
-reads it.
-
 ## Unreleased
 
-## 0.3.0
+## 0.3.0 — 2026-09-04
+
+### Security
+
+- **Default-safe tool policy.** A normal launch exposes 21 observation and bounded local-processing
+  tools. Calendar mutations, permission UI, and user-created Shortcuts are disabled independently by
+  default and require `M3MCP_ENABLE_CALENDAR_MUTATIONS`, `M3MCP_ENABLE_PERMISSION_UI`, or
+  `M3MCP_ENABLE_USER_SHORTCUTS` before both the app and bridge start. Unknown tools fail closed, and
+  the app repeats authorization at dispatch time.
+- **One-call native approval.** Every enabled Calendar mutation and Shortcut invocation is queued for
+  a default-deny native sheet with a bounded, credential-redacted argument preview. Approval is not
+  reusable; denial, dismissal, cancellation, timeout, or an unavailable app window rejects the call.
+- **No TCC prompts from default tools.** All 21 default tools preflight any authorization they need
+  without requesting permission or opening settings. For fresh Voice Memos transcription, the legacy
+  recognizer checks Speech Recognition without prompting. Permission prompts and System Settings
+  navigation are isolated in the optional permission-UI group.
+- **Strict on-device speech.** `SFSpeechRecognizer` is started only when the locale advertises
+  on-device recognition, and every request requires it. If local recognition is unavailable the tool
+  fails instead of falling back to cloud recognition.
+- **Hardened local HTTP framing.** Header/body/response limits, duplicate and overflow-safe
+  `Content-Length` handling, malformed-JSON rejection, absolute request-receive and response-write
+  deadlines, bounded concurrency, shutdown cancellation, and overload responses replace crash- and
+  slow-client-prone parsing. An owner-only per-endpoint `flock(2)` held for the listener lifetime
+  also serializes stale-socket removal and bind across competing app processes. Existing sockets are
+  probed nonblocking under one 250 ms monotonic deadline; timeout or ambiguous probe state preserves
+  the endpoint and fails startup. The 1 MiB HTTP request-body limit matches the bridge's MCP message
+  limit so every accepted MCP request is representable on the app transport. Any provider result
+  that would exceed the bridge's 8 MiB response ceiling is replaced centrally with a bounded,
+  parseable HTTP 413 response. The bridge incrementally validates response framing and applies one
+  absolute monotonic deadline across local connect, request writing, provider wait, and response
+  reading, so a trickling peer cannot reset the deadline by making intermittent progress.
+- **Stateful MCP validation.** The bridge now requires a valid initialize/initialized lifecycle,
+  bounds each stdio message to 1 MiB, validates JSON-RPC identifiers and arguments, and explicitly
+  supports protocol revisions 2024-11-05 through 2025-11-25. The app independently repeats the
+  exhaustive per-tool argument validation before approval and dispatch. Supported revisions that
+  define them receive advisory tool annotations and structured results; results above 1,000,000 encoded bytes
+  omit the duplicate structured copy. Every newly encoded tool response also
+  carries `contentTrust: "untrusted_data_not_instructions"`; decoding keeps that field optional for
+  compatibility with legacy app responses.
+- **Cancellation propagation.** MCP cancellations and local-client disconnects cancel the matching
+  in-flight app task, permission callback wait, cooperative subprocess work, and bounded Mail
+  database/MIME/filesystem scans. SQLite progress callbacks interrupt longer Mail queries. A cancelled
+  permission sequence does not raise later prompts, and late framework callbacks are ignored. Legacy
+  speech deadlines use a one-shot timer whose action captures are released immediately on cancel or fire.
+  Cancellation is not rollback: Calendar changes or Shortcut effects committed before interruption
+  remain and must be checked before retrying.
+- **Bounded MCP output backpressure.** Tool reservations remain charged while their responses wait
+  for stdout. Nonblocking writes have a 15-second deadline; a partial or failed JSON line fails the
+  writer, cancels outstanding calls, and prevents additional tool dispatch in that bridge process.
+  A complete candidate that exceeds the 16 MiB line budget before any byte is written is instead
+  replaced by a small normal tool error for the same request ID, leaving the writer usable.
+- **Private diagnostics and scratch data.** Diagnostics moved from a predictable `/tmp` log to
+  privacy-marked Unified Logging. Voice Memos snapshots use descriptor-anchored no-follow copies,
+  inode plus observable content-metadata validation before and after reads, a 1 GiB-per-component
+  cap, and read-only SQLite; generated PNGs use owner-only creation;
+  Shortcut JSON is delivered only through bounded standard input, and narrowly matched
+  stale-artifact cleanup covers exact same-owner leftovers from older versions only at native app
+  startup, not from read-only status tools. Startup cleanup now consumes the temporary directory
+  incrementally, inspects at most 4,096 top-level entries, attempts at most 64 removals, and runs as
+  one retained cancellable utility task only after socket startup is attempted instead of blocking
+  the main actor. Speech fallback
+  decoding is pull-driven in memory and creates no CAF scratch path.
+- **Health/activity separation.** `/health` omits recent activity. `/status` remains an explicitly
+  sensitive diagnostic route containing recent inputs and bounded outputs.
 
 ### Added
 
-- **Calendar write support.** `calendar_create_event`, `calendar_update_event` and
-  `calendar_delete_event`, plus the three tools a caller needs to use them safely:
-  `calendar_list_calendars` (which calendar, and is it writable), `calendar_read_event` (read one
-  event back by id — `calendar_search` scans a date window, so it cannot confirm a write that moved
-  an event out of that window), and `calendar_create_calendar` / `calendar_delete_calendar`.
-- **`project_slug` on create and update.** A machine-readable project identifier, stored as a
-  `Project: <slug>` line at the top of the notes and reported back as `metadata.project_slug` by
-  every calendar read path. Notes rather than `url`, because `EKEvent.url` is dropped by some CalDAV
-  and Exchange servers while notes are plain text everywhere. Slugs are validated, so a slug carrying
-  a newline cannot plant a second marker.
-- **`calendar` on `calendar_search`**, to scope a search to one calendar. Without it a busy range can
-  push a specific event past the 100-item ceiling.
-- **`raw_state` on the permission items that can disagree with themselves.** `permissions_status`
-  promotes a `not_determined` status to `authorized` from a `UserDefaults` flag; that flag is keyed on
-  the bundle identifier, so a second build of the app inherits it and claims access it does not have.
-  `raw_state` reports what the framework actually said.
-- **`M3MCP_SOCKET_DIR`** relocates the endpoint for both the app and the bridge, so a development
-  build can run beside an installed one. `LocalHTTPServer.start()` unlinks the socket path before
-  binding, so without this a development build silently steals the installed app's endpoint.
-- **`M3MCP_TCC_REQUEST_TIMEOUT_SECONDS`** bounds the wait for the macOS permission dialog.
-- **A downloadable build.** `script/package_release.sh <dir>` produces `M3MCP.app.zip` and
-  `M3MCP.app.zip.sha256` offline, and `.github/workflows/release.yml` attaches both to the release a
-  `v*` tag creates. The bundle carries `M3MCPBridge` in `Contents/MacOS`, so an MCP client can be
-  pointed at the download without a checkout. The app is signed ad hoc: no Developer ID, no
-  notarisation, a Gatekeeper warning on first launch, and a Full Disk Access grant that has to be
-  given again after every update because the designated requirement is the binary hash.
-- **`script/check_release_artifact.sh`** runs in CI on every push. It packages, checks the archive
-  against an exact list of expected entries, verifies the signature and the checksum, starts the
-  packaged bridge to see which version it reports to an MCP client, and compares a second packaging
-  run byte for byte. A broken package fails before a tag is set instead of after.
+- **Opt-in Calendar write support.** `calendar_create_event`, `calendar_update_event`,
+  `calendar_delete_event`, `calendar_create_calendar`, and `calendar_delete_calendar`, together with
+  `calendar_list_calendars` and `calendar_read_event` for target selection and readback.
+- **`project_slug` on Calendar create and update.** A validated machine-readable identifier is stored
+  as a `Project: <slug>` line in notes and reported as `metadata.project_slug` on Calendar reads.
+- **Scoped Calendar search.** `calendar_search.calendar` restricts a query to one calendar.
+- **Relocatable sockets.** `M3MCP_SOCKET_DIR` lets development and synthetic runtime tests avoid an
+  installed endpoint.
+- **Release controls.** A macOS 26 CI workflow verifies the required SDK, dependency surface, full
+  tests, ThreadSanitizer subset, release build, plist, shell, installer, and documentation contracts;
+  third-party actions are pinned to a reviewed commit. `SECURITY.md` defines private reporting and
+  supported versions, while `docs/SECURITY_MODEL.md` records the trust boundary, retention, and
+  network caveats. Identity discovery admits Apple-issued certificates only from the verified keychain
+  listing, permits the exact local self-signed identity only in its expected trust state, rejects
+  near matches, and signs with the inspected certificate fingerprint. Release-candidate packaging
+  preserves the source plist and required license notices, enforces an exact archive allowlist,
+  verifies arm64/macOS 15 metadata and both 21-tool/30-tool MCP catalogs, and reproduces ad-hoc
+  candidate bytes. A tag reruns the complete CI workflow, attests the checked ZIP, and grants
+  repository write access only to a no-checkout job that creates an explicitly enabled draft
+  candidate in the named `release` environment.
 
 ### Changed
 
-- **Calendar tools no longer request access on every call.** They read
-  `EKEventStore.authorizationStatus` first and only prompt when it is `notDetermined`. The old path
-  called `requestFullAccessToEvents` on every `calendar_search`, which re-activated the app each time
-  and, after a denial, asked an already-answered question instead of reporting what was wrong.
-- **A permission request is bounded.** An unanswered dialog never calls its completion handler, so the
-  old code hung for as long as the client would wait — indistinguishable from a broken server. It now
-  returns an error naming the missing permission.
-- **`calendar_create_calendar` will not fall back to the default calendar's source.** On a machine
-  with no local ("On My Mac") source the old-style fallback would create a calendar inside whichever
-  account happened to be default. It now says so and asks for `source` explicitly.
+- **Mail is local-store only.** Automatic Mail.app AppleScript fallback was removed. Mail tools now
+  fail with Full Disk Access guidance when the local Envelope Index or `.emlx` store is unavailable;
+  legacy `as:` identifiers are rejected.
+- **Bounded provider work and results.** Mail search limits query length and term count, validates the
+  field/match selector, excludes both flagged junk and known Junk mailboxes by default, and caps
+  candidate, mailbox-row, mailbox-list, body, and recipient-header results. SQLite values above
+  256 KiB, invalid text, and recipient joins beyond 20,000 rows or 1,000,000 VM instructions fail
+  closed before unbounded materialization. Mailbox lists disclose their 20,000-row scan ceiling;
+  search and detail reads reject an incomplete mailbox map. Photos album listing inspects at most 2,000 albums and
+  returns at most 200 with truncation metadata. Contacts fetches only one
+  result page; Calendar uses bounded date chunks and an explicit scan ceiling; Reminders fetches per
+  list and applies a disclosed post-fetch scan budget. Contacts, Calendar, Reminders, and Notes now
+  bound untrusted response fields in UTF-8 bytes. Notes also caps its in-process AppleScript result;
+  direct note bodies remain capped at 65,536 characters with truncation metadata.
+- **Shortcuts use a versioned contract.** `ai_writing_tools` and `ai_translate` invoke the fixed
+  `/usr/bin/shortcuts` executable without a shell, pass JSON only through bounded standard input,
+  require text output, and enforce runtime and output limits. The tools remain open-world because the
+  user's Shortcut can network or cause arbitrary side effects.
+- **Photo permission disclosure is exact.** PhotoKit's `.readWrite` TCC level is used because
+  `.addOnly` cannot fetch existing assets; AppleMCP's exposed Photos tools remain non-mutating.
+- **Installed policy is explicit.** `script/install_local.sh` persists only explicitly true values
+  of the three fixed `M3MCP_ENABLE_*` variables in the generated LaunchAgent; unrelated environment
+  values are never copied. App and LaunchAgent replacement is staged with retained backups and
+  rollback on handled failures and termination signals, including failures in signing, validation,
+  launchd startup, or the bounded Unix-socket `/health` readiness check.
+- **Calendar source selection is explicit.** Creating a calendar no longer falls back to the default
+  account when no local source exists.
 
 ### Fixed
 
-- `VoiceMemosProvider.dateValue` called `doubleValue(statement, column)` without the required
-  argument label, so `main` did not compile with Swift 6.3.
+- Malformed MPEG-4 atom sizes, payloads, and transcript time values now fail closed rather than
+  overflowing indexes or unsafe numeric conversions.
+- Voice Memo detail IDs, cache digests, recording paths, base64 reads, and transcript-cache sizes are
+  validated and bounded. Base64 audio is capped at 5,000,000 source bytes; larger recordings use
+  path output, and returned transcript text is capped at 750,000 UTF-8 bytes with truncation
+  metadata. Store and cache paths cannot escape through symlinks; cache replacement uses validated
+  directory descriptors and owner-only atomic files.
+- Voice Memo recording reads reopen relative to a verified directory descriptor and compare the
+  opened owner/type/link/device/inode identity. AVFoundation consumes the retained descriptor with
+  an explicit MIME override, while legacy Speech receives only bounded PCM buffers; pathname
+  replacement therefore cannot redirect those Full Disk Access reads.
+- Voice Memo search and SQLite parsing now apply pre-normalization query limits, a 256 KiB SQLite
+  materialization ceiling, bounded UTF-8 database access, and per-field output caps.
+- Speech fallback decoding no longer creates a temporary transcode file. Duration, source-frame,
+  decoded-frame, decoded-byte, and buffer-work limits apply before or during its pull-driven input
+  stream; exact same-owner CAF leftovers from older versions are still recovered at startup.
+- Legacy speech timeout/cancellation now drains the serialized PCM feeder and waits for the native
+  recognition task's actual `.completed` state before releasing its single-flight lease.
+- Permission status reports framework state without promoting stale bundle-keyed history into a false
+  authorization result.
+- `VoiceMemosProvider.dateValue` now compiles with the Swift 6.3 argument-label checks.
 
 ## 0.2.0
 
@@ -86,21 +170,21 @@ reads it.
   arrives with none: cached earlier run (keyed on `ZAUDIODIGEST`), then `SpeechAnalyzer` on
   macOS 26, then `SFSpeechRecognizer` on macOS 15 to 25.
 - **`ai_summarize`** over the on-device foundation model: summaries and action items without a
-  Shortcut. Transcript text is fenced as data so instructions inside a recording are not followed.
+  Shortcut. The prompt labels transcript text as untrusted data; callers must still treat model
+  output as untrusted.
 - Parser tests under `Tests/M3MCPCoreTests`, runnable with `swift test`.
 
 ### Security
 
-- The endpoint is no longer reachable by other local processes. The app holds Full Disk Access, so
-  anything that reached the old TCP port borrowed that privilege — including sandboxed apps that
-  macOS specifically prevents from reading the underlying data. Access control is now filesystem
-  permissions: `0700` directory, `0600` socket.
+- The endpoint moved out of the loopback TCP namespace and into a `0700` directory with a `0600`
+  socket. This blocks browsers, other users, and normally sandboxed apps without path access. It does
+  not authenticate an unsandboxed process running under the same user ID.
 - Browser-originated and DNS-rebound requests are rejected (kept as defence in depth).
 
 ### Fixed
 
 - Voice Memos results no longer miss the newest recordings. `CloudRecordings.db` runs in WAL mode,
-  and a read-only open cannot replay the log; reads now go through a snapshot of the store plus its
+  and opening only the main database cannot replay the log; reads now go through a snapshot plus its
   `-wal`/`-shm` sidecars.
 - Deleted memos are no longer listed as current ones — `ZEVICTIONDATE` is the deletion timestamp,
   not an iCloud eviction marker. Placeholder rows with an empty `ZPATH` are filtered out.
