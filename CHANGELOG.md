@@ -84,6 +84,16 @@ reads it.
   `mail_search("Rechnung")` searched subject, sender and recipients and never opened a message. That
   costs one file read per message in the scan window, and it is what makes the tool a full-text search
   rather than a header search.
+- **A body search bounds the index side too, and now says so.** With `body` among the fields the
+  candidate set is fetched twice with `limit: max_candidates` — once for the index hits, once for the
+  scan window — so a query with more subject matches than that gets a `meta.total` that is a lower
+  bound, and `offset` pages inside the candidate set instead of over the index. Measured on a
+  synthetic index with 3000 subject hits: the default path returns 500 candidates and nothing at all
+  at `offset: 1000`, while the same query without `body` in `fields` pages in SQL and answers 25.
+  That is the cost of having `body` in the default, and the README, the tool description and the
+  reply now name it: `meta.index_capped` is new next to `meta.body_scan_capped`, and the message no
+  longer blames the body scan for a cut the index side took. A caller that needs an exact total and
+  SQL paging passes `fields` without `body`.
 - **Honest body-scan metadata.** `meta.body_searchable` was the constant `"true"`, which said nothing.
   It is replaced by `body_searched`, `body_scan_limit`, `body_scan_capped` and `body_messages_read`.
   `total_exact` is false exactly when the scan window was full, so an incomplete answer no longer

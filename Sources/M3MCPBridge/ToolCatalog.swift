@@ -151,7 +151,7 @@ enum ToolCatalog {
                 "fields": [
                     "type": "array",
                     "items": ["type": "string"],
-                    "description": "Which fields to match against: subject, sender, recipients, body. All four by default, so a term that appears only inside a message is found without asking for it. sender and recipients match the display name AND the address, so a firstname.lastname query works. body opens message files, which is the slow part: it is bounded by max_candidates, and meta.body_scan_capped says whether that bound was reached. Narrow the list to [subject, sender, recipients] for a fast index-only search."
+                    "description": "Which fields to match against: subject, sender, recipients, body. All four by default, so a term that appears only inside a message is found without asking for it. sender and recipients match the display name AND the address, so a firstname.lastname query works. body opens message files, which is the slow part: asking for it bounds the whole answer by max_candidates, the index hits included, and meta.index_capped and meta.body_scan_capped say whether that bound was reached. Narrow the list to [subject, sender, recipients] for a fast index-only search with an exact total and SQL paging."
                 ],
                 "match": [
                     "type": "string",
@@ -166,7 +166,7 @@ enum ToolCatalog {
                     "description": "When true (default), words like 'unread', 'ungelesen', 'today' or '24h' in the query also set the matching filter. Set false to search those words literally; meta.query_rewritten reports whether it fired."
                 ],
                 "since_hours": ["type": "integer", "description": "Only return messages received within the last N hours, e.g. 24. Applied in the query, not after the page was cut."],
-                "max_candidates": ["type": "integer", "description": "How many messages the body scan opens, newest first, when body is among the fields. Default 500, maximum 5000. Matches on subject, sender and recipients are not bounded by it — they come from the index. meta.body_scan_capped says whether older messages were left unopened."]
+                "max_candidates": ["type": "integer", "description": "Bounds the whole answer whenever body is among the fields, which it is by default. That many messages are opened for the body, newest first, AND that many index hits on subject, sender and recipients are fetched. Past it meta.total is a lower bound and offset pages only inside that set; meta.index_capped and meta.body_scan_capped say which side hit it. Default 500, maximum 5000. For an exact total and SQL paging, pass fields without body."]
             ])
         ),
         MCPTool(

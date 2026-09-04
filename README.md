@@ -181,7 +181,7 @@ The M3MCP UI app must be running for MCP calls to work. The bridge talks to the 
 
 | Tool | Description |
 |---|---|
-| `mail_search` | Search messages in the local Apple Mail index. Matches subject, sender, recipients and the message body; scoped to a mailbox with `mailbox`, narrowed with `unread_only` and `since_hours`, paged with `offset`, and `match` picks how a multi-word query applies: all, any, or phrase. Subject, sender and recipient matches come from the index and are complete; the body scan opens the newest `max_candidates` messages in scope, 500 by default, and `meta.body_scan_capped` says when older ones were left unopened |
+| `mail_search` | Search messages in the local Apple Mail index. Matches subject, sender, recipients and the message body; scoped to a mailbox with `mailbox`, narrowed with `unread_only` and `since_hours`, paged with `offset`, and `match` picks how a multi-word query applies: all, any, or phrase. with `body` in `fields` — the default — the whole answer is bounded by `max_candidates`, 500 by default: index hits and the newest messages in scope are both fetched with that limit, so `meta.total` is a lower bound and `offset` pages inside that set. `meta.index_capped` and `meta.body_scan_capped` say which side hit the bound. Leave `body` out of `fields` for the index-only path, which counts and pages in SQL and reports an exact total |
 | `mail_list_mailboxes` | List the mailboxes of the local Mail index with account, path, role, and message counts, so a `mail_search` can be scoped to a name that exists |
 | `mail_read` | Read full email content by ID (body, recipients, attachments metadata) |
 | `calendar_search` | Search calendar events via EventKit, optionally scoped to one calendar |

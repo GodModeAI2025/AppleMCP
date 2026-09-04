@@ -248,7 +248,7 @@ final class MailProvider {
                     message: "No mailbox matches '\(request.mailboxFilter)'. Call mail_list_mailboxes to see the names.",
                     meta: baseMeta(request, schema: schema, mailboxes: mailboxes, total: 0, returned: 0,
                                   totalExact: true, hasMore: false, scanned: 0, scanCapped: false,
-                                  mailboxFilterMatched: 0)
+                                  indexCapped: false, mailboxFilterMatched: 0)
                 )
             }
         }
@@ -265,11 +265,15 @@ final class MailProvider {
         // itself as a complete answer is worse than a miss.
         //
         // The candidate set is now the union of two queries:
-        //   * every row the term clause matches on the indexed fields, which stays exact and cheap;
+        //   * every row the term clause matches on the indexed fields;
         //   * the newest `max_candidates` rows in scope regardless of terms, which is the window the
         //     body is actually read from.
-        // Only the second can be cut short, and when it is, `meta.body_scan_capped` says so and
-        // `meta.total_exact` turns false.
+        // Both are fetched with `limit: max_candidates`, so both can be cut short. That is the price
+        // of this path and it is reported rather than hidden: `meta.index_capped` and
+        // `meta.body_scan_capped` say which side hit the bound, `meta.total_exact` turns false, and
+        // `offset` pages inside the candidate set rather than over the whole index. A caller that
+        // needs an exact total and SQL paging leaves `body` out of `fields` and takes the branch
+        // below, which counts and pages in SQL.
         if request.searchesBody {
             let scanClause = try buildWhere(
                 request, schema: schema, mailboxIDs: selected, includeTermPredicates: false
@@ -338,10 +342,12 @@ final class MailProvider {
                 ok: true,
                 source: sourceName,
                 items: items,
-                message: message(items: items, hasMore: hasMore, scanCapped: scanCapped, request: request),
+                message: message(items: items, hasMore: hasMore, bodyScanCapped: bodyScanCapped,
+                                 indexCapped: indexCapped, request: request),
                 meta: baseMeta(request, schema: schema, mailboxes: mailboxes, total: matched.count,
                                returned: items.count, totalExact: !scanCapped, hasMore: hasMore,
                                scanned: candidates.count, scanCapped: scanCapped,
+                               indexCapped: indexCapped,
                                mailboxFilterMatched: mailboxFilterMatched,
                                bodyScan: BodyScan(
                                    performed: true,
@@ -380,9 +386,11 @@ final class MailProvider {
             ok: true,
             source: sourceName,
             items: items,
-            message: message(items: items, hasMore: hasMore, scanCapped: false, request: request),
+            message: message(items: items, hasMore: hasMore, bodyScanCapped: false,
+                             indexCapped: false, request: request),
             meta: baseMeta(request, schema: schema, mailboxes: mailboxes, total: total, returned: items.count,
                            totalExact: true, hasMore: hasMore, scanned: total, scanCapped: false,
+                           indexCapped: false,
                            mailboxFilterMatched: mailboxFilterMatched)
         )
     }
@@ -400,6 +408,7 @@ final class MailProvider {
         hasMore: Bool,
         scanned: Int,
         scanCapped: Bool,
+        indexCapped: Bool,
         mailboxFilterMatched: Int,
         bodyScan: BodyScan = .notPerformed
     ) -> [String: String] {
@@ -413,6 +422,9 @@ final class MailProvider {
             "truncated": String(hasMore || scanCapped),
             "scanned": String(scanned),
             "scan_capped": String(scanCapped),
+            // Which side of the candidate set hit max_candidates. The index side is bounded too when
+            // body is searched, and saying only "body_scan_capped" would blame the wrong half.
+            "index_capped": String(indexCapped),
             "fields": request.fields.joined(separator: ","),
             "match": request.match,
             "query": request.query,
@@ -444,14 +456,28 @@ final class MailProvider {
         static let notPerformed = BodyScan(performed: false, limit: 0, capped: false, messagesRead: 0)
     }
 
-    private func message(items: [DataItem], hasMore: Bool, scanCapped: Bool, request: SearchRequest) -> String? {
+    private func message(
+        items: [DataItem],
+        hasMore: Bool,
+        bodyScanCapped: Bool,
+        indexCapped: Bool,
+        request: SearchRequest
+    ) -> String? {
         if items.isEmpty {
             if request.offset > 0 {
-                return "No messages at offset \(request.offset). Lower offset, or read meta.total."
+                return "No messages at offset \(request.offset). Lower offset, or read meta.total. With body among the fields, offset pages inside the candidate set only, and that set holds at most max_candidates=\(request.maxCandidates) messages."
             }
             return "No matching messages found in the local Mail index."
         }
-        if scanCapped {
+        // Two different caps, and blaming the body scan for both is how a truncated index answer
+        // came back looking like a complete one.
+        if indexCapped && bodyScanCapped {
+            return "Capped at max_candidates=\(request.maxCandidates) on both sides: that many index hits and that many messages opened for the body, so meta.total is a lower bound and offset pages only inside that set. Raise max_candidates, narrow with mailbox or since_hours, or drop body from fields for an exact total with SQL paging."
+        }
+        if indexCapped {
+            return "Subject, sender and recipient hits were cut at max_candidates=\(request.maxCandidates); there are more in the index. meta.total is a lower bound and offset pages only inside the candidate set. Raise max_candidates, or drop body from fields for an exact total with SQL paging."
+        }
+        if bodyScanCapped {
             return "Body search read the newest \(request.maxCandidates) messages in scope; older ones were not opened, so meta.total is a lower bound and meta.body_scan_capped is true. Raise max_candidates, or narrow the search with mailbox or since_hours."
         }
         if hasMore {
