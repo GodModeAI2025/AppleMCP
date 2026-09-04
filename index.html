@@ -226,6 +226,22 @@
         </section>
 
         <section>
+            <h2>Download</h2>
+            <p>Each release carries <code>M3MCP.app.zip</code> and a checksum file. The ZIP holds the app and the bridge binary, so an MCP client can be pointed at the download without a checkout.</p>
+<pre><code>curl -LO https://github.com/GodModeAI2025/AppleMCP/releases/latest/download/M3MCP.app.zip
+curl -LO https://github.com/GodModeAI2025/AppleMCP/releases/latest/download/M3MCP.app.zip.sha256
+shasum -a 256 -c M3MCP.app.zip.sha256
+unzip M3MCP.app.zip
+mv M3MCP.app /Applications/
+
+# Point the MCP client at the bridge inside the bundle
+claude mcp add applemcp /Applications/M3MCP.app/Contents/MacOS/M3MCPBridge</code></pre>
+            <p style="margin-top: 16px;"><strong>Apple Silicon only.</strong> The build has one architecture, <code>arm64</code>. On an Intel Mac it will not start, and building from source is the way in.</p>
+            <p style="margin-top: 12px;"><strong>macOS warns on first launch, and it has reason to.</strong> The app is signed ad hoc: no Developer ID, no notarisation, nothing Apple has inspected. <code>spctl --assess --type execute</code> answers <code>rejected</code>. To start it anyway, open it once, dismiss the dialog, then go to System Settings, Privacy &amp; Security and choose <strong>Open Anyway</strong>. Right-click and Open stopped working for apps that are not notarised.</p>
+            <p style="margin-top: 12px;"><strong>The Full Disk Access grant does not survive an update.</strong> An ad-hoc signature pins the designated requirement to the binary hash, so the next release is a different app as far as macOS is concerned. The source build below signs with a stable local certificate and keeps the grant.</p>
+        </section>
+
+        <section>
             <h2>Setup</h2>
 <pre><code># Build (release, the configuration install_local.sh uses)
 swift build -c release
