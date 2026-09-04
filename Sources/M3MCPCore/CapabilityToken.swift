@@ -13,12 +13,15 @@ import Security
 /// Where it lives: the login keychain, as a generic password. That is a deliberate choice over a
 /// `0600` file next to the socket. A file in the socket directory would be readable by exactly the
 /// set of processes that can already open the socket, so it would add nothing. A keychain item is
-/// bound by its ACL to the binary that created it; another binary asking for it produces a user
-/// prompt, and the prompt names the asker. That is a control the user can actually see.
+/// bound by its ACL to the binary that created it, and reaching it from anywhere else takes the
+/// user's say-so.
 ///
-/// The cost is honest and worth writing down: the app is signed ad hoc, so the ACL is tied to the
-/// app's code directory hash. After an update the keychain re-prompts, exactly as the Full Disk
-/// Access grant does.
+/// The cost is honest and worth writing down twice over. The app is signed ad hoc, so the ACL is
+/// tied to the app's code directory hash and every update asks again, exactly as the Full Disk
+/// Access grant does. And the bridge is another binary: it does not ask, because the panel would
+/// appear in a session an MCP client has not got — see `read(service:account:allowingInteraction:)`.
+/// So the fallback reaches an item already on this bridge's ACL and no other, and a client that is
+/// not that has to be given `M3MCP_TOKEN`.
 public enum CapabilityToken {
     /// Set this and it wins over the keychain, in the app and in the bridge alike.
     ///

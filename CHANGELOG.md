@@ -26,16 +26,18 @@ reads it.
     What that does not do is make a copied token useless. The pin identifies the binary on the other
     end, not the process that started it: anything that can read `M3MCP_TOKEN` out of an MCP client's
     config can also run `M3MCP.app/Contents/MacOS/M3MCPBridge`, and that bridge is the one the pin
-    trusts. What an attacker loses is the direct path — it has to go through the shipped bridge — and,
-    where the token is not in a config file, silence: the bridge reading the keychain item under a
-    signature that did not create it produces a prompt naming the asker.
+    trusts. What an attacker loses is the direct path: no client of their own, only the shipped bridge
+    and whatever it will do. Without the token that is nothing — the bridge refuses the keychain item
+    it did not create rather than asking anyone. With the token it is everything, and that is the
+    whole of it.
     `SocketAuthenticationTests.testThePinRefusesAHandwrittenClientAndPassesTheBundledBridge` measures
     both halves.
 
   A `getpeereid` check was considered and left out on purpose: a `0600` socket in a `0700` directory
   means the kernel already refused every other uid, so it would restate a condition rather than add
   one. Answers [issue #9](https://github.com/GodModeAI2025/AppleMCP/issues/9).
-- **`M3MCP_TOKEN`** configures a client that cannot answer a keychain prompt, and
+- **`M3MCP_TOKEN`** is how a client is configured — the keychain fallback only reaches an item whose
+  ACL already names the bridge binary, and the bridge never asks for one that does not — and
   **`M3MCP_TRUSTED_CLIENT_CDHASH`** pins a bridge that lives outside the app bundle.
 - **Server › Copy MCP Client Token** (⇧⌘T) puts the token on the pasteboard, and the app window and
   `/health` both report whether the client binary is pinned or whether the install is running
@@ -69,7 +71,8 @@ reads it.
   served, anything past that is `503` straight away.
   `SocketAuthenticationTests.testIdleConnectionsCannotStarveTheEndpoint` measures it: with 120 idle
   connections in place, `/health` and a tool call used to hit an eight second timeout and now answer
-  in 0.04 seconds.
+  in 0.04 seconds. What it is not is immunity: 128 connections held open still refuse the 129th until
+  a deadline frees a slot, and SECURITY.md says so under Known Gaps.
 - **The bridge hung instead of answering when it was not allowed to read the keychain item.** With no
   `M3MCP_TOKEN` set, the bridge reads the token from the login keychain — an item the app created, so
   the ACL names the app and a read from the bridge needs the user's confirmation. Measured with an

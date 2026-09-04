@@ -16,9 +16,9 @@ final class LocalAppClient {
     ///
     /// `initialize` and `tools/list` are answered out of the catalog without ever touching the app,
     /// and an MCP client sends them the moment it launches the bridge. Reading the keychain there
-    /// would put an authorization prompt in front of a user who has not asked for any data yet — and
-    /// it would break `script/check_release_artifact.sh`, which pipes `initialize` into the packaged
-    /// bridge on a machine with no app, no keychain item and no token.
+    /// would spend the user's keychain on someone who has not asked for any data yet — and it would
+    /// break `script/check_release_artifact.sh`, which pipes `initialize` into the packaged bridge on
+    /// a machine with no app, no keychain item and no token.
     private var credentials: CapabilityToken.Resolution??
 
     /// Why there is no token, kept so the refusal can say it.

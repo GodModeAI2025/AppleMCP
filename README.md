@@ -168,13 +168,13 @@ The app issues a capability token on its first start and the server refuses ever
 not carry it. Get it from the app: **Server › Copy MCP Client Token** (⇧⌘T), then paste it into the
 config above.
 
-`M3MCP_TOKEN` is not the only way, but it is the one to use. With no environment variable set the
-bridge falls back to the login keychain, and that item belongs to the app: the ACL names the binary
-that created it, so a read from the bridge needs your confirmation. A bridge that an MCP client
-started has no window to ask in, so it does not ask — it refuses the read and answers with what to
-configure instead of waiting for a panel nobody can see. That fallback therefore works where you
-started the bridge yourself and can answer, and nowhere else. Put the token in the client's
-configuration.
+Use `M3MCP_TOKEN`. With no environment variable set the bridge falls back to the login keychain, and
+that item belongs to the app: its ACL names the binary that created it, so the bridge asking for it
+would put an authorization panel on screen. A bridge an MCP client started has no session to show one
+in, and waiting for a panel nobody can see is indistinguishable from a server that never answers, so
+the bridge does not ask at all. It refuses the read and says what to configure. The fallback therefore
+reaches an item whose ACL already names this bridge binary and nothing else — which after an update is
+a different hash again. The environment variable is the path that works.
 
 The M3MCP UI app must be running for MCP calls to work. The bridge talks to the app over a Unix domain socket in the user's Application Support directory.
 
@@ -276,7 +276,7 @@ The security policy and the threat model live in `SECURITY.md`, currently in rev
 
 ## Limits
 
-- **The client check needs the bridge to be next to the app.** `script/package_release.sh` and `script/install_local.sh` both put `M3MCPBridge` in the bundle, so the pin has something to pin to. Run the app straight out of `.build` without having built the bridge, or point a client at a bridge copied somewhere else, and the app falls back to the token alone — it says so in the window and in `/health`, and `M3MCP_TRUSTED_CLIENT_CDHASH` sets the pin by hand. With or without the pin, a process that can read your MCP client's config holds the token, and the bundled bridge will carry it for whoever runs it. Keeping the token out of the config file leaves the bridge on the keychain fallback, which only works where somebody can answer the confirmation panel.
+- **The client check needs the bridge to be next to the app.** `script/package_release.sh` and `script/install_local.sh` both put `M3MCPBridge` in the bundle, so the pin has something to pin to. Run the app straight out of `.build` without having built the bridge, or point a client at a bridge copied somewhere else, and the app falls back to the token alone — it says so in the window and in `/health`, and `M3MCP_TRUSTED_CLIENT_CDHASH` sets the pin by hand. With or without the pin, a process that can read your MCP client's config holds the token, and the bundled bridge will carry it for whoever runs it. Keeping the token out of the config file leaves the bridge on the keychain fallback, which reaches an item whose ACL already names this bridge binary and asks for nothing else.
 - **`ai_translate` has prerequisites nothing sets up for you.** The provider pipes the text through `/usr/bin/python3` into `shortcuts run Translate`. You need a Shortcut named "Translate" that you created yourself, and the system Python 3 at `/usr/bin/python3`. Without either the tool answers that translation is not reachable. Whether the translation itself stays on the Mac depends on whether the language pair is downloaded, which the Shortcuts and Translate apps decide, not AppleMCP.
 - **`ai_writing_tools` needs a Shortcut named "Writing Tools"** for the same reason, and the same open question follows: the text goes into that Shortcut, and where it goes from there is the Shortcut's business, not AppleMCP's. `ai_summarize` does not; it calls FoundationModels directly and needs macOS 26.
 - **`ai_image_playground` leaves files behind.** Each call writes a PNG into the process temporary directory and returns the path. AppleMCP never deletes them; they stay until macOS clears that directory.

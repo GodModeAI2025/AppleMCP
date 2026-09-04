@@ -420,6 +420,21 @@ final class SocketAuthenticationTests: XCTestCase {
     /// has been read whole, so these are never refused by the token check — they simply occupy the
     /// server. `/health` and an authorised tool call have to keep answering while they sit there.
     func testIdleConnectionsCannotStarveTheEndpoint() throws {
+        // Two descriptors per connection, both ends being in this process, so the test needs headroom
+        // a stock runner does not always have. Raise the soft limit where the hard limit allows it,
+        // and skip rather than measure something else where it does not.
+        var limits = rlimit()
+        if getrlimit(RLIMIT_NOFILE, &limits) == 0, limits.rlim_cur < 512 {
+            var raised = limits
+            raised.rlim_cur = min(rlim_t(1024), limits.rlim_max)
+            _ = setrlimit(RLIMIT_NOFILE, &raised)
+            _ = getrlimit(RLIMIT_NOFILE, &limits)
+        }
+        try XCTSkipUnless(
+            limits.rlim_cur >= 512,
+            "only \(limits.rlim_cur) descriptors available; 120 connections need both ends of each"
+        )
+
         try startServer()
 
         var idle: [Int32] = []
