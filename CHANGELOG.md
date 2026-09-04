@@ -1,6 +1,13 @@
 # Changelog
 
+The version of this project is the first `## X.Y.Z` heading below. Nothing else in the repository
+carries a version number: `script/package_release.sh` writes this one into the app bundle's
+`Info.plist`, and the release workflow refuses a tag that does not match it. `script/version.sh`
+reads it.
+
 ## Unreleased
+
+## 0.3.0
 
 ### Added
 
@@ -24,6 +31,15 @@
   build can run beside an installed one. `LocalHTTPServer.start()` unlinks the socket path before
   binding, so without this a development build silently steals the installed app's endpoint.
 - **`M3MCP_TCC_REQUEST_TIMEOUT_SECONDS`** bounds the wait for the macOS permission dialog.
+- **A downloadable build.** `script/package_release.sh <dir>` produces `M3MCP.app.zip` and
+  `M3MCP.app.zip.sha256` offline, and `.github/workflows/release.yml` attaches both to the release a
+  `v*` tag creates. The bundle carries `M3MCPBridge` in `Contents/MacOS`, so an MCP client can be
+  pointed at the download without a checkout. The app is signed ad hoc: no Developer ID, no
+  notarisation, a Gatekeeper warning on first launch, and a Full Disk Access grant that has to be
+  given again after every update because the designated requirement is the binary hash.
+- **`script/check_release_artifact.sh`** runs in CI on every push. It packages, checks the archive
+  against an exact list of expected entries, verifies the signature and the checksum, and compares a
+  second packaging run byte for byte, so a broken package fails before a tag is set instead of after.
 
 ### Changed
 
