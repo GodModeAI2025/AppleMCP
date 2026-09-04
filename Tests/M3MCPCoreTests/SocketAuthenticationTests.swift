@@ -278,6 +278,39 @@ final class SocketAuthenticationTests: XCTestCase {
         XCTAssertTrue(unconfigured.contains("No capability token"), unconfigured)
     }
 
+    /// What the pin buys and what it does not, measured instead of claimed.
+    ///
+    /// Pinned to the code directory hash of the built bridge: a socket client written by hand is
+    /// refused with `403` even holding the right token, and the very same token, handed by the very
+    /// same process to the bridge the pin trusts, goes through and returns a tool result. The pin
+    /// forces an attacker through the shipped bridge. It does not stop them using it, so any text
+    /// promising that a copied token is refused would be false.
+    func testThePinRefusesAHandwrittenClientAndPassesTheBundledBridge() throws {
+        let bridge = try XCTUnwrap(Self.bridgeExecutable(), "M3MCPBridge is not built; run swift build first")
+        let bridgeHash = try XCTUnwrap(
+            PeerIdentity.codeDirectoryHash(ofFileAt: bridge),
+            "the built bridge carries no readable code signature, so the pin cannot be exercised"
+        )
+        try startServer(pinnedTo: [bridgeHash])
+
+        // This process is not the pinned binary. The right token is not enough.
+        let handwritten = try request(
+            method: "POST", path: "/tools/source_status", body: Data("{}".utf8), token: token
+        )
+        XCTAssertEqual(handwritten.status, 403, handwritten.statusLine)
+
+        // The same token, from the same process, presented through the binary the pin trusts.
+        let throughBridge = try run(
+            bridge,
+            input: #"{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"source_status","arguments":{}}}"#,
+            environment: [
+                M3MCPEndpoint.directoryEnvironmentKey: directory.path,
+                CapabilityToken.environmentKey: token
+            ]
+        )
+        XCTAssertTrue(throughBridge.contains("ran source_status"), throughBridge)
+    }
+
     /// The probe README and index.html print, and the same probe aimed at a tool.
     ///
     /// curl is the shape an attacker would reach for first, and it is also the shape the docs tell a

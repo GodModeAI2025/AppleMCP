@@ -20,8 +20,17 @@ reads it.
   - the **code identity of the connecting process**. `getsockopt(LOCAL_PEERTOKEN)` yields the peer's
     audit token — not a pid, which can be recycled between `accept` and the lookup — and the Security
     framework turns it into a `SecCode` whose signature is checked and whose code directory hash is
-    read. The app pins that hash to the `M3MCPBridge` beside its own executable, so a token copied
-    out of an MCP client's config and replayed by another process is `403`.
+    read. The app pins that hash to the `M3MCPBridge` beside its own executable, so a socket client
+    someone writes themselves is `403` even holding the right token.
+
+    What that does not do is make a copied token useless. The pin identifies the binary on the other
+    end, not the process that started it: anything that can read `M3MCP_TOKEN` out of an MCP client's
+    config can also run `M3MCP.app/Contents/MacOS/M3MCPBridge`, and that bridge is the one the pin
+    trusts. What an attacker loses is the direct path — it has to go through the shipped bridge — and,
+    where the token is not in a config file, silence: the bridge reading the keychain item under a
+    signature that did not create it produces a prompt naming the asker.
+    `SocketAuthenticationTests.testThePinRefusesAHandwrittenClientAndPassesTheBundledBridge` measures
+    both halves.
 
   A `getpeereid` check was considered and left out on purpose: a `0600` socket in a `0700` directory
   means the kernel already refused every other uid, so it would restate a condition rather than add

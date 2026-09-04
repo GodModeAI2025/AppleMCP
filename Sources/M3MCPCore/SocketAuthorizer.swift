@@ -5,9 +5,14 @@ import Foundation
 /// Two factors, and they fail differently on purpose:
 ///
 ///  * the **capability token** answers "is this client configured?". Missing or wrong is `401`.
-///  * the **pinned code identity** answers "is this the client I was configured for?". A valid
-///    token from the wrong binary is `403`, because that is the interesting case: a token copied out
-///    of an MCP client's config file by some other process on the machine.
+///  * the **pinned code identity** answers "is this the client I was configured for?". A valid token
+///    from the wrong binary is `403`, so a socket client somebody writes themselves does not get in
+///    on a copied token alone.
+///
+/// What the pin is not: proof of who is calling. It identifies the binary on the other end, and the
+/// bundled `M3MCPBridge` satisfies it whichever process starts it. A stolen token plus that bridge
+/// is still a working client — see Known Gaps in SECURITY.md, and
+/// `SocketAuthenticationTests.testThePinRefusesAHandwrittenClientAndPassesTheBundledBridge`.
 ///
 /// What is deliberately *not* checked: the peer's uid. The socket is `0600` inside a `0700`
 /// directory, so the kernel refused every other uid before this code ran. Testing it here would

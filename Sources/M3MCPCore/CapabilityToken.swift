@@ -6,8 +6,9 @@ import Security
 /// The token is one half of the access control on the socket; `PeerIdentity` is the other. On its
 /// own a bearer token is a secret in a file: whoever can read `claude_desktop_config.json` or the
 /// keychain item can replay it. It is still worth having, because it turns "connect to the socket"
-/// from a capability every process of the user holds into one that has to be configured — and
-/// because a stolen token is useless without also being the pinned client binary.
+/// from a capability every process of the user holds into one that has to be configured. What it is
+/// not: a token stays usable when it is stolen. The pin only forces the thief through the bundled
+/// bridge instead of a client of their own.
 ///
 /// Where it lives: the login keychain, as a generic password. That is a deliberate choice over a
 /// `0600` file next to the socket. A file in the socket directory would be readable by exactly the
