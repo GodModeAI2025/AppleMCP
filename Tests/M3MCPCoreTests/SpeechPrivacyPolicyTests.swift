@@ -135,7 +135,7 @@ final class SpeechPrivacyPolicyTests: XCTestCase {
         }
 
         let elapsed = Double(DispatchTime.now().uptimeNanoseconds - started) / 1_000_000_000
-        XCTAssertLessThan(elapsed, 1)
+        XCTAssertLessThan(elapsed, zeitbudget(1))
         XCTAssertEqual(admission.activeOperationCount, 0)
     }
 
@@ -162,7 +162,7 @@ final class SpeechPrivacyPolicyTests: XCTestCase {
         }
 
         let elapsed = Double(DispatchTime.now().uptimeNanoseconds - started) / 1_000_000_000
-        XCTAssertLessThan(elapsed, 0.15)
+        XCTAssertLessThan(elapsed, zeitbudget(0.15))
         XCTAssertEqual(admission.activeOperationCount, 1)
 
         do {
@@ -211,7 +211,7 @@ final class SpeechPrivacyPolicyTests: XCTestCase {
         }
 
         let elapsed = Double(DispatchTime.now().uptimeNanoseconds - started) / 1_000_000_000
-        XCTAssertLessThan(elapsed, 0.15)
+        XCTAssertLessThan(elapsed, zeitbudget(0.15))
         XCTAssertEqual(admission.activeOperationCount, 1)
         try? await Task.sleep(nanoseconds: 350_000_000)
         XCTAssertEqual(admission.activeOperationCount, 0)

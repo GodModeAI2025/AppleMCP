@@ -68,6 +68,12 @@ jobs:
         run: swift test
 
       - name: Run concurrency security tests with ThreadSanitizer
+        env:
+          # ThreadSanitizer verlangsamt um ein Vielfaches. Ohne diesen Faktor werden die
+          # Zeitschranken der Nebenlaeufigkeitstests zur Wette auf die Auslastung des
+          # Runners: am 5. September lieferte derselbe Commit einen gruenen und einen
+          # roten Lauf, waehrend der Test lokal zehnmal hintereinander bestand.
+          M3MCP_TIMING_SLACK: "20"
         run: >-
           swift test --sanitize=thread --filter
           'PermissionProviderCancellationTests|RemindersProviderCancellationTests|LegacySpeechRecognizerCancellationTests|SpeechPrivacyPolicyTests|NativeToolApprovalCoordinatorTests|AppleScriptRunnerCancellationTests|AutomationPermissionPreflightTests|MailProviderCancellationTests|MailProviderSQLiteSecurityTests|LocalHTTPServerCancellationTests|LocalHTTPServerStartLockTests|MCPServerFormattingTests|LocalHTTPResponseTests|InFlightRequestRegistryTests|BoundedProcessRunnerTests|SensitiveTemporaryArtifactsTests|AppStartupCleanupTests|ShortcutRunnerTests|VoiceMemosRecordingSecurityTests|VoiceMemosSnapshotSecurityTests|SocketAuthenticationTests|SocketPeerPinTests|SocketAvailabilityTests'

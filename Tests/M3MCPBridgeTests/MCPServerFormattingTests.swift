@@ -468,7 +468,7 @@ final class MCPServerFormattingTests: XCTestCase {
         XCTAssertEqual(response.source, "M3MCPBridge")
         XCTAssertTrue(response.message?.contains("Reading from the local socket failed") == true)
         XCTAssertGreaterThanOrEqual(elapsed, 0.8)
-        XCTAssertLessThan(elapsed, 3)
+        XCTAssertLessThan(elapsed, zeitbudget(3))
         XCTAssertEqual(fixture.peerClosed.wait(timeout: .now() + 2), .success)
     }
 
@@ -487,7 +487,7 @@ final class MCPServerFormattingTests: XCTestCase {
         XCTAssertFalse(response.ok)
         XCTAssertTrue(response.message?.contains("absolute response deadline") == true)
         XCTAssertGreaterThanOrEqual(elapsed, 0.15)
-        XCTAssertLessThan(elapsed, 1.5)
+        XCTAssertLessThan(elapsed, zeitbudget(1.5))
         XCTAssertEqual(fixture.peerClosed.wait(timeout: .now() + 2), .success)
     }
 
