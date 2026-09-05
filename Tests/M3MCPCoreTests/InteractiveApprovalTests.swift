@@ -226,8 +226,9 @@ final class InteractiveApprovalTests: XCTestCase {
         // The token itself never reaches the sheet, which is why the effect line has to exist.
         XCTAssertEqual(request.argumentPreview, "undo_token: [REDACTED]")
 
-        let effect = try? XCTUnwrap(request.effectPreview)
-        guard let effect else { return XCTFail("an effect line was supplied and must survive") }
+        guard let effect = request.effectPreview else {
+            return XCTFail("an effect line was supplied and must survive")
+        }
         XCTAssertFalse(effect.contains("\n"), effect)
         XCTAssertFalse(effect.unicodeScalars.contains { $0.value == 0 }, effect)
         XCTAssertFalse(effect.unicodeScalars.contains { $0.value == 0x202E }, effect)
