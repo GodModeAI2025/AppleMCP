@@ -106,8 +106,8 @@ The boundary of the mechanism, stated rather than implied:
 - Undo is itself a calendar mutation: same launch opt-in, same per-call sheet. It writes the
   recorded previous values over the current state without checking whether something else changed
   the event in between. A failed undo changes nothing and leaves the token valid. Building the sheet
-  reads the token but does not spend it, so a sheet answered after the 30-minute window ends in an
-  expired token.
+  reads the token, and only the answered sheet spends it, so a token whose lifetime runs out between
+  those two moments is reported as expired rather than acted on.
 - A token is a capability held in the response of its own write, and the journal belongs to the app
   process rather than to a client. Any caller that can read that response and pass the approval sheet
   can spend it.

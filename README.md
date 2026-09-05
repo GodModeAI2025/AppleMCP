@@ -310,9 +310,9 @@ What it does not cover, in the order you are likely to hit it:
 - **Undo is a write.** It needs the same launch opt-in and its own approval sheet, it can fail
   against a calendar that has since become read-only, and it does not check whether something else
   changed the event in the meantime. It writes the recorded previous values over whatever is there
-  now. When it fails, nothing changes and the token stays valid. The sheet reads the token before you
-  answer it, so a sheet left open past the 30-minute window ends in an expired token rather than an
-  undo.
+  now. When it fails, nothing changes and the token stays valid. The sheet reads the token before it
+  is answered and the undo spends it afterwards, so a token whose 30 minutes run out between those
+  two moments is reported as expired instead of being quietly spent.
 - **A token is a capability.** It travels in the response of the write it belongs to. Anything that
   can read that response can spend it, up to the point where the approval sheet asks a human. The
   journal belongs to the app process, not to a client, so it is shared by every connected client.
