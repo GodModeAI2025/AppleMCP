@@ -190,6 +190,22 @@ final class SocketAvailabilityTests: XCTestCase {
         XCTAssertEqual(health.statusLine, "HTTP/1.1 200 OK")
     }
 
+    /// A client that shuts down its write side after half a request still gets told why, the way it
+    /// did when the request was read by a parked thread.
+    func testAHalfOpenClientIsToldItsRequestWasIncomplete() throws {
+        try startServer(openConnections: 2)
+
+        let client = try connectToSocket(at: socketURL)
+        defer { Darwin.close(client) }
+        try writeAllToSocket(Data("GET /heal".utf8), to: client)
+        XCTAssertEqual(Darwin.shutdown(client, SHUT_WR), 0)
+
+        let reply = try readUntilSocketClose(from: client, timeout: 3)
+        let text = String(decoding: reply, as: UTF8.self)
+        XCTAssertTrue(text.hasPrefix("HTTP/1.1 400 Bad Request\r\n"), text)
+        XCTAssertTrue(text.contains("Could not read a complete request"), text)
+    }
+
     // MARK: - The in-flight cap is a separate, honest limit
 
     /// Silence is cheap and a thread is the price of having said something. When every serving slot

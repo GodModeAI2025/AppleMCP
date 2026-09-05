@@ -974,12 +974,14 @@ final class LocalHTTPServer {
             if count < 0 {
                 if errno == EINTR { continue }
                 if errno == EAGAIN || errno == EWOULDBLOCK { return }
-                finish(connection, outcome: .drop)
+                finish(connection, outcome: .reply(errorResponse(400, "Could not read a complete request.")))
                 return
             }
             if count == 0 {
-                // The peer hung up before finishing its request.
-                finish(connection, outcome: .drop)
+                // The peer hung up before finishing its request. The reply is still attempted, because
+                // a half-open client that shut down only its write side is still reading; a fully
+                // closed one drops it, which is what best-effort means.
+                finish(connection, outcome: .reply(errorResponse(400, "Could not read a complete request.")))
                 return
             }
 
