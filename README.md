@@ -291,7 +291,14 @@ What the pin is not: proof of who is calling. It identifies the binary on the ot
 bundled bridge satisfies it whichever process starts it. A stolen token plus that bridge is still a
 working client, so treat every MCP client that holds the token as inside the local trust boundary.
 
-The server rejects malformed or oversized framing, limits concurrent connections, enforces an absolute request-receive deadline plus I/O timeouts, and closes active work on shutdown. These controls reduce accidental and hostile resource consumption but do not turn the endpoint into a multi-tenant service.
+The server rejects malformed or oversized framing, enforces an absolute request-receive deadline plus
+I/O timeouts, and closes active work on shutdown. Its two connection caps are separate on purpose: up
+to 128 accepted connections may be waiting for a request, each costing a descriptor and no thread, and
+up to 16 framed requests may be served at once. At the waiting cap the connection that has waited
+longest without sending a byte yields its place to a new arrival, so a process that opens connections
+and says nothing cannot take the endpoint away from the client that holds the token. These controls
+reduce accidental and hostile resource consumption but do not turn the endpoint into a multi-tenant
+service.
 
 For vulnerability reporting and supported versions, see [SECURITY.md](SECURITY.md). For the detailed
 threat model, network caveats, diagnostics, data retention, and release checklist, see

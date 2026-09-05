@@ -19,6 +19,16 @@
   overrides the sibling lookup. Where no sibling bridge exists the pin cannot be computed and the
   endpoint says so instead of implying it. `script/install_local.sh` now stages, signs, and commits
   the bridge together with the app, the way `script/package_release.sh` already did.
+- **Silence no longer takes the endpoint away.** Accepted connections are read through a dispatch
+  source on a serial queue instead of a thread parked in `read`, so a connection that has sent
+  nothing costs a descriptor and a deadline. Two caps replace one: 128 connections waiting for a
+  request, 16 requests being served. At the waiting cap the connection that has waited longest
+  without sending a byte is displaced by a new arrival, and the listen backlog is matched to the cap
+  so a burst is queued rather than met with ECONNREFUSED. Measured on the same probe: with 16 silent
+  connections the previous build answered `GET /health` and every tool call with 503, and this one
+  answers 200; under a four-thread reconnect flood it went from 4 percent of calls answered to 98
+  percent. A connection that has sent something is never displaced, and when every serving slot is
+  busy the refusal is still 503.
 
 ## 0.3.0 — 2026-09-04
 

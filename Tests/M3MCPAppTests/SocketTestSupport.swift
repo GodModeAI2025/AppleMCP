@@ -47,6 +47,19 @@ func connectToSocket(at url: URL) throws -> Int32 {
     return descriptor
 }
 
+/// The listen backlog is matched to the connection cap, so a burst larger than the cap can be met
+/// with ECONNREFUSED while the accept loop is still draining. That is the kernel, not the server,
+/// and a client retries. Returns nil when the endpoint refused for the whole window.
+func connectToSocketWithRetry(at url: URL, attempts: Int = 80) -> Int32? {
+    for attempt in 0..<attempts {
+        if let descriptor = try? connectToSocket(at: url) {
+            return descriptor
+        }
+        Thread.sleep(forTimeInterval: 0.002 * Double(attempt + 1))
+    }
+    return nil
+}
+
 func writeAllToSocket(_ data: Data, to descriptor: Int32) throws {
     try data.withUnsafeBytes { raw in
         guard let base = raw.baseAddress else { return }
@@ -94,7 +107,9 @@ func exchangeOverSocket(
     request: String,
     timeout: TimeInterval = 5
 ) throws -> (statusLine: String, body: String) {
-    let descriptor = try connectToSocket(at: url)
+    guard let descriptor = connectToSocketWithRetry(at: url) else {
+        throw POSIXError(.ECONNREFUSED)
+    }
     defer { Darwin.close(descriptor) }
     try writeAllToSocket(Data(request.utf8), to: descriptor)
     let raw = try readUntilSocketClose(from: descriptor, timeout: timeout)

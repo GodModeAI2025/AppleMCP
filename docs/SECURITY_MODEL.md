@@ -116,8 +116,18 @@ Implemented limits include:
 - a nonblocking liveness probe for any pre-existing socket under one 250 ms absolute monotonic
   deadline; timeout, unexpected poll state, or another ambiguous error preserves the endpoint and
   fails startup instead of replacing it;
-- at most 16 accepted connections doing work at once;
-- a 15-second absolute request-receive deadline, even when a client trickles bytes;
+- two separate caps, because a connection that has said nothing and one that is being served do not
+  cost the same thing: at most 128 accepted connections waiting for a request, each costing a file
+  descriptor and a dispatch source and no thread, and at most 16 framed requests being served at
+  once, each holding a thread while its handler runs;
+- displacement rather than refusal at the waiting cap: the connection that has waited longest without
+  sending a byte yields its place to a new arrival, so filling every slot buys a silent process a
+  burst and not an outage. A connection that has sent something is work in progress and is never
+  displaced; when every slot holds one of those, a new arrival is refused with 503;
+- a listen backlog matched to the waiting cap, so a burst is queued rather than answered with
+  ECONNREFUSED, which a client cannot tell from a server that is not running;
+- a 15-second absolute request-receive deadline measured from `accept`, even when a client trickles
+  bytes or says nothing at all;
 - 15-second blocked read and write timeouts as defence in depth;
 - 32 KiB maximum HTTP header block;
 - 1,048,576-byte (1 MiB) maximum HTTP request body, matching the bridge's MCP message limit;
