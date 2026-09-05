@@ -170,7 +170,10 @@ final class CapabilityTokenTests: XCTestCase {
         case .resolved(let resolution):
             XCTFail("a client invented the token \(resolution.origin)")
         case .missing(let reason):
-            XCTAssertTrue(reason.contains(service), reason)
+            // The property under test is that nothing was invented. The wording depends on why the
+            // keychain said no, and a locked or absent login keychain on a build machine answers
+            // with an OSStatus message instead of naming the item.
+            XCTAssertFalse(reason.isEmpty, "a refusal has to say something")
         }
     }
 }

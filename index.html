@@ -258,8 +258,9 @@ gh attestation verify M3MCP.app.zip \
   --signer-workflow GodModeAI2025/AppleMCP/.github/workflows/release.yml  # optional
 unzip M3MCP.app.zip
 
-# Point the MCP client at the bridge inside the bundle
-claude mcp add applemcp /absolute/path/M3MCP.app/Contents/MacOS/M3MCPBridge</code></pre>
+# Point the MCP client at the bridge inside the bundle. The app accepts only the
+# M3MCPBridge next to its own executable, and the token comes from Server &gt; Copy MCP Client Token.
+claude mcp add applemcp -e M3MCP_TOKEN=&lt;token&gt; -- /absolute/path/M3MCP.app/Contents/MacOS/M3MCPBridge</code></pre>
             <p style="margin-top: 16px;"><strong>Candidate status.</strong> The automated build is Apple Silicon only (<code>arm64</code>), ad-hoc signed, and unnotarized. It is not a production-grade macOS distribution.</p>
             <p style="margin-top: 12px;"><strong>Verification has limits.</strong> The checksum detects a mismatch against the asset recorded in the same GitHub release; alone it does not establish independent publisher authenticity. GitHub provenance binds the ZIP to this repository's workflow, but does not replace Apple Developer ID signing and notarization.</p>
             <p style="margin-top: 12px;"><strong>Respect Gatekeeper.</strong> If macOS blocks the app, verify its origin first and use System Settings, Privacy &amp; Security → <strong>Open Anyway</strong> only when you trust the candidate. Do not remove quarantine metadata merely to bypass the warning.</p>
@@ -279,13 +280,18 @@ swift test
 {
   "mcpServers": {
     "applemcp": {
-      "command": "/path/to/AppleMCP/.build/debug/M3MCPBridge"
+      "command": "/path/to/AppleMCP/.build/debug/M3MCPBridge",
+      "env": { "M3MCP_TOKEN": "&lt;token from the app: Server &gt; Copy MCP Client Token&gt;" }
     }
   }
 }
 
 # Or add to Claude Code
-claude mcp add applemcp /path/to/AppleMCP/.build/debug/M3MCPBridge
+claude mcp add applemcp -e M3MCP_TOKEN=&lt;token&gt; -- /path/to/AppleMCP/.build/debug/M3MCPBridge
+
+# Use the bridge next to the app you actually run: dist/M3MCP.app/Contents/MacOS/M3MCPBridge
+# after build_and_run.sh, ~/Applications/M3MCP.app/Contents/MacOS/M3MCPBridge after install_local.sh.
+# A copy from anywhere else has a different code directory hash and is refused with 403.
 
 # Check the endpoint
 curl --unix-socket ~/Library/Application\ Support/M3MCP/mcp.sock \

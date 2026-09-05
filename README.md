@@ -102,8 +102,23 @@ then run the staged installer:
 ```
 
 The installer builds the release configuration, validates the signed bundle, stages replacements,
-and commits them only after launchd and the Unix-socket health check succeed. Its bridge is at
-`.build/release/M3MCPBridge`; the one-off development commands below use `.build/debug/M3MCPBridge`.
+and commits them only after launchd and the Unix-socket health check succeed. It builds its bridge at
+`.build/release/M3MCPBridge` and installs a copy of it into the bundle; the one-off development
+commands below use `.build/debug/M3MCPBridge`.
+
+**Point the MCP client at the bridge that sits next to the app it will talk to.** The app accepts
+connections only from the `M3MCPBridge` beside its own executable, so:
+
+| The app you run | The bridge to configure |
+|---|---|
+| `swift build` plus `.build/<config>/M3MCPApp` | `.build/<config>/M3MCPBridge` |
+| `./script/build_and_run.sh` | `dist/M3MCP.app/Contents/MacOS/M3MCPBridge` |
+| `./script/install_local.sh` | `~/Applications/M3MCP.app/Contents/MacOS/M3MCPBridge` |
+| A downloaded release ZIP | `M3MCP.app/Contents/MacOS/M3MCPBridge` |
+
+After an install the copy in `.build/release/` is refused with `403`, even though it was built from
+the same source: the installer re-signs the staged bridge with your stable certificate, which changes
+its code directory hash. That is the pin working, not a bug. The installer prints the path to use.
 
 The app listens on a Unix domain socket at:
 
@@ -148,7 +163,7 @@ Claude Desktop example:
 Claude Code example:
 
 ```bash
-claude mcp add applemcp --env M3MCP_TOKEN="<token>" /path/to/AppleMCP/.build/debug/M3MCPBridge
+claude mcp add applemcp -e M3MCP_TOKEN="<token>" -- /path/to/AppleMCP/.build/debug/M3MCPBridge
 ```
 
 The app creates the capability token on its first start and keeps it in the login keychain. Copy it
@@ -222,7 +237,8 @@ environment. Installation commits only after launchd reports the replacement job
 the installer restores the previous app bundle and LaunchAgent and attempts to restart the previous
 service.
 
-Pass the same variables to the bridge in the MCP client configuration:
+Pass the same variables to the bridge in the MCP client configuration, alongside the capability
+token, and use the bridge path from the table above for the app you actually run:
 
 ```json
 {
@@ -230,6 +246,7 @@ Pass the same variables to the bridge in the MCP client configuration:
     "applemcp": {
       "command": "/path/to/AppleMCP/.build/release/M3MCPBridge",
       "env": {
+        "M3MCP_TOKEN": "<token from the app's Server menu>",
         "M3MCP_ENABLE_CALENDAR_MUTATIONS": "1",
         "M3MCP_ENABLE_PERMISSION_UI": "1",
         "M3MCP_ENABLE_USER_SHORTCUTS": "1"

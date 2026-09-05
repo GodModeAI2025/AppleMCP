@@ -18,7 +18,10 @@
   pid, and `SecCodeCheckValidity` runs alongside the hash comparison. `M3MCP_TRUSTED_CLIENT_CDHASH`
   overrides the sibling lookup. Where no sibling bridge exists the pin cannot be computed and the
   endpoint says so instead of implying it. `script/install_local.sh` now stages, signs, and commits
-  the bridge together with the app, the way `script/package_release.sh` already did.
+  the bridge together with the app, the way `script/package_release.sh` already did, and
+  `script/build_and_run.sh` stages one into its `dist/M3MCP.app` for the same reason. README and the
+  landing page now name which bridge to configure for each way of running the app: after an install
+  the copy in `.build/release/` is a different binary to the pin and is refused.
 - **Silence no longer takes the endpoint away.** Accepted connections are read through a dispatch
   source on a serial queue instead of a thread parked in `read`, so a connection that has sent
   nothing costs a descriptor and a deadline. Two caps replace one: 128 connections waiting for a
