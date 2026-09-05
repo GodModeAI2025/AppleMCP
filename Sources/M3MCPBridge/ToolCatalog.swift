@@ -191,7 +191,7 @@ enum ToolCatalog {
         ),
         MCPTool(
             name: .calendarCreateEvent,
-            description: "Create an event in an explicitly selected macOS calendar via EventKit. Writes to the user's real calendar — use calendar_id from calendar_list_calendars when possible, and confirm the target and times before calling. Pass dry_run to see the resolved calendar and times without writing. A committed create returns metadata.undo_token, which calendar_undo_write spends to delete the event again.",
+            description: "Create an event in an explicitly selected macOS calendar via EventKit. Writes to the user's real calendar — use calendar_id from calendar_list_calendars when possible, and confirm the target and times before calling. Pass dry_run to see the resolved calendar and times without writing. A committed create returns meta.undo_token, which calendar_undo_write spends to delete the event again.",
             schema: objectSchema(properties: [
                 "title": ["type": "string", "description": "Event title."],
                 "start": [
@@ -216,7 +216,7 @@ enum ToolCatalog {
         ),
         MCPTool(
             name: .calendarUpdateEvent,
-            description: "Change an existing macOS Calendar event. Only the fields passed are changed; anything omitted is left as it is. Pass dry_run to see which fields would change, and to what, without writing. A committed change to a non-recurring event returns metadata.undo_token, which calendar_undo_write spends to put the previous values back.",
+            description: "Change an existing macOS Calendar event. Only the fields passed are changed; anything omitted is left as it is. Pass dry_run to see which fields would change, and to what, without writing. A committed change to a non-recurring event returns meta.undo_token, which calendar_undo_write spends to put the previous values back.",
             schema: objectSchema(properties: [
                 "id": ["type": "string", "description": "Event id, from calendar_search or calendar_create_event."],
                 "title": ["type": "string", "description": "New title."],
@@ -239,7 +239,7 @@ enum ToolCatalog {
         ),
         MCPTool(
             name: .calendarDeleteEvent,
-            description: "Delete a macOS Calendar event by id. Pass dry_run to see exactly which event would go, without deleting it. Deleting a non-recurring event with the default span returns metadata.undo_token: calendar_undo_write rebuilds the event from a snapshot taken before the delete, with a new id. There is no undo token for a recurring event or for span=future_events, and none at all after the app restarts.",
+            description: "Delete a macOS Calendar event by id. Pass dry_run to see exactly which event would go, without deleting it. Deleting a non-recurring event with the default span returns meta.undo_token: calendar_undo_write rebuilds the event from a snapshot taken before the delete, with a new id. There is no undo token for a recurring event or for span=future_events, and none at all after the app restarts.",
             schema: objectSchema(properties: [
                 "id": ["type": "string", "description": "Event id, from calendar_search or calendar_create_event."],
                 "span": [
@@ -271,7 +271,7 @@ enum ToolCatalog {
             name: .calendarUndoWrite,
             description: "Reverse one committed calendar_create_event, calendar_update_event, or calendar_delete_event, using the undo_token that write returned. A create is reversed by deleting the event, an update by writing the previous values of the changed fields back, a delete by rebuilding the event from the snapshot taken before it. Tokens are single-use, expire after 30 minutes, and are held in memory only, so they do not survive a restart of the AppleMCP app. Rebuilding a deleted event gives it a new id, and restores only the fields these tools can write.",
             schema: objectSchema(properties: [
-                "undo_token": ["type": "string", "description": "The token from metadata.undo_token of the write to reverse."],
+                "undo_token": ["type": "string", "description": "The token from meta.undo_token of the write to reverse."],
                 "dry_run": ["type": "boolean", "description": "When true, report what the undo would do and leave the token unspent. Default false."]
             ], required: ["undo_token"])
         ),
