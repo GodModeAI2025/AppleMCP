@@ -279,8 +279,17 @@ keychain, and refuses every request other than `GET /health` that does not prese
 `Authorization: Bearer <token>`, compared in constant time. A process without the token can still
 open the socket and can still read `/health`; it cannot call a tool.
 
-A token is a secret in a configuration file, so it does not survive being copied. Treat every MCP
-client that holds it as inside the local trust boundary.
+A token is a secret in a configuration file, so a copy of it works. That is what the second factor is
+for. At every start the app reads the code directory hash of the `M3MCPBridge` sitting next to its own
+executable and accepts connections from that binary and no other. A valid token presented by anything
+else is `403`, not `401`, because the two say different things: the first means "configure a token",
+the second means "that token is not yours to use from there". Where no sibling bridge is found the pin
+cannot be computed; the app then runs token-only and says so in its window, in `source_status`, and in
+`/health`.
+
+What the pin is not: proof of who is calling. It identifies the binary on the other end, and the
+bundled bridge satisfies it whichever process starts it. A stolen token plus that bridge is still a
+working client, so treat every MCP client that holds the token as inside the local trust boundary.
 
 The server rejects malformed or oversized framing, limits concurrent connections, enforces an absolute request-receive deadline plus I/O timeouts, and closes active work on shutdown. These controls reduce accidental and hostile resource consumption but do not turn the endpoint into a multi-tenant service.
 

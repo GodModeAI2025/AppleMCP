@@ -12,6 +12,13 @@
   `initialize` and `tools/list` still answer on a machine with no app and no keychain item.
 - **`/status` is no longer open.** It carries the activity log with tool inputs and bounded outputs,
   so it now needs the token. `/health` stays open and keeps omitting the log.
+- **Pinned client binary.** At every start the app reads the code directory hash of the
+  `M3MCPBridge` next to its own executable and accepts connections from that binary alone; a valid
+  token from anywhere else is `403`. The identity comes from the peer's audit token rather than its
+  pid, and `SecCodeCheckValidity` runs alongside the hash comparison. `M3MCP_TRUSTED_CLIENT_CDHASH`
+  overrides the sibling lookup. Where no sibling bridge exists the pin cannot be computed and the
+  endpoint says so instead of implying it. `script/install_local.sh` now stages, signs, and commits
+  the bridge together with the app, the way `script/package_release.sh` already did.
 
 ## 0.3.0 — 2026-09-04
 

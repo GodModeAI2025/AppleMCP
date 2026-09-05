@@ -49,11 +49,21 @@ final class CapabilityTokenTests: XCTestCase {
         XCTAssertFalse(SocketAuthorizer.isPublic(method: "GET", path: "/health/../status"))
     }
 
+    /// A server without a pin never looks at the peer, so any identity does here.
+    private var unpinnedPeer: PeerIdentity {
+        PeerIdentity(processIdentifier: 1, userIdentifier: 501)
+    }
+
     func testTheAuthorizerRefusesAMissingAndAWrongToken() {
         let authorizer = SocketAuthorizer(token: "expected")
 
         XCTAssertEqual(
-            authorizer.authorize(method: "POST", path: "/tools/mail_search", authorizationHeader: nil),
+            authorizer.authorize(
+                method: "POST",
+                path: "/tools/mail_search",
+                authorizationHeader: nil,
+                peer: unpinnedPeer
+            ),
             .deny(
                 status: 401,
                 reason: "This endpoint needs a capability token. Send 'Authorization: Bearer <token>'. "
@@ -65,7 +75,8 @@ final class CapabilityTokenTests: XCTestCase {
             authorizer.authorize(
                 method: "POST",
                 path: "/tools/mail_search",
-                authorizationHeader: "Bearer wrong"
+                authorizationHeader: "Bearer wrong",
+                peer: unpinnedPeer
             ),
             .deny(status: 401, reason: "The capability token is not the one this M3MCP instance issued.")
         )
@@ -73,12 +84,18 @@ final class CapabilityTokenTests: XCTestCase {
             authorizer.authorize(
                 method: "POST",
                 path: "/tools/mail_search",
-                authorizationHeader: "Bearer expected"
+                authorizationHeader: "Bearer expected",
+                peer: unpinnedPeer
             ),
             .allow
         )
         XCTAssertEqual(
-            authorizer.authorize(method: "GET", path: "/health", authorizationHeader: nil),
+            authorizer.authorize(
+                method: "GET",
+                path: "/health",
+                authorizationHeader: nil,
+                peer: unpinnedPeer
+            ),
             .allow
         )
     }

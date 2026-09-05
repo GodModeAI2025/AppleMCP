@@ -38,7 +38,8 @@ Relevant Apple documentation:
 
 - Use a Unix domain socket, not a loopback TCP port.
 - Keep the socket directory `0700`, the socket `0600`, and a restrictive creation `umask`.
-- Remember that `0600` is not authentication against another unsandboxed process with the same user ID. The capability token is; keep it out of shell history, logs, and shared configuration.
+- Remember that `0600` is not authentication against another unsandboxed process with the same user ID. The capability token and the client pin are; keep the token out of shell history, logs, and shared configuration.
+- Install the bridge next to the app executable. Without it the pin cannot be computed and the endpoint falls back to token-only, which `/health` and the app window report.
 - Unlink only the exact configured stale socket before binding.
 - Keep accepted-connection concurrency, request sizes, and blocked I/O time bounded.
 - Reject ambiguous framing: duplicate or invalid `Content-Length`, transfer encoding, trailing bytes, and malformed JSON.

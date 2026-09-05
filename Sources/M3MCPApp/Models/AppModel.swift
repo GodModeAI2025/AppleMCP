@@ -63,9 +63,15 @@ final class AppModel: ObservableObject {
             return
         }
 
-        let authorizer = SocketAuthorizer(token: credentials.token)
+        let trust = TrustedClient.resolve(appExecutableURL: Bundle.main.executableURL)
+        let authorizer = SocketAuthorizer(
+            token: credentials.token,
+            trustedCodeDirectoryHashes: trust.hashes,
+            trustDescription: trust.note
+        )
         capabilityToken = credentials.token
         authenticationSummary = "\(authorizer.pinningDescription); token from \(credentials.origin)"
+        AppLogger.log("Client authentication: \(trust.note)")
 
         let localService = service
         let server = LocalHTTPServer(
@@ -99,7 +105,7 @@ final class AppModel: ObservableObject {
                 // Only refusals are recorded. A granted call is already an activity entry of its own,
                 // and one line per accepted request would bury it.
                 guard !attempt.allowed else { return }
-                AppLogger.log("Refused \(attempt.method) \(attempt.path)")
+                AppLogger.log("Refused \(attempt.method) \(attempt.path) from \(attempt.peer.description)")
                 Task { @MainActor in
                     self?.record(
                         tool: "access_refused",
@@ -107,7 +113,14 @@ final class AppModel: ObservableObject {
                             ok: false,
                             source: "M3MCP Server",
                             message: attempt.reason ?? "Refused",
-                            meta: ["path": attempt.path, "method": attempt.method]
+                            meta: [
+                                "path": attempt.path,
+                                "method": attempt.method,
+                                "peer_pid": String(attempt.peer.processIdentifier),
+                                "peer_identifier": attempt.peer.signingIdentifier ?? "",
+                                "peer_cdhash": attempt.peer.codeDirectoryHash ?? "",
+                                "peer_path": attempt.peer.executablePath ?? ""
+                            ]
                         ),
                         durationMilliseconds: 0
                     )
@@ -147,7 +160,7 @@ final class AppModel: ObservableObject {
         ServiceHealth(
             name: "Client Authentication",
             endpoint: "m3mcp://auth",
-            mode: "capability token",
+            mode: "capability token + peer code identity",
             state: authorizer.pinningDescription
         )
     }

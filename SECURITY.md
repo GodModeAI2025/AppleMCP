@@ -34,7 +34,9 @@ release checklist are in [docs/SECURITY_MODEL.md](docs/SECURITY_MODEL.md). In pa
 
 - a `0700` directory and `0600` socket exclude other users and normally sandboxed apps; a same-user
   unsandboxed process is stopped by the capability token, which every route other than `GET /health`
-  requires and which a client that holds a copy of can still present;
+  requires, and by a pin on the connecting binary's code directory hash;
+- the pin identifies a binary, not a caller: the bundled `M3MCPBridge` satisfies it whichever process
+  starts it, so a stolen token used through that bridge is still a working client;
 - Mail, Notes, Calendar text, transcripts, filenames, and other provider data remain untrusted
   content even when marked with the machine-readable provenance boundary;
 - Calendar mutation, permission UI, and user-created Shortcuts are separate launch-time opt-ins;

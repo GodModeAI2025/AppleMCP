@@ -34,7 +34,21 @@ If the token cannot be read or created, the app does not start the listener. Com
 
 The bridge resolves the token on its first tool call and not at start-up, so `initialize` and `tools/list` are still answered by a bridge on a machine with no app, no keychain item, and no token. A keychain read from the bridge refuses interaction: an MCP client gives the bridge no session in which an authorization panel could be answered, and a panel there is indistinguishable from a server that never replies.
 
-What a token does not do: it is a secret in a file, and a copy of it works. It raises "connect to the socket", which every process of the user can do, to "be configured for this endpoint".
+What a token does not do: it is a secret in a file, and a copy of it works. It raises "connect to the socket", which every process of the user can do, to "be configured for this endpoint". The second factor covers the copy.
+
+### Pinned client binary
+
+At every start the app reads the code directory hash of the `M3MCPBridge` next to its own executable and accepts connections from that binary alone. A valid token from any other binary is refused with `403`. `M3MCP_TRUSTED_CLIENT_CDHASH` replaces the sibling lookup with an explicit comma-separated list; it is read from the server's environment, which only the person starting the server controls.
+
+The identity comes from the peer's audit token (`LOCAL_PEERTOKEN`) rather than its pid, because a pid can be recycled between `accept` and the lookup while a connection stays open through an asynchronous tool call. `SecCodeCheckValidity` runs as well as the hash comparison, so a binary whose pages were changed after signing is refused even when the recorded hash still matches.
+
+Why the hash and not a team identifier or a certificate: `swift build` produces an ad-hoc signature whose designated requirement is the hash itself, so for a source build there is nothing else to pin. `script/install_local.sh` and `script/package_release.sh` do sign with a stable certificate, which would make a leaf-certificate pin possible and would also make it weaker: `script/create_local_identity.sh` creates one self-signed certificate that signs every binary its owner signs, a hand-written socket client included. The hash does not go stale, because it is read at each start rather than compiled in, and an install replaces app and bridge together.
+
+Where no sibling bridge is found the pin cannot be computed. The app then runs token-only and reports that state in its window, in `source_status`, and in `/health`, rather than implying a protection that is not there.
+
+### Known limits
+
+The pin identifies a binary, not a caller. Any process that can start the bundled bridge and holds the token is a working client. The window between `connect` and the identity check is the time the request takes to arrive, so a process could in principle deliver a request and then become the pinned binary; that reaches only what the previous sentence already grants.
 
 The endpoint is not reachable from a web page because browsers cannot open Unix domain sockets. Origin-style request headers are also rejected as defense in depth.
 

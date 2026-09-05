@@ -226,7 +226,7 @@
                 </div>
                 <div class="card">
                     <h3>Honest local boundary</h3>
-                    <p>The socket is owner-only, and every route but <code>/health</code> also needs the capability token the app keeps in the login keychain. A copied token still works, so treat every configured client as trusted.</p>
+                    <p>The socket is owner-only, every route but <code>/health</code> needs the capability token from the login keychain, and the connecting binary is pinned to the <code>M3MCPBridge</code> installed next to the app. The pin identifies a binary, not a caller, so treat every configured client as trusted.</p>
                 </div>
             </div>
         </section>

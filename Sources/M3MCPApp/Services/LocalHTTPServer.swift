@@ -16,8 +16,9 @@ private func m3mcpFlock(_ descriptor: Int32, _ operation: Int32) -> Int32
 ///
 /// The filesystem is only part of the access control, because it stops at the user boundary: every
 /// unsandboxed process of the same user could connect and inherit the app's Full Disk Access. So
-/// every request other than `GET /health` has to present the capability token. `SocketAuthorizer`
-/// holds the rules.
+/// every request other than `GET /health` has to present the capability token, and where the app
+/// could work out which binary its bridge is, the connecting process is checked against that
+/// binary's code directory hash. `SocketAuthorizer` holds the rules, `PeerIdentity` reads the peer.
 final class LocalHTTPServer {
     typealias ToolHandler = (String, [String: JSONValue]) async -> ToolResponse
     /// `includeActivity` is false for the public health probe and true for the diagnostic endpoint.
@@ -878,6 +879,12 @@ final class LocalHTTPServer {
     private func serve(_ client: Int32) {
         switch readRequest(from: client) {
         case .request(let request):
+            // The peer is read here and not at `accept`: resolving it costs a signature check, and a
+            // connection that never delivered a request never reaches an authorization decision.
+            // The descriptor is still the one the peer connected on, so `LOCAL_PEERTOKEN` names the
+            // process that opened it.
+            let peer = PeerIdentity.resolve(descriptor: client)
+
             // Once framing is complete no more client bytes are expected. Keep watching the read
             // side while the async handler runs so a bridge cancellation (`shutdown`) or crashed
             // client promptly cancels the work and returns the connection slot.
@@ -891,7 +898,7 @@ final class LocalHTTPServer {
 
             let task = Task { [weak self] in
                 defer { done.signal() }
-                await self?.respond(to: request, on: client, cancellation: cancellation)
+                await self?.respond(to: request, on: client, peer: peer, cancellation: cancellation)
             }
             cancellation.attach(task)
             done.wait()
@@ -1033,12 +1040,13 @@ final class LocalHTTPServer {
     private func respond(
         to request: LocalHTTPRequest,
         on client: Int32,
+        peer: PeerIdentity,
         cancellation: RequestCancellationState
     ) async {
         guard responseIsAllowed(cancellation) else { return }
 
         if let reason = RequestGuard.rejection(for: request) {
-            report(request, allowed: false, reason: reason)
+            report(request, peer: peer, allowed: false, reason: reason)
             send(status: 403, refusal: reason, path: request.path, to: client, cancellation: cancellation)
             return
         }
@@ -1046,15 +1054,16 @@ final class LocalHTTPServer {
         let decision = authorizer.authorize(
             method: request.method,
             path: request.path,
-            authorizationHeader: request.headers["authorization"]
+            authorizationHeader: request.headers["authorization"],
+            peer: peer
         )
         if case .deny(let status, let reason) = decision {
-            report(request, allowed: false, reason: reason)
+            report(request, peer: peer, allowed: false, reason: reason)
             send(status: status, refusal: reason, path: request.path, to: client, cancellation: cancellation)
             return
         }
 
-        report(request, allowed: true, reason: nil)
+        report(request, peer: peer, allowed: true, reason: nil)
 
         if request.method == "GET", request.path == "/health" {
             let status = await statusHandler(false)
@@ -1095,10 +1104,16 @@ final class LocalHTTPServer {
         send(status: 404, body: ["error": "Not found"], to: client, cancellation: cancellation)
     }
 
-    private func report(_ request: LocalHTTPRequest, allowed: Bool, reason: String?) {
+    private func report(_ request: LocalHTTPRequest, peer: PeerIdentity, allowed: Bool, reason: String?) {
         guard let auditHandler else { return }
         auditHandler(
-            AccessAttempt(method: request.method, path: request.path, allowed: allowed, reason: reason)
+            AccessAttempt(
+                method: request.method,
+                path: request.path,
+                peer: peer,
+                allowed: allowed,
+                reason: reason
+            )
         )
     }
 
