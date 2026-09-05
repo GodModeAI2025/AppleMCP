@@ -127,7 +127,7 @@ public struct M3MCPToolArgumentPolicy: Equatable, Sendable {
                     "url", "project_slug"
                 ],
                 integers: ["duration_minutes", "alarm_minutes_before"],
-                booleans: ["all_day"],
+                booleans: ["all_day", M3MCPWriteIntent.parameterName],
                 required: ["title", "start"],
                 requiredAlternatives: [["calendar_id"], ["calendar"]]
             )
@@ -139,18 +139,37 @@ public struct M3MCPToolArgumentPolicy: Equatable, Sendable {
                     "calendar", "calendar_id", "span"
                 ],
                 integers: ["duration_minutes"],
-                booleans: ["all_day"],
+                booleans: ["all_day", M3MCPWriteIntent.parameterName],
                 required: ["id"]
             )
 
         case .calendarDeleteEvent:
-            return policy(strings: ["id", "span"], required: ["id"])
+            return policy(
+                strings: ["id", "span"],
+                booleans: [M3MCPWriteIntent.parameterName],
+                required: ["id"]
+            )
 
         case .calendarCreateCalendar:
-            return policy(strings: ["title", "source"], required: ["title"])
+            return policy(
+                strings: ["title", "source"],
+                booleans: [M3MCPWriteIntent.parameterName],
+                required: ["title"]
+            )
 
         case .calendarDeleteCalendar:
-            return policy(strings: ["id", "title"], required: ["id", "title"])
+            return policy(
+                strings: ["id", "title"],
+                booleans: [M3MCPWriteIntent.parameterName],
+                required: ["id", "title"]
+            )
+
+        case .calendarUndoWrite:
+            return policy(
+                strings: ["undo_token"],
+                booleans: [M3MCPWriteIntent.parameterName],
+                required: ["undo_token"]
+            )
 
         case .contactsSearch:
             return queryPolicy()

@@ -39,6 +39,32 @@ public enum M3MCPInteractiveApproval {
         }
     }
 
+    /// The same question, asked of a concrete call.
+    ///
+    /// A dry run changes nothing, so there is nothing to consent to; requiring a click to see what a
+    /// write would do would make the preview useless in exactly the case it is for: a client
+    /// working out which event it means before asking a human anything. The exemption is narrow on
+    /// purpose:
+    ///
+    /// - only the literal boolean `true` reaches it, every other shape having been rejected by
+    ///   `M3MCPToolArgumentPolicy` first,
+    /// - only for a tool whose reviewed argument policy actually declares `dry_run`, so a tool that
+    ///   never learned to preview cannot be talked out of its sheet by an unexpected key, and
+    /// - it is the same value the provider reads, from the same function, so "no sheet" and "no
+    ///   write" cannot come apart.
+    ///
+    /// What it does not weaken: the launch-time opt-in still gates the whole group, so a preview is
+    /// only reachable where the mutation group was enabled at launch. It reveals no more about the
+    /// calendar than the default-safe read tools already do.
+    public static func requiresApproval(for tool: M3MCPToolName, input: [String: JSONValue]) -> Bool {
+        guard requiresApproval(for: tool) else { return false }
+        guard M3MCPToolArgumentPolicy
+            .forTool(tool)
+            .allowedKeys
+            .contains(M3MCPWriteIntent.parameterName) else { return true }
+        return M3MCPWriteIntent.resolve(from: input).writes
+    }
+
     /// Produces a stable, bounded preview for a native approval dialog.
     ///
     /// Keys are sorted, nested objects remain sorted, control characters are escaped, long values

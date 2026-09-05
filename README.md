@@ -214,7 +214,7 @@ Each group is disabled when its variable is absent, empty, malformed, or false. 
 
 | Environment variable | Tools enabled | Additional control |
 |---|---|---|
-| `M3MCP_ENABLE_CALENDAR_MUTATIONS=1` | `calendar_create_event`, `calendar_update_event`, `calendar_delete_event`, `calendar_create_calendar`, `calendar_delete_calendar` | Native approval for every call |
+| `M3MCP_ENABLE_CALENDAR_MUTATIONS=1` | `calendar_create_event`, `calendar_update_event`, `calendar_delete_event`, `calendar_create_calendar`, `calendar_delete_calendar`, `calendar_undo_write` | Native approval for every call that writes |
 | `M3MCP_ENABLE_PERMISSION_UI=1` | `permissions_request`, `permissions_open_settings` | macOS owns the resulting prompt or settings UI |
 | `M3MCP_ENABLE_USER_SHORTCUTS=1` | `ai_writing_tools`, `ai_translate` | Native approval for every call; Shortcut behavior is open-world |
 
@@ -256,15 +256,58 @@ token, and use the bridge path from the table above for the app you actually run
 }
 ```
 
-Enable only the groups you need. Environment opt-in makes tools available; it does not pre-approve Calendar or Shortcut calls. For those calls, the app displays the tool name and a bounded, credential-redacted argument preview. Denial, dismissal, timeout, cancellation, or the absence of a usable app window rejects that one call. Approval is not reusable.
+Enable only the groups you need. Environment opt-in makes tools available; it does not pre-approve Calendar or Shortcut calls. For those calls, the app displays the tool name and a bounded, credential-redacted argument preview. Denial, dismissal, timeout, cancellation, or the absence of a usable app window rejects that one call. Approval is not reusable. A call that carries `dry_run: true` writes nothing and shows no sheet, because there is nothing to consent to; see below.
 
-Cancellation is best-effort, cooperative interruption, not rollback. A client cancellation or disconnect is propagated to in-flight work where the underlying API supports interruption, but an already-raised macOS permission prompt, a running Automation determination, or a running in-process `NSAppleScript` call can remain until the system operation finishes. The caller still returns promptly, and the shared Apple Event slot remains held until that native operation actually ends. A Calendar save/delete or Shortcut action that already happened is not reversed. Read back Calendar state and inspect Shortcut effects before retrying a cancelled call.
+Cancellation is best-effort, cooperative interruption, not rollback. A client cancellation or disconnect is propagated to in-flight work where the underlying API supports interruption, but an already-raised macOS permission prompt, a running Automation determination, or a running in-process `NSAppleScript` call can remain until the system operation finishes. The caller still returns promptly, and the shared Apple Event slot remains held until that native operation actually ends. A Calendar save/delete or Shortcut action that already happened is not reversed by the cancellation. For a single event, `calendar_undo_write` can reverse it afterwards, but only from the token in a response a cancelled caller may never have received. Read back Calendar state and inspect Shortcut effects before retrying a cancelled call.
 
 ### User-created Shortcut contract
 
 The optional `ai_writing_tools` and `ai_translate` tools run Shortcuts named exactly `Writing Tools` and `Translate`. A Shortcut receives a versioned JSON document over standard input and must return non-empty UTF-8 plain text. Standard output and standard error are each limited to 1 MiB, and execution is limited to 60 seconds. A user-created Shortcut can make network requests, modify files, or perform any other action its author added; AppleMCP cannot constrain those actions.
 
 The complete input schemas and setup notes are in [User Shortcut contract](docs/SHORTCUTS.md).
+
+### Dry run, undo, and what neither covers
+
+Two separate questions sit in front of a calendar write. What would this do, and may it happen? The
+approval sheet answers only the second, and answers it about the arguments rather than the effect.
+
+**`dry_run`.** Every calendar write tool takes `dry_run`. With `dry_run: true` the tool resolves the
+calendar, parses the timestamps, applies every validation rule, works out which fields would change,
+reports the result with `meta.dry_run = "true"`, and writes nothing. It shows no approval sheet
+either: nothing is being approved. The launch opt-in still applies, so a preview is only reachable
+where the mutation group was enabled at launch, and it shows nothing the default read tools do not
+already show. Only the literal boolean `true` selects a preview. `"true"`, `1`, and a missing value
+all mean commit, so no existing caller turns into a silent no-op.
+
+**Undo.** A confirmed mistake used to stay. `calendar_create_event`, `calendar_update_event`, and
+`calendar_delete_event` now take a snapshot before they write and return `meta.undo_token` after
+they have. `calendar_undo_write` spends that token: it deletes an event that was created, writes the
+previous values back over the fields an update changed, and rebuilds a deleted event from the
+snapshot taken just before it went. `dry_run: true` on the undo reports the plan and leaves the
+token unspent.
+
+What it does not cover, in the order you are likely to hit it:
+
+- **A rebuilt event has a new id.** EventKit cannot hand an identifier back, so anything holding the
+  old one still points at nothing. `meta.undo_restores_identifier` says so before you act.
+- **Recurring events get no token at all.** Neither does `span: "future_events"`. Deleting one
+  occurrence detaches it from its series, and a single snapshot cannot describe what happens to the
+  occurrences it never saw. The write still happens; the response carries `meta.undo_unavailable`
+  with the reason instead of a token.
+- **Only the fields these tools write.** Attendees, attachments, availability, recurrence rules, and
+  travel time are outside the write contract and therefore outside the undo contract. An event
+  rebuilt after a delete keeps its title, times, all-day flag, location, URL, notes, and relative
+  alarms, and nothing else.
+- **Tokens live in memory.** They are single-use, expire 30 minutes after the write, are capped at
+  the 20 most recent writes, and are gone when the app restarts. Writing them to disk would put a
+  second copy of calendar content outside the calendar, which is a worse trade than a short window.
+- **Calendars are not events.** `calendar_create_calendar` and `calendar_delete_calendar` support
+  `dry_run` but issue no undo token. Deleting a calendar destroys every event in it, and that is
+  what the two matching keys, `id` and `title`, are for.
+- **Undo is a write.** It needs the same launch opt-in and its own approval sheet, it can fail
+  against a calendar that has since become read-only, and it does not check whether something else
+  changed the event in the meantime. It writes the recorded previous values over whatever is there
+  now. When it fails, nothing changes and the token stays valid.
 
 ## Voice Memos and speech privacy
 

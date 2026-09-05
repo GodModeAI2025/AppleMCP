@@ -16,6 +16,10 @@ final class CalendarProvider {
 
     private let store = EKEventStore()
 
+    /// What the last few committed writes replaced. See `M3MCPCalendarUndoJournal` for why it is in
+    /// memory and why it is bounded.
+    let undoJournal = M3MCPCalendarUndoJournal()
+
     // MARK: - Read
 
     func search(input: [String: JSONValue]) async -> ToolResponse {
@@ -218,6 +222,7 @@ final class CalendarProvider {
     // MARK: - Write: events
 
     func createEvent(input: [String: JSONValue]) async -> ToolResponse {
+        let intent = M3MCPWriteIntent.resolve(from: input)
         switch await access(need: .write) {
         case .denied(let response):
             return response
@@ -313,6 +318,19 @@ final class CalendarProvider {
             event.notes = suppliedNotes
         }
 
+        // Everything above this line resolved the write; nothing below it has happened yet. That is
+        // what makes the preview worth having: it answers which calendar, which times, which slug,
+        // using the same code the commit would use.
+        if intent == .dryRun {
+            return ToolResponse(
+                ok: true,
+                source: "EventKit",
+                items: [dryRunItem(from: item(for: event), id: "dry-run", operation: "create_event")],
+                message: "Dry run: would create '\(title)' in '\(calendar.title)'. Nothing was written.",
+                meta: ["dry_run": "true", "undo_available_after_commit": "true"]
+            )
+        }
+
         guard !Task.isCancelled else {
             return cancelledBeforeWrite("event creation")
         }
@@ -322,17 +340,31 @@ final class CalendarProvider {
             return failure("Could not save the event: \(error.localizedDescription)")
         }
 
+        var meta = ["dry_run": "false"]
+        if let identifier = event.eventIdentifier, !identifier.isEmpty {
+            let record = await undoJournal.record(
+                tool: .calendarCreateEvent,
+                summary: Self.undoSummary("creating '\(title)' in '\(calendar.title)'"),
+                action: .removeCreatedEvent(eventIdentifier: identifier)
+            )
+            meta.merge(Self.undoMeta(for: record)) { current, _ in current }
+        } else {
+            meta["undo_unavailable"] = "EventKit returned no identifier for the created event"
+        }
+
         return ToolResponse(
             ok: true,
             source: "EventKit",
             items: [item(for: event)],
-            message: "Created '\(title)' in '\(calendar.title)'."
+            message: "Created '\(title)' in '\(calendar.title)'.",
+            meta: meta
         )
     }
 
     /// Changes only the fields present in `input`. An absent field is left alone; that is what makes
     /// this safe to call on an event the caller did not create.
     func updateEvent(input: [String: JSONValue]) async -> ToolResponse {
+        let intent = M3MCPWriteIntent.resolve(from: input)
         switch await access(need: .write) {
         case .denied(let response):
             return response
@@ -354,6 +386,11 @@ final class CalendarProvider {
         guard event.calendar.allowsContentModifications else {
             return failure("Event '\(event.title ?? id)' is in read-only calendar '\(event.calendar.title)'.")
         }
+
+        // Taken before the first assignment below, because after it the previous state exists
+        // nowhere else.
+        let before = snapshot(of: event)
+        let undoReason = Self.undoUnavailableReason(event: event, span: recurrenceSpan)
 
         var changed: [String] = []
 
@@ -463,24 +500,76 @@ final class CalendarProvider {
             return failure("Nothing to change. Pass at least one of title, start, end, duration_minutes, all_day, location, url, notes, project_slug, calendar.")
         }
 
+        if intent == .dryRun {
+            // The event object carries the pending values now, which is what makes it a useful
+            // preview. It is dropped back to its saved state immediately afterwards: nothing was
+            // committed, so nothing may be left dirty for the next reader of the same store.
+            let preview = dryRunItem(
+                from: item(for: event),
+                id: id,
+                operation: "update_event",
+                extra: [
+                    "would_change": changed.sorted().joined(separator: ", "),
+                    "span": recurrenceSpan == .futureEvents ? "future_events" : "this_event"
+                ]
+            )
+            event.reset()
+            var meta = [
+                "dry_run": "true",
+                "would_change": changed.sorted().joined(separator: ", ")
+            ]
+            meta["undo_available_after_commit"] = String(undoReason == nil)
+            if let undoReason {
+                meta["undo_unavailable"] = undoReason
+            }
+            return ToolResponse(
+                ok: true,
+                source: "EventKit",
+                items: [preview],
+                message: "Dry run: would update \(changed.sorted().joined(separator: ", ")) on '\(event.title ?? id)'. Nothing was written.",
+                meta: meta
+            )
+        }
+
         guard !Task.isCancelled else {
+            event.reset()
             return cancelledBeforeWrite("event update")
         }
         do {
             try store.save(event, span: recurrenceSpan, commit: true)
         } catch {
+            event.reset()
             return failure("Could not save the event: \(error.localizedDescription)")
+        }
+
+        var meta = ["dry_run": "false"]
+        if let undoReason {
+            meta["undo_unavailable"] = undoReason
+        } else {
+            let record = await undoJournal.record(
+                tool: .calendarUpdateEvent,
+                summary: Self.undoSummary(
+                    "updating \(changed.sorted().joined(separator: ", ")) on '\(event.title ?? id)'"
+                ),
+                action: .restorePreviousValues(
+                    eventIdentifier: id,
+                    previous: Self.previousValues(from: before, changedFieldNames: changed)
+                )
+            )
+            meta.merge(Self.undoMeta(for: record)) { current, _ in current }
         }
 
         return ToolResponse(
             ok: true,
             source: "EventKit",
             items: [item(for: event)],
-            message: "Updated \(changed.joined(separator: ", "))."
+            message: "Updated \(changed.joined(separator: ", ")).",
+            meta: meta
         )
     }
 
     func deleteEvent(input: [String: JSONValue]) async -> ToolResponse {
+        let intent = M3MCPWriteIntent.resolve(from: input)
         switch await access(need: .write) {
         case .denied(let response):
             return response
@@ -505,6 +594,32 @@ final class CalendarProvider {
 
         let title = event.title ?? "(untitled event)"
         let calendarTitle = event.calendar.title
+        // The event is about to stop existing, so this is the last moment it can be read.
+        let before = snapshot(of: event)
+        let undoReason = Self.undoUnavailableReason(event: event, span: recurrenceSpan)
+        let spanName = recurrenceSpan == .futureEvents ? "future_events" : "this_event"
+
+        if intent == .dryRun {
+            var meta = ["dry_run": "true", "span": spanName]
+            meta["undo_available_after_commit"] = String(undoReason == nil)
+            if let undoReason {
+                meta["undo_unavailable"] = undoReason
+            }
+            return ToolResponse(
+                ok: true,
+                source: "EventKit",
+                items: [
+                    dryRunItem(
+                        from: item(for: event),
+                        id: id,
+                        operation: "delete_event",
+                        extra: ["span": spanName]
+                    )
+                ],
+                message: "Dry run: would delete '\(title)' from '\(calendarTitle)'. Nothing was written.",
+                meta: meta
+            )
+        }
 
         guard !Task.isCancelled else {
             return cancelledBeforeWrite("event deletion")
@@ -515,10 +630,23 @@ final class CalendarProvider {
             return failure("Could not delete the event: \(error.localizedDescription)")
         }
 
+        var meta = ["dry_run": "false"]
+        if let undoReason {
+            meta["undo_unavailable"] = undoReason
+        } else {
+            let record = await undoJournal.record(
+                tool: .calendarDeleteEvent,
+                summary: Self.undoSummary("deleting '\(title)' from '\(calendarTitle)'"),
+                action: .recreateDeletedEvent(before)
+            )
+            meta.merge(Self.undoMeta(for: record)) { current, _ in current }
+        }
+
         return ToolResponse(
             ok: true,
             source: "EventKit",
-            message: "Deleted '\(title)' from '\(calendarTitle)'."
+            message: "Deleted '\(title)' from '\(calendarTitle)'.",
+            meta: meta
         )
     }
 
@@ -530,6 +658,7 @@ final class CalendarProvider {
     /// account's other devices and to whoever that account shares with. Anything scratch — a test
     /// calendar above all — belongs on the machine that made it.
     func createCalendar(input: [String: JSONValue]) async -> ToolResponse {
+        let intent = M3MCPWriteIntent.resolve(from: input)
         switch await access(need: .write) {
         case .denied(let response):
             return response
@@ -575,6 +704,31 @@ final class CalendarProvider {
             )
         }
 
+        if intent == .dryRun {
+            return ToolResponse(
+                ok: true,
+                source: "EventKit",
+                items: [
+                    DataItem(
+                        id: "dry-run",
+                        title: title,
+                        subtitle: source.title,
+                        kind: "calendar_write_preview",
+                        source: "EventKit",
+                        preview: nil,
+                        metadata: [
+                            "dry_run": "true",
+                            "operation": "create_calendar",
+                            "source": source.title,
+                            "source_type": describe(source.sourceType)
+                        ]
+                    )
+                ],
+                message: "Dry run: would create calendar '\(title)' in source '\(source.title)'. Nothing was written.",
+                meta: ["dry_run": "true", "source_type": describe(source.sourceType)]
+            )
+        }
+
         let calendar = EKCalendar(for: .event, eventStore: store)
         calendar.title = title
         calendar.source = source
@@ -606,7 +760,13 @@ final class CalendarProvider {
                     ]
                 )
             ],
-            message: "Created calendar '\(title)' in source '\(source.title)'."
+            message: "Created calendar '\(title)' in source '\(source.title)'.",
+            meta: [
+                "dry_run": "false",
+                // calendar_undo_write reverses single events. A calendar is not in its vocabulary,
+                // and saying so here is cheaper than letting a caller assume otherwise.
+                "undo_unavailable": "calendar_undo_write covers events, not calendars"
+            ]
         )
     }
 
@@ -616,6 +776,7 @@ final class CalendarProvider {
     /// with no undo, and an identifier alone is easy to carry over from a stale listing — so the
     /// second key is what proves the caller means *this* calendar.
     func deleteCalendar(input: [String: JSONValue]) async -> ToolResponse {
+        let intent = M3MCPWriteIntent.resolve(from: input)
         switch await access(need: .write) {
         case .denied(let response):
             return response
@@ -638,6 +799,26 @@ final class CalendarProvider {
             return failure("Calendar '\(calendar.title)' is immutable and cannot be deleted.")
         }
 
+        if intent == .dryRun {
+            return ToolResponse(
+                ok: true,
+                source: "EventKit",
+                items: [
+                    calendarItem(
+                        for: calendar,
+                        defaultCalendarID: store.defaultCalendarForNewEvents?.calendarIdentifier
+                    )
+                ],
+                message: "Dry run: would delete calendar '\(calendar.title)' and every event in it. "
+                    + "Nothing was written, and there is no undo for this once it is committed.",
+                meta: [
+                    "dry_run": "true",
+                    "undo_available_after_commit": "false",
+                    "undo_unavailable": "calendar_undo_write covers events, not calendars"
+                ]
+            )
+        }
+
         guard !Task.isCancelled else {
             return cancelledBeforeWrite("calendar deletion")
         }
@@ -647,7 +828,15 @@ final class CalendarProvider {
             return failure("Could not delete calendar '\(title)': \(error.localizedDescription)")
         }
 
-        return ToolResponse(ok: true, source: "EventKit", message: "Deleted calendar '\(title)'.")
+        return ToolResponse(
+            ok: true,
+            source: "EventKit",
+            message: "Deleted calendar '\(title)'.",
+            meta: [
+                "dry_run": "false",
+                "undo_unavailable": "calendar_undo_write covers events, not calendars"
+            ]
+        )
     }
 
     // MARK: - Access
@@ -911,5 +1100,474 @@ final class CalendarProvider {
         case .birthdays: return "birthdays"
         @unknown default: return "unknown"
         }
+    }
+}
+
+/// Snapshot capture, snapshot application, and the tool that spends an undo token.
+///
+/// Kept beside `CalendarProvider` rather than inside it because it is the one part of calendar
+/// writing that has to be readable on its own: what is recorded, what is put back, and what is
+/// admitted to be out of reach.
+extension CalendarProvider {
+    static let maximumUndoSummaryUTF8Bytes = 160
+
+    // MARK: - Capture
+
+    /// Reads the fields these tools can write off a live event, before it changes.
+    func snapshot(of event: EKEvent) -> M3MCPCalendarEventSnapshot {
+        M3MCPCalendarEventSnapshot(
+            title: event.title,
+            isAllDay: event.isAllDay,
+            startDate: event.startDate,
+            endDate: event.endDate,
+            location: event.location,
+            url: event.url?.absoluteString,
+            notes: event.notes,
+            calendarIdentifier: event.calendar?.calendarIdentifier,
+            // An alarm fixed to a wall-clock date is not a relative reminder and is not restored as
+            // one; `alarm_minutes_before` is the only alarm shape these tools create.
+            alarmOffsetsSeconds: (event.alarms ?? [])
+                .filter { $0.absoluteDate == nil }
+                .map(\.relativeOffset)
+        )
+    }
+
+    /// The names `updateEvent` reports back to the caller, mapped onto the fields that carry them.
+    ///
+    /// `notes` and `project_slug` are two ways of writing one field, so both map to `.notes`; the
+    /// snapshot holds the raw notes text, which is what restores either of them.
+    static func undoField(forChangeName name: String) -> M3MCPCalendarField? {
+        switch name {
+        case "title": return .title
+        case "all_day": return .allDay
+        case "start": return .start
+        case "end": return .end
+        case "location": return .location
+        case "url": return .url
+        case "notes", "project_slug": return .notes
+        case "calendar": return .calendar
+        default: return nil
+        }
+    }
+
+    /// Turns the changed field names into the previous values that reverse them.
+    ///
+    /// Toggling `all_day` drags the start and end with it inside EventKit, whether or not the caller
+    /// passed them, so those two are always recorded alongside it. Restoring the flag on its own
+    /// would leave the normalized times in place and call it an undo.
+    static func previousValues(
+        from snapshot: M3MCPCalendarEventSnapshot,
+        changedFieldNames: [String]
+    ) -> [M3MCPCalendarField: M3MCPCalendarPreviousValue] {
+        var fields = Set(changedFieldNames.compactMap(undoField(forChangeName:)))
+        if fields.contains(.allDay) {
+            fields.formUnion([.start, .end])
+        }
+
+        var previous: [M3MCPCalendarField: M3MCPCalendarPreviousValue] = [:]
+        for field in fields {
+            switch field {
+            case .title:
+                previous[field] = snapshot.title.map { .text($0) } ?? .cleared
+            case .allDay:
+                previous[field] = .flag(snapshot.isAllDay)
+            case .start:
+                previous[field] = snapshot.startDate.map { .timestamp($0) } ?? .cleared
+            case .end:
+                previous[field] = snapshot.endDate.map { .timestamp($0) } ?? .cleared
+            case .location:
+                previous[field] = snapshot.location.map { .text($0) } ?? .cleared
+            case .url:
+                previous[field] = snapshot.url.map { .text($0) } ?? .cleared
+            case .notes:
+                previous[field] = snapshot.notes.map { .text($0) } ?? .cleared
+            case .calendar:
+                previous[field] = snapshot.calendarIdentifier.map { .text($0) } ?? .cleared
+            }
+        }
+        return previous
+    }
+
+    /// An undo snapshot is offered only where it can be honoured.
+    ///
+    /// A recurring event is the case it cannot. EventKit does not hand back an occurrence: deleting
+    /// one detaches it from its series, and rebuilding it as a standalone event would look restored
+    /// while the series had moved on without it. `future_events` is worse still, because the write
+    /// touches occurrences the snapshot never saw. Both keep working exactly as before; they simply
+    /// return no token, and say so.
+    static func undoIsRepresentable(event: EKEvent, span: EKSpan) -> Bool {
+        span == .thisEvent && (event.recurrenceRules ?? []).isEmpty
+    }
+
+    static func undoUnavailableReason(event: EKEvent, span: EKSpan) -> String? {
+        if span != .thisEvent {
+            return "no undo snapshot: span 'future_events' changes occurrences a single snapshot cannot describe"
+        }
+        if !(event.recurrenceRules ?? []).isEmpty {
+            return "no undo snapshot: the event is part of a recurring series"
+        }
+        return nil
+    }
+
+    static func undoSummary(_ text: String) -> String {
+        ProviderOutputBudget.text(text, maximumUTF8Bytes: maximumUndoSummaryUTF8Bytes).text
+    }
+
+    /// The response-level facts a caller needs to act on an undo token without reading prose.
+    static func undoMeta(for record: M3MCPCalendarUndoRecord) -> [String: String] {
+        let formatter = ISO8601DateFormatter()
+        return [
+            "undo_token": record.token,
+            "undo_expires_at": formatter.string(from: record.expiresAt),
+            "undo_restores_identifier": String(record.restoresIdentifier),
+            "undo_tool": M3MCPToolName.calendarUndoWrite.rawValue
+        ]
+    }
+
+    // MARK: - Preview
+
+    /// Re-labels a resolved event as the change that has not happened.
+    ///
+    /// The kind is deliberately not `calendar_event`: a client that stores results should not file a
+    /// preview next to things that exist.
+    func dryRunItem(
+        from item: DataItem,
+        id: String,
+        operation: String,
+        extra: [String: String] = [:]
+    ) -> DataItem {
+        var metadata = item.metadata
+        metadata["dry_run"] = "true"
+        metadata["operation"] = operation
+        for (key, value) in extra {
+            metadata[key] = value
+        }
+        return DataItem(
+            id: id,
+            title: item.title,
+            subtitle: item.subtitle,
+            kind: "calendar_write_preview",
+            source: "EventKit",
+            preview: item.preview,
+            metadata: metadata
+        )
+    }
+
+    // MARK: - Application
+
+    /// A refusal with a caller-facing reason. `Result` needs an `Error`, and the reason is the whole
+    /// payload, so this is the smallest honest way to carry it.
+    struct UndoProblem: Error, Equatable {
+        let message: String
+    }
+
+    enum UndoOutcome {
+        case restored([DataItem], String)
+        case nothingToDo(String)
+        case failed(String)
+    }
+
+    /// Writes recorded previous values back over an event.
+    ///
+    /// Ordering matches `updateEvent`: the all-day flag first, because it decides how the timestamps
+    /// are interpreted, then the rest.
+    func applyPreviousValues(
+        _ previous: [M3MCPCalendarField: M3MCPCalendarPreviousValue],
+        to event: EKEvent
+    ) -> Result<[String], UndoProblem> {
+        var restored: [String] = []
+
+        if case .flag(let wasAllDay)? = previous[.allDay] {
+            event.isAllDay = wasAllDay
+            restored.append("all_day")
+        }
+        if let value = previous[.start] {
+            guard case .timestamp(let date) = value else {
+                return .failure(UndoProblem(message: "The recorded previous start is not a timestamp."))
+            }
+            event.startDate = date
+            restored.append("start")
+        }
+        if let value = previous[.end] {
+            guard case .timestamp(let date) = value else {
+                return .failure(UndoProblem(message: "The recorded previous end is not a timestamp."))
+            }
+            event.endDate = date
+            restored.append("end")
+        }
+        if let value = previous[.title] {
+            // A blank title is not a state EventKit keeps, so a create-then-undo cannot produce one.
+            event.title = text(of: value) ?? ""
+            restored.append("title")
+        }
+        if let value = previous[.location] {
+            event.location = text(of: value)
+            restored.append("location")
+        }
+        if let value = previous[.url] {
+            if let raw = text(of: value) {
+                guard let url = URL(string: raw) else {
+                    return .failure(UndoProblem(message: "The recorded previous url is no longer a valid URL."))
+                }
+                event.url = url
+            } else {
+                event.url = nil
+            }
+            restored.append("url")
+        }
+        if let value = previous[.notes] {
+            event.notes = text(of: value)
+            restored.append("notes")
+        }
+        if let value = previous[.calendar] {
+            guard let identifier = text(of: value),
+                  let calendar = store.calendar(withIdentifier: identifier) else {
+                return .failure(UndoProblem(message: "The calendar the event came from no longer exists, so it cannot be moved back."))
+            }
+            guard calendar.allowsContentModifications else {
+                return .failure(UndoProblem(message: "Calendar '\(calendar.title)' is read-only, so the event cannot be moved back into it."))
+            }
+            event.calendar = calendar
+            restored.append("calendar")
+        }
+
+        guard CalendarEventTiming.isValid(start: event.startDate, end: event.endDate) else {
+            return .failure(UndoProblem(message: "Restoring the previous values would leave 'end' at or before 'start'."))
+        }
+        return .success(restored.sorted())
+    }
+
+    /// Builds a deleted event again from its snapshot.
+    func rebuild(from snapshot: M3MCPCalendarEventSnapshot) -> Result<EKEvent, UndoProblem> {
+        guard let identifier = snapshot.calendarIdentifier,
+              let calendar = store.calendar(withIdentifier: identifier) else {
+            return .failure(UndoProblem(message: "The calendar the event was deleted from no longer exists, so it cannot be put back."))
+        }
+        guard calendar.allowsContentModifications else {
+            return .failure(UndoProblem(message: "Calendar '\(calendar.title)' is read-only, so the event cannot be put back into it."))
+        }
+        guard let start = snapshot.startDate, let end = snapshot.endDate else {
+            return .failure(UndoProblem(message: "The snapshot has no start or end, so the event cannot be rebuilt."))
+        }
+
+        let event = EKEvent(eventStore: store)
+        event.calendar = calendar
+        event.title = snapshot.title ?? ""
+        event.isAllDay = snapshot.isAllDay
+        event.startDate = start
+        event.endDate = end
+        event.location = snapshot.location
+        event.notes = snapshot.notes
+        if let raw = snapshot.url {
+            event.url = URL(string: raw)
+        }
+        for offset in snapshot.alarmOffsetsSeconds {
+            event.addAlarm(EKAlarm(relativeOffset: offset))
+        }
+        return .success(event)
+    }
+
+    private func text(of value: M3MCPCalendarPreviousValue) -> String? {
+        if case .text(let string) = value { return string }
+        return nil
+    }
+
+    // MARK: - Tool
+
+    /// Spends one undo token.
+    func undoWrite(input: [String: JSONValue]) async -> ToolResponse {
+        switch await access(need: .write) {
+        case .denied(let response):
+            return response
+        case .granted:
+            break
+        }
+
+        let token = input.string("undo_token").trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !token.isEmpty else {
+            return failure("'undo_token' is required and must not be blank.")
+        }
+        let intent = M3MCPWriteIntent.resolve(from: input)
+
+        // A preview must not spend the token it is previewing: reading the plan is not carrying it
+        // out, and losing the chance to undo by asking about it would be the worst of both.
+        let lookup = intent == .dryRun
+            ? await undoJournal.peek(token: token)
+            : await undoJournal.consume(token: token)
+
+        let record: M3MCPCalendarUndoRecord
+        switch lookup {
+        case .found(let found):
+            record = found
+        case .alreadyUndone:
+            return failure("That undo token has already been spent. Each write can be undone once.")
+        case .expired:
+            let minutes = Int(M3MCPCalendarUndoJournal.defaultLifetime / 60)
+            return failure("That undo token has expired. Undo snapshots are kept for \(minutes) minutes after the write.")
+        case .unknown:
+            return failure(
+                "No undo snapshot for that token. Tokens are held in memory only, are spent once, "
+                + "and are dropped when the AppleMCP app restarts."
+            )
+        }
+
+        if intent == .dryRun {
+            return ToolResponse(
+                ok: true,
+                source: "EventKit",
+                items: [undoPlanItem(for: record, dryRun: true)],
+                message: "Dry run: would reverse \(record.summary). Nothing was written, and the token is still unspent.",
+                meta: undoMeta(for: record, intent: .dryRun, applied: false)
+            )
+        }
+
+        guard !Task.isCancelled else {
+            await undoJournal.reinstate(record)
+            return cancelledBeforeWrite("undo")
+        }
+
+        let outcome = apply(record)
+        switch outcome {
+        case .restored(let items, let message):
+            return ToolResponse(
+                ok: true,
+                source: "EventKit",
+                items: items,
+                message: message,
+                meta: undoMeta(for: record, intent: .commit, applied: true)
+            )
+        case .nothingToDo(let message):
+            return ToolResponse(
+                ok: true,
+                source: "EventKit",
+                message: message,
+                meta: undoMeta(for: record, intent: .commit, applied: false)
+            )
+        case .failed(let message):
+            // The state did not change, so the token has to survive the attempt.
+            await undoJournal.reinstate(record)
+            return failure(message + " The undo token is still valid.")
+        }
+    }
+
+    private func apply(_ record: M3MCPCalendarUndoRecord) -> UndoOutcome {
+        switch record.action {
+        case .removeCreatedEvent(let identifier):
+            guard let event = store.event(withIdentifier: identifier) else {
+                return .nothingToDo("Nothing to undo: the event created by that call no longer exists.")
+            }
+            guard event.calendar.allowsContentModifications else {
+                return .failed("Event '\(event.title ?? identifier)' now sits in read-only calendar '\(event.calendar.title)'.")
+            }
+            let removed = item(for: event)
+            do {
+                try store.remove(event, span: .thisEvent, commit: true)
+            } catch {
+                return .failed("Could not remove the created event: \(error.localizedDescription)")
+            }
+            return .restored([removed], "Undone: removed the event created by \(record.summary).")
+
+        case .restorePreviousValues(let identifier, let previous):
+            guard let event = store.event(withIdentifier: identifier) else {
+                return .failed("The updated event no longer exists, so its previous values cannot be written back.")
+            }
+            guard event.calendar.allowsContentModifications else {
+                return .failed("Event '\(event.title ?? identifier)' is in read-only calendar '\(event.calendar.title)'.")
+            }
+            let restored: [String]
+            switch applyPreviousValues(previous, to: event) {
+            case .success(let fields):
+                restored = fields
+            case .failure(let problem):
+                event.reset()
+                return .failed(problem.message)
+            }
+            do {
+                try store.save(event, span: .thisEvent, commit: true)
+            } catch {
+                event.reset()
+                return .failed("Could not write the previous values back: \(error.localizedDescription)")
+            }
+            return .restored(
+                [item(for: event)],
+                "Undone: restored \(restored.joined(separator: ", ")) on '\(event.title ?? identifier)'."
+            )
+
+        case .recreateDeletedEvent(let snapshot):
+            let event: EKEvent
+            switch rebuild(from: snapshot) {
+            case .success(let rebuilt):
+                event = rebuilt
+            case .failure(let problem):
+                return .failed(problem.message)
+            }
+            do {
+                try store.save(event, span: .thisEvent, commit: true)
+            } catch {
+                return .failed("Could not put the deleted event back: \(error.localizedDescription)")
+            }
+            return .restored(
+                [item(for: event)],
+                "Undone: put '\(event.title ?? "(untitled event)")' back into '\(event.calendar.title)'. "
+                    + "It has a new id, because a deleted event cannot be given its old one."
+            )
+        }
+    }
+
+    private func undoPlanItem(for record: M3MCPCalendarUndoRecord, dryRun: Bool) -> DataItem {
+        let action: String
+        let target: String
+        switch record.action {
+        case .removeCreatedEvent(let identifier):
+            action = "remove_created_event"
+            target = identifier
+        case .restorePreviousValues(let identifier, let previous):
+            action = "restore_previous_values"
+            target = identifier
+            return DataItem(
+                id: identifier,
+                title: record.summary,
+                subtitle: record.tool.rawValue,
+                kind: "calendar_undo_plan",
+                source: "EventKit",
+                preview: previous.keys.map(\.rawValue).sorted().joined(separator: ", "),
+                metadata: [
+                    "undo_action": action,
+                    "event_id": target,
+                    "restores_identifier": String(record.restoresIdentifier),
+                    "dry_run": String(dryRun)
+                ]
+            )
+        case .recreateDeletedEvent(let snapshot):
+            action = "recreate_deleted_event"
+            target = snapshot.title ?? "(untitled event)"
+        }
+        return DataItem(
+            id: target,
+            title: record.summary,
+            subtitle: record.tool.rawValue,
+            kind: "calendar_undo_plan",
+            source: "EventKit",
+            preview: nil,
+            metadata: [
+                "undo_action": action,
+                "restores_identifier": String(record.restoresIdentifier),
+                "dry_run": String(dryRun)
+            ]
+        )
+    }
+
+    private func undoMeta(
+        for record: M3MCPCalendarUndoRecord,
+        intent: M3MCPWriteIntent,
+        applied: Bool
+    ) -> [String: String] {
+        [
+            "dry_run": intent.metaValue,
+            "undo_applied": String(applied),
+            "undone_tool": record.tool.rawValue,
+            "undo_restores_identifier": String(record.restoresIdentifier),
+            "undo_token_spent": String(intent == .commit)
+        ]
     }
 }

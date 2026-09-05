@@ -19,6 +19,7 @@ public enum M3MCPToolName: String, CaseIterable, Sendable {
     case calendarDeleteEvent = "calendar_delete_event"
     case calendarCreateCalendar = "calendar_create_calendar"
     case calendarDeleteCalendar = "calendar_delete_calendar"
+    case calendarUndoWrite = "calendar_undo_write"
 
     case contactsSearch = "contacts_search"
     case mailSearch = "mail_search"
@@ -172,7 +173,8 @@ public struct M3MCPSecurityPolicy: Equatable, Sendable {
              .calendarUpdateEvent,
              .calendarDeleteEvent,
              .calendarCreateCalendar,
-             .calendarDeleteCalendar:
+             .calendarDeleteCalendar,
+             .calendarUndoWrite:
             return .calendarMutation
 
         case .permissionsRequest,
@@ -210,7 +212,7 @@ public struct M3MCPSecurityPolicy: Equatable, Sendable {
     }
 
     /// Every reviewed tool exactly once, annotated with its state under this launch policy.
-    /// Default-safe callers therefore receive 21 enabled rows plus the nine explicit opt-ins,
+    /// Default-safe callers therefore receive 21 enabled rows plus the ten explicit opt-ins,
     /// without maintaining a second UI catalog.
     public var toolAvailability: [ToolAvailability] {
         M3MCPToolName.allCases.map { tool in

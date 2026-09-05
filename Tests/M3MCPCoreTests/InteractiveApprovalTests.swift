@@ -9,6 +9,7 @@ final class InteractiveApprovalTests: XCTestCase {
             .calendarDeleteEvent,
             .calendarCreateCalendar,
             .calendarDeleteCalendar,
+            .calendarUndoWrite,
             .aiWritingTools,
             .aiTranslate
         ]
@@ -37,6 +38,7 @@ final class InteractiveApprovalTests: XCTestCase {
             .calendarDeleteEvent,
             .calendarCreateCalendar,
             .calendarDeleteCalendar,
+            .calendarUndoWrite,
             .aiWritingTools,
             .aiTranslate
         ] {
@@ -49,6 +51,69 @@ final class InteractiveApprovalTests: XCTestCase {
 
         XCTAssertTrue(optedIn.allows(.permissionsRequest))
         XCTAssertFalse(M3MCPInteractiveApproval.requiresApproval(for: .permissionsRequest))
+    }
+
+    /// The dry-run exemption is the one way past the sheet, so it is pinned from both sides: it must
+    /// hold for every write tool that declares `dry_run`, and it must not be reachable by any other
+    /// shape of the argument or by a tool that never learned to preview.
+    func testOnlyAnExplicitBooleanDryRunSkipsTheApprovalSheet() {
+        let previewable: [M3MCPToolName] = [
+            .calendarCreateEvent,
+            .calendarUpdateEvent,
+            .calendarDeleteEvent,
+            .calendarCreateCalendar,
+            .calendarDeleteCalendar,
+            .calendarUndoWrite
+        ]
+
+        for tool in previewable {
+            XCTAssertTrue(
+                M3MCPToolArgumentPolicy.forTool(tool).allowedKeys.contains("dry_run"),
+                "\(tool.rawValue) must advertise the parameter its exemption depends on"
+            )
+            XCTAssertFalse(
+                M3MCPInteractiveApproval.requiresApproval(for: tool, input: ["dry_run": .bool(true)]),
+                "a preview of \(tool.rawValue) writes nothing and has nothing to approve"
+            )
+
+            for commitShape: [String: JSONValue] in [
+                [:],
+                ["dry_run": .bool(false)],
+                ["dry_run": .string("true")],
+                ["dry_run": .number(1)],
+                ["dry_run": .null]
+            ] {
+                XCTAssertTrue(
+                    M3MCPInteractiveApproval.requiresApproval(for: tool, input: commitShape),
+                    "\(tool.rawValue) must keep its sheet for \(commitShape)"
+                )
+            }
+        }
+
+        // A tool with no dry-run contract cannot be talked out of its sheet by the key alone.
+        for tool in [M3MCPToolName.aiWritingTools, .aiTranslate] {
+            XCTAssertFalse(M3MCPToolArgumentPolicy.forTool(tool).allowedKeys.contains("dry_run"))
+            XCTAssertTrue(
+                M3MCPInteractiveApproval.requiresApproval(for: tool, input: ["dry_run": .bool(true)])
+            )
+        }
+
+        // And a read stays free of the sheet either way.
+        XCTAssertFalse(M3MCPInteractiveApproval.requiresApproval(for: .calendarSearch, input: [:]))
+    }
+
+    func testWriteIntentDefaultsToCommitForEveryNonBooleanShape() {
+        XCTAssertEqual(M3MCPWriteIntent.resolve(from: ["dry_run": .bool(true)]), .dryRun)
+        XCTAssertEqual(M3MCPWriteIntent.resolve(from: [:]), .commit)
+        XCTAssertEqual(M3MCPWriteIntent.resolve(from: ["dry_run": .bool(false)]), .commit)
+        XCTAssertEqual(M3MCPWriteIntent.resolve(from: ["dry_run": .string("true")]), .commit)
+        XCTAssertEqual(M3MCPWriteIntent.resolve(from: ["dry_run": .number(1)]), .commit)
+        XCTAssertEqual(M3MCPWriteIntent.resolve(from: ["dry_run": .null]), .commit)
+
+        XCTAssertTrue(M3MCPWriteIntent.commit.writes)
+        XCTAssertFalse(M3MCPWriteIntent.dryRun.writes)
+        XCTAssertEqual(M3MCPWriteIntent.dryRun.metaValue, "true")
+        XCTAssertEqual(M3MCPWriteIntent.commit.metaValue, "false")
     }
 
     func testPreviewIsStableSortedAndEscapesControls() {

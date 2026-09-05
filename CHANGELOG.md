@@ -2,6 +2,32 @@
 
 ## Unreleased
 
+### Added
+
+- **`dry_run` on every calendar write.** `calendar_create_event`, `calendar_update_event`,
+  `calendar_delete_event`, `calendar_create_calendar`, and `calendar_delete_calendar` take a
+  `dry_run` boolean. With `dry_run: true` the tool resolves the calendar, parses the timestamps,
+  runs every validation rule, works out which fields would change, answers with
+  `meta.dry_run = "true"`, and writes nothing. Such a call shows no approval sheet, because nothing
+  is being approved; the launch opt-in still gates the group, and a preview reveals nothing the
+  default-safe read tools do not. Only the literal boolean `true` selects a preview, so `"true"`,
+  `1`, and an absent value all keep the previous behaviour.
+- **Undo for the three event writes.** Create, update, and delete now record what they replaced
+  before they commit and return `meta.undo_token`. The new `calendar_undo_write` tool spends that
+  token: it removes an event that was created, writes the previous values back over the fields an
+  update changed, and rebuilds a deleted event from the snapshot taken just before it went.
+  `dry_run: true` on the undo reports the plan and leaves the token unspent, and a failed undo
+  changes nothing and keeps the token valid. Undo is itself a calendar mutation, so it needs the
+  same `M3MCP_ENABLE_CALENDAR_MUTATIONS=1` opt-in and its own approval sheet.
+
+  What it does not cover is documented next to it, in the README and in `docs/SECURITY_MODEL.md`, and
+  reported per call in `meta`: a rebuilt event has a new id; recurring events and
+  `span: "future_events"` get no token at all, only `meta.undo_unavailable` with the reason; only
+  fields these tools can write are restored, so attendees, attachments, availability, recurrence
+  rules, and travel time are outside it; tokens are single-use, expire after 30 minutes, are capped
+  at the 20 most recent writes, and are held in memory only, so they do not survive a restart of the
+  app; and deleting a calendar still has no undo, which is what its two matching keys are for.
+
 ### Security
 
 - **Capability token on the socket.** The app generates a 32-byte secret on its first start, keeps it

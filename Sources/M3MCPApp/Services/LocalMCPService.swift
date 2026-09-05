@@ -93,7 +93,7 @@ final class LocalMCPService {
             return cancellationResponse(tool: tool)
         }
 
-        if M3MCPInteractiveApproval.requiresApproval(for: toolName) {
+        if M3MCPInteractiveApproval.requiresApproval(for: toolName, input: input) {
             guard let approvalHandler else {
                 return ToolResponse(
                     ok: false,
@@ -164,6 +164,8 @@ final class LocalMCPService {
             response = await calendarProvider.createCalendar(input: input)
         case .calendarDeleteCalendar:
             response = await calendarProvider.deleteCalendar(input: input)
+        case .calendarUndoWrite:
+            response = await calendarProvider.undoWrite(input: input)
         case .contactsSearch:
             response = await contactsProvider.search(input: input)
         case .mailSearch:
