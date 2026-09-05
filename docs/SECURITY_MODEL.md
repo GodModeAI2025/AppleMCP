@@ -22,7 +22,19 @@ still governs enabled Calendar and Shortcut calls.
 
 The bridge explicitly supports MCP revisions `2024-11-05`, `2025-03-26`, `2025-06-18`, and `2025-11-25`. It requires the initialize response to be followed by the initialized notification before tools can be listed or called. Tool annotations are emitted for revisions that define them, and structured results are added for revisions that support them while retaining the text result for compatibility. Each incoming newline-delimited stdio message is limited to 1 MiB; bounded tool responses can be larger and use a separate 16 MiB stdout limit.
 
-The local operating-system account remains a trust boundary. The socket directory is `0700` and the socket is `0600`, which excludes other users and normally excludes sandboxed processes without access to that path. It does **not** authenticate another unsandboxed process running under the same user ID. Such a process can normally connect and exercise every tool enabled in the app process. Full Disk Access therefore raises the impact of compromise of any same-user unsandboxed process.
+The local operating-system account remains a trust boundary. The socket directory is `0700` and the socket is `0600`, which excludes other users and normally excludes sandboxed processes without access to that path. Filesystem permissions alone do **not** authenticate another unsandboxed process running under the same user ID, so the endpoint adds a capability token on top of them. See [Client authentication](#client-authentication). Full Disk Access raises the impact of compromise of any same-user unsandboxed process that holds a copy of the token.
+
+## Client authentication
+
+Every request other than `GET /health` must carry `Authorization: Bearer <token>`. `/health` stays open because it is the readiness probe `script/install_local.sh` waits on and it never carries the activity log.
+
+The token is 32 bytes from `SecRandomCopyBytes`, encoded as unpadded base64url so it survives an environment variable, a JSON configuration file, and an HTTP header unchanged. The app creates it on its first start and stores it in the login keychain as a generic password. `M3MCP_TOKEN` overrides the keychain in the app and in the bridge alike, which is how an MCP client is configured and how tests run without a keychain. Comparison is constant time in the token contents; the length is fixed by the generator and is allowed to leak.
+
+If the token cannot be read or created, the app does not start the listener. Coming up without one would put the endpoint back where it was.
+
+The bridge resolves the token on its first tool call and not at start-up, so `initialize` and `tools/list` are still answered by a bridge on a machine with no app, no keychain item, and no token. A keychain read from the bridge refuses interaction: an MCP client gives the bridge no session in which an authorization panel could be answered, and a panel there is indistinguishable from a server that never replies.
+
+What a token does not do: it is a secret in a file, and a copy of it works. It raises "connect to the socket", which every process of the user can do, to "be configured for this endpoint".
 
 The endpoint is not reachable from a web page because browsers cannot open Unix domain sockets. Origin-style request headers are also rejected as defense in depth.
 

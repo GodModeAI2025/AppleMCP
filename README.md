@@ -118,7 +118,17 @@ curl --unix-socket "$HOME/Library/Application Support/M3MCP/mcp.sock" \
   http://localhost/health
 ```
 
-`/health` omits recent tool activity. `/status` includes recent inputs and bounded outputs and should be treated as sensitive local diagnostics.
+`/health` omits recent tool activity and is the one route that answers without a capability token,
+because it is the readiness probe the installer waits on. Every other route, `/status` and every
+tool call included, needs `Authorization: Bearer <token>`. `/status` includes recent inputs and
+bounded outputs and should be treated as sensitive local diagnostics.
+
+```bash
+curl --unix-socket "$HOME/Library/Application Support/M3MCP/mcp.sock" \
+  -H "Authorization: Bearer $M3MCP_TOKEN" \
+  -H 'Content-Type: application/json' -d '{}' \
+  http://localhost/tools/source_status
+```
 
 ### Connect an MCP client
 
@@ -128,7 +138,8 @@ Claude Desktop example:
 {
   "mcpServers": {
     "applemcp": {
-      "command": "/path/to/AppleMCP/.build/debug/M3MCPBridge"
+      "command": "/path/to/AppleMCP/.build/debug/M3MCPBridge",
+      "env": { "M3MCP_TOKEN": "<token from the app's Server menu>" }
     }
   }
 }
@@ -137,8 +148,14 @@ Claude Desktop example:
 Claude Code example:
 
 ```bash
-claude mcp add applemcp /path/to/AppleMCP/.build/debug/M3MCPBridge
+claude mcp add applemcp --env M3MCP_TOKEN="<token>" /path/to/AppleMCP/.build/debug/M3MCPBridge
 ```
+
+The app creates the capability token on its first start and keeps it in the login keychain. Copy it
+with Server › Copy MCP Client Token and put it in the client's configuration. Without it the app
+refuses every tool call. The bridge can also read the item from the keychain, which works only for
+the binary the item is on the ACL of and never prompts, because an MCP client gives the bridge no
+session in which a panel could be answered.
 
 The app must be running while the bridge is in use. The app and bridge independently resolve their immutable security policy at process launch, so optional features must be enabled for both processes.
 
@@ -255,7 +272,15 @@ MCP client <--stdio--> M3MCPBridge <--HTTP over Unix socket--> M3MCPApp
 
 ## Security boundary
 
-The Unix socket prevents browser access and restricts other macOS users. It is not authentication against an unsandboxed process running under the same user account: such a process can normally reach a `0600` socket owned by that user and would inherit whatever data access the app exposes. Treat every MCP client and every same-user unsandboxed process as inside the local trust boundary.
+The Unix socket prevents browser access and restricts other macOS users. It is not authentication on
+its own: a `0600` socket is reachable by every unsandboxed process of the same user. That is what the
+capability token is for. The app generates a 32-byte secret on its first start, keeps it in the login
+keychain, and refuses every request other than `GET /health` that does not present it as
+`Authorization: Bearer <token>`, compared in constant time. A process without the token can still
+open the socket and can still read `/health`; it cannot call a tool.
+
+A token is a secret in a configuration file, so it does not survive being copied. Treat every MCP
+client that holds it as inside the local trust boundary.
 
 The server rejects malformed or oversized framing, limits concurrent connections, enforces an absolute request-receive deadline plus I/O timeouts, and closes active work on shutdown. These controls reduce accidental and hostile resource consumption but do not turn the endpoint into a multi-tenant service.
 

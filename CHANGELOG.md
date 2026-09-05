@@ -2,6 +2,17 @@
 
 ## Unreleased
 
+### Security
+
+- **Capability token on the socket.** The app generates a 32-byte secret on its first start, keeps it
+  in the login keychain, and refuses every request other than `GET /health` that does not present it
+  as `Authorization: Bearer <token>`, compared in constant time. `M3MCP_TOKEN` overrides the keychain
+  in both processes. If no token can be read or created the listener does not start. `Server › Copy
+  MCP Client Token` puts it on the pasteboard; the bridge resolves it on its first tool call, so
+  `initialize` and `tools/list` still answer on a machine with no app and no keychain item.
+- **`/status` is no longer open.** It carries the activity log with tool inputs and bounded outputs,
+  so it now needs the token. `/health` stays open and keeps omitting the log.
+
 ## 0.3.0 — 2026-09-04
 
 ### Security

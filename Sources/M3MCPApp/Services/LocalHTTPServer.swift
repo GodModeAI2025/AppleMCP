@@ -13,10 +13,18 @@ private func m3mcpFlock(_ descriptor: Int32, _ operation: Int32) -> Int32
 /// the socket replaces the former loopback TCP port. Access control is now the filesystem's job:
 /// the socket lives in a `0700` directory and is itself `0600`, so a sandboxed app — the case macOS
 /// TCC is meant to stop — cannot reach it, and neither can a web page.
+///
+/// The filesystem is only part of the access control, because it stops at the user boundary: every
+/// unsandboxed process of the same user could connect and inherit the app's Full Disk Access. So
+/// every request other than `GET /health` has to present the capability token. `SocketAuthorizer`
+/// holds the rules.
 final class LocalHTTPServer {
     typealias ToolHandler = (String, [String: JSONValue]) async -> ToolResponse
     /// `includeActivity` is false for the public health probe and true for the diagnostic endpoint.
     typealias StatusHandler = (_ includeActivity: Bool) async -> StatusResponse
+    /// Called for every authorization outcome that was refused, so a refusal is visible in the app
+    /// rather than silent.
+    typealias AuditHandler = @Sendable (AccessAttempt) -> Void
 
     struct Configuration {
         var requestLimits = LocalHTTPRequestParser.Limits()
@@ -118,8 +126,10 @@ final class LocalHTTPServer {
     }
 
     private let socketURL: URL
+    private let authorizer: SocketAuthorizer
     private let toolHandler: ToolHandler
     private let statusHandler: StatusHandler
+    private let auditHandler: AuditHandler?
     private let acceptQueue = DispatchQueue(label: "de.markzimmermann.m3mcp.accept")
     private let connectionQueue = DispatchQueue(
         label: "de.markzimmermann.m3mcp.connections",
@@ -316,20 +326,26 @@ final class LocalHTTPServer {
         }
     }
 
+    /// `authorizer` has no default on purpose. A default that let the endpoint answer without a
+    /// token would be one forgotten argument away from putting the socket back where it was.
     init(
         socketURL: URL,
+        authorizer: SocketAuthorizer,
         configuration: Configuration = Configuration(),
         socketProbeOperations: SocketProbeOperations = .live,
         toolHandler: @escaping ToolHandler,
-        statusHandler: @escaping StatusHandler
+        statusHandler: @escaping StatusHandler,
+        auditHandler: AuditHandler? = nil
     ) {
         self.socketURL = socketURL
+        self.authorizer = authorizer
         self.configuration = configuration
         self.socketProbeOperations = socketProbeOperations
         self.parser = LocalHTTPRequestParser(limits: configuration.requestLimits)
         self.connectionSlots = DispatchSemaphore(value: max(1, configuration.maximumConcurrentConnections))
         self.toolHandler = toolHandler
         self.statusHandler = statusHandler
+        self.auditHandler = auditHandler
     }
 
     deinit {
@@ -1022,9 +1038,23 @@ final class LocalHTTPServer {
         guard responseIsAllowed(cancellation) else { return }
 
         if let reason = RequestGuard.rejection(for: request) {
-            send(status: 403, body: ["error": reason], to: client, cancellation: cancellation)
+            report(request, allowed: false, reason: reason)
+            send(status: 403, refusal: reason, path: request.path, to: client, cancellation: cancellation)
             return
         }
+
+        let decision = authorizer.authorize(
+            method: request.method,
+            path: request.path,
+            authorizationHeader: request.headers["authorization"]
+        )
+        if case .deny(let status, let reason) = decision {
+            report(request, allowed: false, reason: reason)
+            send(status: status, refusal: reason, path: request.path, to: client, cancellation: cancellation)
+            return
+        }
+
+        report(request, allowed: true, reason: nil)
 
         if request.method == "GET", request.path == "/health" {
             let status = await statusHandler(false)
@@ -1063,6 +1093,35 @@ final class LocalHTTPServer {
         }
 
         send(status: 404, body: ["error": "Not found"], to: client, cancellation: cancellation)
+    }
+
+    private func report(_ request: LocalHTTPRequest, allowed: Bool, reason: String?) {
+        guard let auditHandler else { return }
+        auditHandler(
+            AccessAttempt(method: request.method, path: request.path, allowed: allowed, reason: reason)
+        )
+    }
+
+    /// A refusal on a tool path has to decode as a `ToolResponse`, because that is the only shape
+    /// `LocalAppClient` reads for statuses in `200..<500`; anything else reaches the MCP client as
+    /// "unreadable response" instead of as the reason it was refused.
+    private func send(
+        status: Int,
+        refusal: String,
+        path: String,
+        to client: Int32,
+        cancellation: RequestCancellationState? = nil
+    ) {
+        if path.hasPrefix("/tools/") {
+            send(
+                status: status,
+                codable: ToolResponse(ok: false, source: "M3MCP Server", message: refusal),
+                to: client,
+                cancellation: cancellation
+            )
+        } else {
+            send(status: status, body: ["error": refusal], to: client, cancellation: cancellation)
+        }
     }
 
     private func responseIsAllowed(_ cancellation: RequestCancellationState?) -> Bool {
@@ -1140,6 +1199,7 @@ final class LocalHTTPServer {
         switch status {
         case 200: reason = "OK"
         case 400: reason = "Bad Request"
+        case 401: reason = "Unauthorized"
         case 408: reason = "Request Timeout"
         case 403: reason = "Forbidden"
         case 404: reason = "Not Found"

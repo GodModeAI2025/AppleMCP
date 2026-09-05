@@ -32,8 +32,9 @@ arrives within two weeks, follow up in the private advisory.
 The maintained threat model, implemented controls, residual limitations, retention behavior, and
 release checklist are in [docs/SECURITY_MODEL.md](docs/SECURITY_MODEL.md). In particular:
 
-- a `0700` directory and `0600` socket exclude other users and normally sandboxed apps, but do not
-  authenticate an unsandboxed process running as the same user;
+- a `0700` directory and `0600` socket exclude other users and normally sandboxed apps; a same-user
+  unsandboxed process is stopped by the capability token, which every route other than `GET /health`
+  requires and which a client that holds a copy of can still present;
 - Mail, Notes, Calendar text, transcripts, filenames, and other provider data remain untrusted
   content even when marked with the machine-readable provenance boundary;
 - Calendar mutation, permission UI, and user-created Shortcuts are separate launch-time opt-ins;

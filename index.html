@@ -226,7 +226,7 @@
                 </div>
                 <div class="card">
                     <h3>Honest local boundary</h3>
-                    <p>The socket is owner-only, but an unsandboxed process running as the same user can normally connect. Full Disk Access raises that trust requirement.</p>
+                    <p>The socket is owner-only, and every route but <code>/health</code> also needs the capability token the app keeps in the login keychain. A copied token still works, so treat every configured client as trusted.</p>
                 </div>
             </div>
         </section>

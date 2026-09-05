@@ -303,6 +303,7 @@ final class LocalHTTPServerStartLockTests: XCTestCase {
     ) -> LocalHTTPServer {
         LocalHTTPServer(
             socketURL: socketURL,
+            authorizer: SocketAuthorizer(token: testCapabilityToken),
             configuration: configuration,
             socketProbeOperations: socketProbeOperations,
             toolHandler: { _, _ in

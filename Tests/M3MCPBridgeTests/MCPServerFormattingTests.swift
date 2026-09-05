@@ -381,7 +381,7 @@ final class MCPServerFormattingTests: XCTestCase {
     func testCancellingLocalAppClientInterruptsHeldUnixSocketRead() async throws {
         let fixture = try HeldUnixSocketFixture()
         defer { fixture.close() }
-        let client = LocalAppClient(socketURL: fixture.socketURL, timeout: 30)
+        let client = LocalAppClient(socketURL: fixture.socketURL, timeout: 30, capabilityToken: "fixture-token")
 
         let call = Task {
             await client.call(tool: "source_status", arguments: [:])
@@ -402,6 +402,7 @@ final class MCPServerFormattingTests: XCTestCase {
         let client = LocalAppClient(
             socketURL: fixture.socketURL,
             timeout: 2,
+            capabilityToken: "fixture-token",
             registeredSocketHook: { controller in
                 // This is the exact old race: shutdown runs while the descriptor is registered but
                 // not connected, so Darwin can return ENOTCONN. The post-connect locked recheck must
@@ -457,7 +458,7 @@ final class MCPServerFormattingTests: XCTestCase {
     func testLocalAppClientTimesOutWhenUnixSocketHoldsResponseOpen() async throws {
         let fixture = try HeldUnixSocketFixture()
         defer { fixture.close() }
-        let client = LocalAppClient(socketURL: fixture.socketURL, timeout: 1)
+        let client = LocalAppClient(socketURL: fixture.socketURL, timeout: 1, capabilityToken: "fixture-token")
 
         let started = Date()
         let response = await client.call(tool: "source_status", arguments: [:])
@@ -477,7 +478,7 @@ final class MCPServerFormattingTests: XCTestCase {
             interByteDelayMicroseconds: 50_000
         )
         defer { fixture.close() }
-        let client = LocalAppClient(socketURL: fixture.socketURL, timeout: 0.25)
+        let client = LocalAppClient(socketURL: fixture.socketURL, timeout: 0.25, capabilityToken: "fixture-token")
 
         let started = Date()
         let response = await client.call(tool: "source_status", arguments: [:])
@@ -496,7 +497,7 @@ final class MCPServerFormattingTests: XCTestCase {
         )
         let fixture = try ScriptedUnixSocketFixture(response: wire)
         defer { fixture.close() }
-        let client = LocalAppClient(socketURL: fixture.socketURL, timeout: 10)
+        let client = LocalAppClient(socketURL: fixture.socketURL, timeout: 10, capabilityToken: "fixture-token")
 
         let started = Date()
         let response = await client.call(tool: "source_status", arguments: [:])
@@ -514,7 +515,7 @@ final class MCPServerFormattingTests: XCTestCase {
         wire.append(body)
         let fixture = try ScriptedUnixSocketFixture(response: wire)
         defer { fixture.close() }
-        let client = LocalAppClient(socketURL: fixture.socketURL, timeout: 10)
+        let client = LocalAppClient(socketURL: fixture.socketURL, timeout: 10, capabilityToken: "fixture-token")
 
         let started = Date()
         let response = await client.call(tool: "source_status", arguments: [:])
