@@ -27,6 +27,16 @@
   rules, and travel time are outside it; tokens are single-use, expire after 30 minutes, are capped
   at the 20 most recent writes, and are held in memory only, so they do not survive a restart of the
   app; and deleting a calendar still has no undo, which is what its two matching keys are for.
+- **Mail search has tests that read a Mail store.** The provider with the largest surface in the
+  repo, and the thinnest coverage, now runs against a synthetic Envelope Index with the
+  `subjects`/`addresses`/`recipients` lookup schema and real `.emlx` files on disk, redirected
+  through `M3MCP_MAIL_ROOT`. Pinned: `match` of `all`, `any`, and `phrase`, including that a phrase
+  keeps a word order that `all` throws away; that an address behind a display name stays findable;
+  that recipients are matched through their own table and only when asked for; that a body-only hit
+  survives being requested next to a subject; that deleted, junk, and read filtering happens in SQL;
+  that `since_hours` understands both the Unix-epoch and the reference-date encoding of the same
+  column; that a mailbox url resolving outside the mail root yields no file from outside it; and how
+  a mailbox url is split into account, path, and role, in English and in German.
 
 ### Security
 
