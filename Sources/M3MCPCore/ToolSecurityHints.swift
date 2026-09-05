@@ -62,6 +62,17 @@ public struct M3MCPToolSecurityHints: Equatable, Sendable {
                     idempotent: true,
                     openWorld: true
                 )
+            case .calendarUndoWrite:
+                // Destructive because reversing a create removes an event, and because reversing an
+                // update overwrites whatever the field holds now. Idempotent because the token is
+                // spent on first use: a repeated call reports that it was already undone rather
+                // than acting a second time.
+                return M3MCPToolSecurityHints(
+                    readOnly: false,
+                    destructive: true,
+                    idempotent: true,
+                    openWorld: true
+                )
             default:
                 // Future policy/catalog drift must fail safely without making tools/list crash.
                 return M3MCPToolSecurityHints(

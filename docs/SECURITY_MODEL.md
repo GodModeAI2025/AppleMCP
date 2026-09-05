@@ -59,7 +59,7 @@ Both the bridge and app resolve an immutable policy from their own environment a
 | Group | Default | Environment variable | Tools |
 |---|---|---|---|
 | Observation and bounded local processing | Enabled | None | 21 tools listed in the README |
-| Calendar mutation | Disabled | `M3MCP_ENABLE_CALENDAR_MUTATIONS=1` | `calendar_create_event`, `calendar_update_event`, `calendar_delete_event`, `calendar_create_calendar`, `calendar_delete_calendar` |
+| Calendar mutation | Disabled | `M3MCP_ENABLE_CALENDAR_MUTATIONS=1` | `calendar_create_event`, `calendar_update_event`, `calendar_delete_event`, `calendar_create_calendar`, `calendar_delete_calendar`, `calendar_undo_write` |
 | Permission UI | Disabled | `M3MCP_ENABLE_PERMISSION_UI=1` | `permissions_request`, `permissions_open_settings` |
 | User-created Shortcuts | Disabled | `M3MCP_ENABLE_USER_SHORTCUTS=1` | `ai_writing_tools`, `ai_translate` |
 
@@ -69,9 +69,48 @@ Accepted true tokens are `1`, `true`, `yes`, and `on`, without case sensitivity.
 
 Every enabled Calendar mutation and user-Shortcut invocation requires a separate decision in the app. The native sheet shows the exact tool name and a stable, bounded argument preview. Credential-like fields are redacted. Requests are queued so approval sheets cannot overlap.
 
+One tool adds a second line. `calendar_undo_write` carries a token and nothing else, and `token` matches the credential-redaction rule, so the argument preview alone reads `undo_token: [REDACTED]` and asks for consent to a handle. The sheet therefore also shows an effect line: the summary the app recorded for the write that would be reversed, read out of the in-memory journal without spending the token, or a plain statement that the token resolves to nothing. That text is server-authored, never client-supplied, and it is escaped and bounded by the same rules and the same budget as the argument preview, so an event title copied out of a calendar cannot reshape the sheet.
+
 Approval applies only to the waiting call. There is no reusable approval token. The default button is Deny, and a denial, closed sheet, cancelled task, 30-second timeout, or missing usable app window rejects the call. Environment opt-in is availability, not consent.
 
 Cancellation before approval is consumed prevents dispatch. After approval, MCP cancellation and a disconnected local HTTP client are propagated to the in-flight app task and cooperative subprocess work. This is best-effort interruption, **not transactional rollback**. EventKit data committed before cancellation remains committed, and a Shortcut can retain file, network, message, or other effects completed before its process was stopped. A caller must inspect real state before retrying; automatic retry can duplicate a Calendar event or repeat a Shortcut effect.
+
+### Preview and undo for calendar writes
+
+Approval and preview are different questions, and they are asked separately.
+
+`dry_run: true` on any calendar write tool resolves the target, validates the arguments, reports the
+change that would be made with `meta.dry_run = "true"`, and writes nothing. No approval sheet is
+shown for such a call, because nothing is being approved. The exemption is narrow: it is reachable
+only through the literal boolean `true`, only for a tool whose reviewed argument policy declares
+`dry_run`, and only inside a mutation group that was enabled at launch. It is resolved once, by
+`M3MCPWriteIntent`, and the same value decides both the missing sheet and the missing write, so the
+two cannot come apart. A preview discloses nothing the default-safe Calendar read tools do not.
+
+`calendar_create_event`, `calendar_update_event`, and `calendar_delete_event` record what they
+replaced before they commit, and return `meta.undo_token`. `calendar_undo_write` spends it once. The
+journal is in memory, bounded to the 20 most recent writes, and expires each entry 30 minutes after
+its write: snapshots hold event titles, notes, and locations, and persisting them would create a
+second copy of calendar content outside the calendar with its own lifetime and its own exposure.
+
+The boundary of the mechanism, stated rather than implied:
+
+- A rebuilt event has a new `eventIdentifier`. `meta.undo_restores_identifier` reports this.
+- Recurring events and `span: "future_events"` receive no token. The write proceeds and the response
+  carries `meta.undo_unavailable` with the reason.
+- Only fields these tools can write are restored: title, all-day flag, start, end, location, URL,
+  notes, relative alarms, and calendar membership.
+- `calendar_create_calendar` and `calendar_delete_calendar` support `dry_run` but issue no token.
+- Only relative alarms are restored. An alarm pinned to an absolute date is outside what these tools
+  create, is not recorded in the snapshot, and does not come back with a rebuilt event.
+- Undo is itself a calendar mutation: same launch opt-in, same per-call sheet. It writes the
+  recorded previous values over the current state without checking whether something else changed
+  the event in between. A failed undo changes nothing and leaves the token valid. Building the sheet
+  reads the token, and only the answered sheet spends it, so a token whose lifetime runs out between
+  those two moments is reported as expired rather than acted on.
+- A token is a capability held in the response of its own write, and the journal belongs to the app
+  process rather than to a client. Any caller that can read that response and pass the approval sheet
+  can spend it.
 
 Permission UI does not use this additional sheet because macOS owns the permission prompt or System Settings surface. The group is still disabled by default so an MCP caller cannot make the app activate or raise security UI without a launch-time choice.
 Cancelling a permission sequence returns control to AppleMCP, ignores late framework callbacks, and suppresses every later prompt in that sequence. A macOS permission prompt that the framework already displayed is system-owned and may remain on screen until the user dismisses it.

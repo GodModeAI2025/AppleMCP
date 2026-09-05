@@ -93,7 +93,7 @@ final class LocalMCPService {
             return cancellationResponse(tool: tool)
         }
 
-        if M3MCPInteractiveApproval.requiresApproval(for: toolName) {
+        if M3MCPInteractiveApproval.requiresApproval(for: toolName, input: input) {
             guard let approvalHandler else {
                 return ToolResponse(
                     ok: false,
@@ -102,7 +102,21 @@ final class LocalMCPService {
                 )
             }
 
-            let request = M3MCPToolApprovalRequest(tool: toolName, input: input)
+            // An undo call carries a token and nothing else, and "token" is a redacted key, so the
+            // sheet would ask for consent to a string of asterisks. The journal knows what the token
+            // stands for; peeking it does not spend it.
+            let effect: String?
+            if toolName == .calendarUndoWrite {
+                effect = await calendarProvider.undoEffectDescription(input: input)
+            } else {
+                effect = nil
+            }
+
+            let request = M3MCPToolApprovalRequest(
+                tool: toolName,
+                input: input,
+                effectPreview: effect
+            )
             let approved = await approvalHandler(request)
             // Cancellation wins over an approval result. In particular, a late click cannot start a
             // mutation after the requesting bridge has disconnected.
@@ -164,6 +178,8 @@ final class LocalMCPService {
             response = await calendarProvider.createCalendar(input: input)
         case .calendarDeleteCalendar:
             response = await calendarProvider.deleteCalendar(input: input)
+        case .calendarUndoWrite:
+            response = await calendarProvider.undoWrite(input: input)
         case .contactsSearch:
             response = await contactsProvider.search(input: input)
         case .mailSearch:

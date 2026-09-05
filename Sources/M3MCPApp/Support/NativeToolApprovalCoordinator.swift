@@ -136,6 +136,7 @@ final class NativeToolApprovalCoordinator {
         let alert = NSAlert()
         alert.alertStyle = .warning
         alert.messageText = "Approve one call to \(request.tool.rawValue)?"
+        let effect = request.effectPreview.map { "\n\nEffect\n\($0)" } ?? ""
         alert.informativeText = """
         A local MCP client requested this operation.
 
@@ -143,7 +144,7 @@ final class NativeToolApprovalCoordinator {
         \(request.tool.rawValue)
 
         Arguments
-        \(request.argumentPreview)
+        \(request.argumentPreview)\(effect)
 
         Allow applies to this call only. Deny is the default.
         """

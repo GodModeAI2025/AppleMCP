@@ -76,7 +76,7 @@ jobs:
           M3MCP_TIMING_SLACK: "20"
         run: >-
           swift test --sanitize=thread --filter
-          'PermissionProviderCancellationTests|RemindersProviderCancellationTests|LegacySpeechRecognizerCancellationTests|SpeechPrivacyPolicyTests|NativeToolApprovalCoordinatorTests|AppleScriptRunnerCancellationTests|AutomationPermissionPreflightTests|MailProviderCancellationTests|MailProviderSQLiteSecurityTests|LocalHTTPServerCancellationTests|LocalHTTPServerStartLockTests|MCPServerFormattingTests|LocalHTTPResponseTests|InFlightRequestRegistryTests|BoundedProcessRunnerTests|SensitiveTemporaryArtifactsTests|AppStartupCleanupTests|ShortcutRunnerTests|VoiceMemosRecordingSecurityTests|VoiceMemosSnapshotSecurityTests|SocketAuthenticationTests|SocketPeerPinTests|SocketAvailabilityTests'
+          'PermissionProviderCancellationTests|RemindersProviderCancellationTests|LegacySpeechRecognizerCancellationTests|SpeechPrivacyPolicyTests|NativeToolApprovalCoordinatorTests|AppleScriptRunnerCancellationTests|AutomationPermissionPreflightTests|MailProviderCancellationTests|MailProviderSQLiteSecurityTests|LocalHTTPServerCancellationTests|LocalHTTPServerStartLockTests|MCPServerFormattingTests|LocalHTTPResponseTests|InFlightRequestRegistryTests|BoundedProcessRunnerTests|SensitiveTemporaryArtifactsTests|AppStartupCleanupTests|ShortcutRunnerTests|VoiceMemosRecordingSecurityTests|VoiceMemosSnapshotSecurityTests|SocketAuthenticationTests|SocketPeerPinTests|SocketAvailabilityTests|CalendarUndoJournalTests|CalendarDryRunDispatchTests'
 
       - name: Build release binaries
         run: swift build -c release

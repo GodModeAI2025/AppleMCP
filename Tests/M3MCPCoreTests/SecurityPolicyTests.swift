@@ -19,6 +19,7 @@ final class SecurityPolicyTests: XCTestCase {
             .calendarDeleteEvent: .calendarMutation,
             .calendarCreateCalendar: .calendarMutation,
             .calendarDeleteCalendar: .calendarMutation,
+            .calendarUndoWrite: .calendarMutation,
 
             .contactsSearch: .readOnly,
             .mailSearch: .readOnly,
@@ -41,7 +42,7 @@ final class SecurityPolicyTests: XCTestCase {
             .aiImagePlayground: .localGeneration
         ]
 
-        XCTAssertEqual(M3MCPToolName.allCases.count, 30)
+        XCTAssertEqual(M3MCPToolName.allCases.count, 31)
         XCTAssertEqual(Set(expected.keys), Set(M3MCPToolName.allCases))
         XCTAssertEqual(
             M3MCPSecurityPolicy.knownToolNames,
@@ -73,6 +74,7 @@ final class SecurityPolicyTests: XCTestCase {
             .calendarDeleteEvent,
             .calendarCreateCalendar,
             .calendarDeleteCalendar,
+            .calendarUndoWrite,
             .aiWritingTools,
             .aiTranslate
         ]
@@ -95,7 +97,7 @@ final class SecurityPolicyTests: XCTestCase {
         let rows = policy.toolAvailability
 
         XCTAssertEqual(rows.map(\.tool), M3MCPToolName.allCases)
-        XCTAssertEqual(rows.count, 30)
+        XCTAssertEqual(rows.count, 31)
         XCTAssertEqual(rows.filter(\.isEnabled).count, 21)
         XCTAssertEqual(Set(rows.map(\.name)), M3MCPSecurityPolicy.knownToolNames)
         XCTAssertEqual(rows.map(\.endpointPath), rows.map { "/tools/\($0.name)" })
@@ -130,6 +132,9 @@ final class SecurityPolicyTests: XCTestCase {
         )
         XCTAssertTrue(calendar.allows(.calendarCreateEvent))
         XCTAssertTrue(calendar.allows(.calendarDeleteCalendar))
+        // Undo is a write of its own, so it is behind the same launch opt-in as the writes it
+        // reverses. Reaching for it does not become possible by having caused the mistake.
+        XCTAssertTrue(calendar.allows(.calendarUndoWrite))
         XCTAssertFalse(calendar.allows(.permissionsRequest))
         XCTAssertFalse(calendar.allows(.aiTranslate))
 
@@ -150,7 +155,7 @@ final class SecurityPolicyTests: XCTestCase {
         XCTAssertFalse(shortcuts.allows(.permissionsOpenSettings))
     }
 
-    func testAllExplicitOptInsEnableAllThirtyKnownTools() {
+    func testAllExplicitOptInsEnableEveryKnownTool() {
         let policy = M3MCPSecurityPolicy(
             configuration: .init(
                 allowCalendarMutations: true,
@@ -159,7 +164,7 @@ final class SecurityPolicyTests: XCTestCase {
             )
         )
 
-        XCTAssertEqual(M3MCPToolName.allCases.filter(policy.allows).count, 30)
+        XCTAssertEqual(M3MCPToolName.allCases.filter(policy.allows).count, 31)
     }
 
     func testEnvironmentResolutionIsInjectableAndFailsClosed() {

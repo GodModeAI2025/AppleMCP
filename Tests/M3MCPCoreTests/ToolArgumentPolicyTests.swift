@@ -3,7 +3,7 @@ import XCTest
 
 final class ToolArgumentPolicyTests: XCTestCase {
     func testEveryPublicToolHasAClosedExhaustiveArgumentPolicy() {
-        XCTAssertEqual(M3MCPToolName.allCases.count, 30)
+        XCTAssertEqual(M3MCPToolName.allCases.count, 31)
 
         for tool in M3MCPToolName.allCases {
             let policy = M3MCPToolArgumentPolicy.forTool(tool)

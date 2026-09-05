@@ -82,6 +82,7 @@ calendar_update_event
 calendar_delete_event
 calendar_create_calendar
 calendar_delete_calendar
+calendar_undo_write
 ai_writing_tools
 ai_translate
 EOF

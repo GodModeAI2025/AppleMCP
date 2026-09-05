@@ -15,7 +15,7 @@ final class LegacySpeechRecognizerCancellationTests: XCTestCase {
                 admission: admission
             ) {
                 await withCheckedContinuation { continuation in
-                    DispatchQueue.global().asyncAfter(deadline: .now() + 0.25) {
+                    DispatchQueue.global().asyncAfter(deadline: .now() + 0.6) {
                         continuation.resume()
                     }
                 }
@@ -31,7 +31,13 @@ final class LegacySpeechRecognizerCancellationTests: XCTestCase {
         let elapsed = Double(
             DispatchTime.now().uptimeNanoseconds - started
         ) / 1_000_000_000
-        XCTAssertLessThan(elapsed, zeitbudget(0.15))
+        // Die Grenze liegt in der Mitte zwischen dem Budget von 0.02 und den 0.6,
+        // die der Vorlauf braucht. Sie war einmal 0.15 gegen 0.25, und damit
+        // blieben auf einem geteilten Laeufer 0.09 Sekunden Luft; ein Lauf mit
+        // 0.162 hat die CI rot gemacht, ohne dass am Verhalten etwas war. Die
+        // Zusage ist unveraendert: wer das Budget ignoriert, wartet die vollen
+        // 0.6 ab und faellt hier durch.
+        XCTAssertLessThan(elapsed, zeitbudget(0.3))
         XCTAssertEqual(admission.activeOperationCount, 1)
 
         do {
@@ -48,7 +54,7 @@ final class LegacySpeechRecognizerCancellationTests: XCTestCase {
             XCTFail("Unexpected error: \(error)")
         }
 
-        try? await Task.sleep(nanoseconds: 350_000_000)
+        try? await Task.sleep(nanoseconds: 800_000_000)
         XCTAssertEqual(admission.activeOperationCount, 0)
     }
 

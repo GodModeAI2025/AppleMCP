@@ -8,9 +8,19 @@ public struct M3MCPToolApprovalRequest: Equatable, Sendable {
     public let tool: M3MCPToolName
     public let argumentPreview: String
 
+    /// What the call would do, when the arguments do not say.
+    ///
+    /// `calendar_undo_write` is the case that forced this. Its only argument is an opaque token, and
+    /// "token" is a redacted key, so the sheet had nothing on it but `undo_token: [REDACTED]`. A
+    /// decision needs the effect, not the handle: this carries the recorded summary of the write
+    /// that would be reversed. It is server-side text, never client-supplied, and it is bounded the
+    /// same way the argument preview is.
+    public let effectPreview: String?
+
     public init(
         tool: M3MCPToolName,
         input: [String: JSONValue],
+        effectPreview: String? = nil,
         maximumPreviewCharacters: Int = M3MCPInteractiveApproval.defaultMaximumPreviewCharacters
     ) {
         self.tool = tool
@@ -18,6 +28,12 @@ public struct M3MCPToolApprovalRequest: Equatable, Sendable {
             input,
             maximumCharacters: maximumPreviewCharacters
         )
+        self.effectPreview = effectPreview.map {
+            M3MCPInteractiveApproval.boundedEffectPreview(
+                $0,
+                maximumCharacters: maximumPreviewCharacters
+            )
+        }
     }
 }
 
@@ -37,6 +53,32 @@ public enum M3MCPInteractiveApproval {
         case .readOnly, .localProcessing, .localGeneration, .permissionUI:
             return false
         }
+    }
+
+    /// The same question, asked of a concrete call.
+    ///
+    /// A dry run changes nothing, so there is nothing to consent to; requiring a click to see what a
+    /// write would do would make the preview useless in exactly the case it is for: a client
+    /// working out which event it means before asking a human anything. The exemption is narrow on
+    /// purpose:
+    ///
+    /// - only the literal boolean `true` reaches it, every other shape having been rejected by
+    ///   `M3MCPToolArgumentPolicy` first,
+    /// - only for a tool whose reviewed argument policy actually declares `dry_run`, so a tool that
+    ///   never learned to preview cannot be talked out of its sheet by an unexpected key, and
+    /// - it is the same value the provider reads, from the same function, so "no sheet" and "no
+    ///   write" cannot come apart.
+    ///
+    /// What it does not weaken: the launch-time opt-in still gates the whole group, so a preview is
+    /// only reachable where the mutation group was enabled at launch. It reveals no more about the
+    /// calendar than the default-safe read tools already do.
+    public static func requiresApproval(for tool: M3MCPToolName, input: [String: JSONValue]) -> Bool {
+        guard requiresApproval(for: tool) else { return false }
+        guard M3MCPToolArgumentPolicy
+            .forTool(tool)
+            .allowedKeys
+            .contains(M3MCPWriteIntent.parameterName) else { return true }
+        return M3MCPWriteIntent.resolve(from: input).writes
     }
 
     /// Produces a stable, bounded preview for a native approval dialog.
@@ -78,6 +120,18 @@ public enum M3MCPInteractiveApproval {
                 maximumCharacters: lineBudget - prefix.count
             )
         }.joined(separator: "\n")
+    }
+
+    /// Escapes and bounds server-authored effect text with the same rules the argument preview uses,
+    /// so a title copied out of a calendar cannot smuggle control characters into the sheet.
+    public static func boundedEffectPreview(
+        _ text: String,
+        maximumCharacters: Int = defaultMaximumPreviewCharacters
+    ) -> String {
+        bounded(
+            boundedEscapedString(text, maximumCharacters: max(0, maximumCharacters)),
+            maximumCharacters: max(0, maximumCharacters)
+        )
     }
 
     private static let sensitiveKeyFragments: [String] = [

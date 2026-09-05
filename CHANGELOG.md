@@ -2,6 +2,50 @@
 
 ## Unreleased
 
+### Added
+
+- **`dry_run` on every calendar write.** `calendar_create_event`, `calendar_update_event`,
+  `calendar_delete_event`, `calendar_create_calendar`, and `calendar_delete_calendar` take a
+  `dry_run` boolean. With `dry_run: true` the tool resolves the calendar, parses the timestamps,
+  runs every validation rule, works out which fields would change, answers with
+  `meta.dry_run = "true"`, and writes nothing. Such a call shows no approval sheet, because nothing
+  is being approved; the launch opt-in still gates the group, and a preview reveals nothing the
+  default-safe read tools do not. Only the literal boolean `true` selects a preview, so `"true"`,
+  `1`, and an absent value all keep the previous behaviour.
+- **Undo for the three event writes.** Create, update, and delete now record what they replaced
+  before they commit and return `meta.undo_token`. The new `calendar_undo_write` tool spends that
+  token: it removes an event that was created, writes the previous values back over the fields an
+  update changed, and rebuilds a deleted event from the snapshot taken just before it went.
+  `dry_run: true` on the undo reports the plan and leaves the token unspent, and a failed undo
+  changes nothing and keeps the token valid. Undo is itself a calendar mutation, so it needs the
+  same `M3MCP_ENABLE_CALENDAR_MUTATIONS=1` opt-in and its own approval sheet.
+
+  What it does not cover is documented next to it, in the README and in `docs/SECURITY_MODEL.md`, and
+  reported per call in `meta`: a rebuilt event has a new id; recurring events and
+  `span: "future_events"` get no token at all, only `meta.undo_unavailable` with the reason; only
+  fields these tools can write are restored, so attendees, attachments, availability, recurrence
+  rules, and travel time are outside it; tokens are single-use, expire after 30 minutes, are capped
+  at the 20 most recent writes, and are held in memory only, so they do not survive a restart of the
+  app; and deleting a calendar still has no undo, which is what its two matching keys are for. An
+  alarm pinned to an absolute date is outside the restored set as well, because these tools only ever
+  create relative ones.
+- **The undo approval sheet shows the effect, not the token.** `undo_token` matches the
+  credential-redaction rule, so the sheet for `calendar_undo_write` would otherwise ask for consent
+  to `undo_token: [REDACTED]`. It now carries a second line: the recorded summary of the write that
+  would be reversed, read from the journal without spending the token, or a plain statement that the
+  token stands for nothing. The line is server-authored and is escaped and bounded exactly like the
+  argument preview.
+- **Mail search has tests that read a Mail store.** The provider with the largest surface in the
+  repo, and the thinnest coverage, now runs against a synthetic Envelope Index with the
+  `subjects`/`addresses`/`recipients` lookup schema and real `.emlx` files on disk, redirected
+  through `M3MCP_MAIL_ROOT`. Pinned: `match` of `all`, `any`, and `phrase`, including that a phrase
+  keeps a word order that `all` throws away; that an address behind a display name stays findable;
+  that recipients are matched through their own table and only when asked for; that a body-only hit
+  survives being requested next to a subject; that deleted, junk, and read filtering happens in SQL;
+  that `since_hours` understands both the Unix-epoch and the reference-date encoding of the same
+  column; that a mailbox url resolving outside the mail root yields no file from outside it; and how
+  a mailbox url is split into account, path, and role, in English and in German.
+
 ### Security
 
 - **Capability token on the socket.** The app generates a 32-byte secret on its first start, keeps it

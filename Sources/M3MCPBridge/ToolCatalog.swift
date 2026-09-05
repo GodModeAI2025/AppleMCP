@@ -191,7 +191,7 @@ enum ToolCatalog {
         ),
         MCPTool(
             name: .calendarCreateEvent,
-            description: "Create an event in an explicitly selected macOS calendar via EventKit. Writes to the user's real calendar — use calendar_id from calendar_list_calendars when possible, and confirm the target and times before calling.",
+            description: "Create an event in an explicitly selected macOS calendar via EventKit. Writes to the user's real calendar — use calendar_id from calendar_list_calendars when possible, and confirm the target and times before calling. Pass dry_run to see the resolved calendar and times without writing. A committed create returns meta.undo_token, which calendar_undo_write spends to delete the event again.",
             schema: objectSchema(properties: [
                 "title": ["type": "string", "description": "Event title."],
                 "start": [
@@ -210,12 +210,13 @@ enum ToolCatalog {
                     "type": "string",
                     "description": "Machine-readable project identifier, stored as a 'Project: <slug>' line at the top of the notes and reported back as metadata.project_slug. Lowercase; a-z, 0-9, '-', '_', '.'; max 64 characters. Notes are plain text on every calendar backend, which is why the slug goes there rather than in url."
                 ],
-                "alarm_minutes_before": ["type": "integer", "description": "Add an alarm this many minutes before the start."]
+                "alarm_minutes_before": ["type": "integer", "description": "Add an alarm this many minutes before the start."],
+                "dry_run": ["type": "boolean", "description": "When true, resolve and validate everything, report the exact change that would be made, and write nothing. No approval sheet appears, because nothing is being approved. Default false."]
             ], required: ["title", "start"], anyOfRequired: [["calendar_id"], ["calendar"]])
         ),
         MCPTool(
             name: .calendarUpdateEvent,
-            description: "Change an existing macOS Calendar event. Only the fields passed are changed; anything omitted is left as it is.",
+            description: "Change an existing macOS Calendar event. Only the fields passed are changed; anything omitted is left as it is. Pass dry_run to see which fields would change, and to what, without writing. A committed change to a non-recurring event returns meta.undo_token, which calendar_undo_write spends to put the previous values back.",
             schema: objectSchema(properties: [
                 "id": ["type": "string", "description": "Event id, from calendar_search or calendar_create_event."],
                 "title": ["type": "string", "description": "New title."],
@@ -232,18 +233,20 @@ enum ToolCatalog {
                 "span": [
                     "type": "string",
                     "description": "For a recurring event: 'this_event' (default) changes this occurrence, 'future_events' changes this one and all later ones."
-                ]
+                ],
+                "dry_run": ["type": "boolean", "description": "When true, resolve and validate everything, report the exact change that would be made, and write nothing. No approval sheet appears, because nothing is being approved. Default false."]
             ], required: ["id"])
         ),
         MCPTool(
             name: .calendarDeleteEvent,
-            description: "Delete a macOS Calendar event by id. There is no undo.",
+            description: "Delete a macOS Calendar event by id. Pass dry_run to see exactly which event would go, without deleting it. Deleting a non-recurring event with the default span returns meta.undo_token: calendar_undo_write rebuilds the event from a snapshot taken before the delete, with a new id. There is no undo token for a recurring event or for span=future_events, and none at all after the app restarts.",
             schema: objectSchema(properties: [
                 "id": ["type": "string", "description": "Event id, from calendar_search or calendar_create_event."],
                 "span": [
                     "type": "string",
                     "description": "For a recurring event: 'this_event' (default) deletes this occurrence, 'future_events' deletes this one and all later ones."
-                ]
+                ],
+                "dry_run": ["type": "boolean", "description": "When true, resolve and validate everything, report the exact change that would be made, and write nothing. No approval sheet appears, because nothing is being approved. Default false."]
             ], required: ["id"])
         ),
         MCPTool(
@@ -251,16 +254,26 @@ enum ToolCatalog {
             description: "Create a calendar. Defaults to the on-device 'Local' source so a scratch or test calendar does not sync to an account.",
             schema: objectSchema(properties: [
                 "title": ["type": "string", "description": "Calendar title. Must not already exist."],
-                "source": ["type": "string", "description": "Source title to create it in, e.g. 'On My Mac' or an account name. Defaults to the local source."]
+                "source": ["type": "string", "description": "Source title to create it in, e.g. 'On My Mac' or an account name. Defaults to the local source."],
+                "dry_run": ["type": "boolean", "description": "When true, resolve and validate everything, report the exact change that would be made, and write nothing. No approval sheet appears, because nothing is being approved. Default false."]
             ], required: ["title"])
         ),
         MCPTool(
             name: .calendarDeleteCalendar,
-            description: "Delete a calendar and every event in it. There is no undo, so id and title must both be given and must refer to the same calendar.",
+            description: "Delete a calendar and every event in it. There is no undo for this one, because calendar_undo_write covers single events and not a calendar with its contents, so id and title must both be given and must refer to the same calendar. Pass dry_run to see which calendar the pair resolves to, without deleting anything.",
             schema: objectSchema(properties: [
                 "id": ["type": "string", "description": "Calendar id, from calendar_list_calendars."],
-                "title": ["type": "string", "description": "Exact current title of that calendar. The delete is refused if it does not match."]
+                "title": ["type": "string", "description": "Exact current title of that calendar. The delete is refused if it does not match."],
+                "dry_run": ["type": "boolean", "description": "When true, resolve and validate everything, report the exact change that would be made, and write nothing. No approval sheet appears, because nothing is being approved. Default false."]
             ], required: ["id", "title"])
+        ),
+        MCPTool(
+            name: .calendarUndoWrite,
+            description: "Reverse one committed calendar_create_event, calendar_update_event, or calendar_delete_event, using the undo_token that write returned. A create is reversed by deleting the event, an update by writing the previous values of the changed fields back, a delete by rebuilding the event from the snapshot taken before it. Tokens are single-use, expire after 30 minutes, and are held in memory only, so they do not survive a restart of the AppleMCP app. Rebuilding a deleted event gives it a new id, and restores only the fields these tools can write.",
+            schema: objectSchema(properties: [
+                "undo_token": ["type": "string", "description": "The token from meta.undo_token of the write to reverse."],
+                "dry_run": ["type": "boolean", "description": "When true, report what the undo would do and leave the token unspent. Default false."]
+            ], required: ["undo_token"])
         ),
         MCPTool(
             name: .contactsSearch,
