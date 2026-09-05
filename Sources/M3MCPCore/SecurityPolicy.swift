@@ -57,7 +57,10 @@ public struct M3MCPSecurityPolicy: Equatable, Sendable {
         case localProcessing
         /// Generates an app-owned local artifact without launching UI or arbitrary automation.
         case localGeneration
-        /// Creates, updates, or irreversibly deletes Calendar data.
+        /// Creates, updates, or deletes Calendar data.
+        ///
+        /// A single event write records what it replaced and can be reversed once through
+        /// `calendar_undo_write`. Deleting a calendar cannot: it takes its events with it.
         case calendarMutation
         /// Requests a macOS permission or opens System Settings.
         case permissionUI

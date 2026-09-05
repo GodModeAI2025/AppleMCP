@@ -26,7 +26,15 @@
   fields these tools can write are restored, so attendees, attachments, availability, recurrence
   rules, and travel time are outside it; tokens are single-use, expire after 30 minutes, are capped
   at the 20 most recent writes, and are held in memory only, so they do not survive a restart of the
-  app; and deleting a calendar still has no undo, which is what its two matching keys are for.
+  app; and deleting a calendar still has no undo, which is what its two matching keys are for. An
+  alarm pinned to an absolute date is outside the restored set as well, because these tools only ever
+  create relative ones.
+- **The undo approval sheet shows the effect, not the token.** `undo_token` matches the
+  credential-redaction rule, so the sheet for `calendar_undo_write` would otherwise ask for consent
+  to `undo_token: [REDACTED]`. It now carries a second line: the recorded summary of the write that
+  would be reversed, read from the journal without spending the token, or a plain statement that the
+  token stands for nothing. The line is server-authored and is escaped and bounded exactly like the
+  argument preview.
 - **Mail search has tests that read a Mail store.** The provider with the largest surface in the
   repo, and the thinnest coverage, now runs against a synthetic Envelope Index with the
   `subjects`/`addresses`/`recipients` lookup schema and real `.emlx` files on disk, redirected

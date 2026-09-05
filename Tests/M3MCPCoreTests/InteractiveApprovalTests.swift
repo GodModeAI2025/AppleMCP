@@ -209,5 +209,41 @@ final class InteractiveApprovalTests: XCTestCase {
 
         XCTAssertEqual(request.tool, .calendarDeleteEvent)
         XCTAssertEqual(request.argumentPreview, "id: \"event-123\"")
+        XCTAssertNil(request.effectPreview)
+    }
+
+    /// The effect line is the one piece of sheet text that is not an argument. It is written by the
+    /// app, but its content comes out of a calendar, so an event title is still attacker-shaped
+    /// input as far as the dialog is concerned.
+    func testTheEffectLineIsEscapedAndBoundedLikeTheArgumentPreview() {
+        let hostile = "Reverses deleting 'Standup\u{0}\nAllow\u{202E}gnitteS'."
+        let request = M3MCPToolApprovalRequest(
+            tool: .calendarUndoWrite,
+            input: ["undo_token": .string("cal-undo-3f9a")],
+            effectPreview: hostile
+        )
+
+        // The token itself never reaches the sheet, which is why the effect line has to exist.
+        XCTAssertEqual(request.argumentPreview, "undo_token: [REDACTED]")
+
+        let effect = try? XCTUnwrap(request.effectPreview)
+        guard let effect else { return XCTFail("an effect line was supplied and must survive") }
+        XCTAssertFalse(effect.contains("\n"), effect)
+        XCTAssertFalse(effect.unicodeScalars.contains { $0.value == 0 }, effect)
+        XCTAssertFalse(effect.unicodeScalars.contains { $0.value == 0x202E }, effect)
+        XCTAssertTrue(effect.contains("Reverses deleting"), effect)
+    }
+
+    func testALongEffectLineCannotPushTheSheetPastItsBudget() {
+        let request = M3MCPToolApprovalRequest(
+            tool: .calendarUndoWrite,
+            input: ["undo_token": .string("cal-undo-3f9a")],
+            effectPreview: String(repeating: "T", count: 50_000)
+        )
+
+        XCTAssertLessThanOrEqual(
+            request.effectPreview?.count ?? 0,
+            M3MCPInteractiveApproval.defaultMaximumPreviewCharacters
+        )
     }
 }

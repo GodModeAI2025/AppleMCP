@@ -297,7 +297,10 @@ What it does not cover, in the order you are likely to hit it:
 - **Only the fields these tools write.** Attendees, attachments, availability, recurrence rules, and
   travel time are outside the write contract and therefore outside the undo contract. An event
   rebuilt after a delete keeps its title, times, all-day flag, location, URL, notes, and relative
-  alarms, and nothing else.
+  alarms, and nothing else. An alarm pinned to an absolute date is not one of those: these tools only
+  ever create relative ones, the snapshot records only relative offsets, and an absolute alarm set in
+  Calendar.app is gone after the rebuild. An event that carries any of this cannot be taken back in
+  full, only rebuilt from the part of it these tools can write.
 - **Tokens live in memory.** They are single-use, expire 30 minutes after the write, are capped at
   the 20 most recent writes, and are gone when the app restarts. Writing them to disk would put a
   second copy of calendar content outside the calendar, which is a worse trade than a short window.
@@ -307,7 +310,12 @@ What it does not cover, in the order you are likely to hit it:
 - **Undo is a write.** It needs the same launch opt-in and its own approval sheet, it can fail
   against a calendar that has since become read-only, and it does not check whether something else
   changed the event in the meantime. It writes the recorded previous values over whatever is there
-  now. When it fails, nothing changes and the token stays valid.
+  now. When it fails, nothing changes and the token stays valid. The sheet reads the token before you
+  answer it, so a sheet left open past the 30-minute window ends in an expired token rather than an
+  undo.
+- **A token is a capability.** It travels in the response of the write it belongs to. Anything that
+  can read that response can spend it, up to the point where the approval sheet asks a human. The
+  journal belongs to the app process, not to a client, so it is shared by every connected client.
 
 The approval sheet for `calendar_undo_write` shows what the token stands for, not the token: its only
 argument matches the credential-redaction rule and would otherwise read `undo_token: [REDACTED]`. The

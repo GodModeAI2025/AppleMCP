@@ -260,7 +260,7 @@ enum ToolCatalog {
         ),
         MCPTool(
             name: .calendarDeleteCalendar,
-            description: "Delete a calendar and every event in it. There is no undo for this one, because calendar_undo_write covers single events and not a calendar with its contents, so id and title must both be given and must refer to the same calendar. Pass dry_run to see which calendar the pair resolves to, and how many events it holds, without deleting anything.",
+            description: "Delete a calendar and every event in it. There is no undo for this one, because calendar_undo_write covers single events and not a calendar with its contents, so id and title must both be given and must refer to the same calendar. Pass dry_run to see which calendar the pair resolves to, without deleting anything.",
             schema: objectSchema(properties: [
                 "id": ["type": "string", "description": "Calendar id, from calendar_list_calendars."],
                 "title": ["type": "string", "description": "Exact current title of that calendar. The delete is refused if it does not match."],

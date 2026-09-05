@@ -14,19 +14,23 @@ import XCTest
 /// - Calendar authorization already granted. The status is read, never requested: a test that raises
 ///   a TCC panel would hang a CI runner and pester a developer.
 ///
-/// Everything happens inside a calendar this test creates in the local ("On My Mac") source and
-/// removes again, so it never touches an account that syncs and never an event that was already
-/// there. Without a local source the test skips rather than fall back to a synced account.
+/// Everything goes through one `CalendarProvider`, and therefore one `EKEventStore`, including the
+/// setup and the read-backs. Reading through a second store instance would leave the result
+/// depending on when EventKit propagates a save between stores, which is a property of the framework
+/// and not of this code.
+///
+/// The scratch calendar is created by `calendar_create_calendar`, which defaults to the local
+/// ("On My Mac") source, so nothing here reaches an account that syncs. Without a local source the
+/// tool refuses and this test skips.
 final class CalendarUndoLiveTests: XCTestCase {
     private static let environmentKey = "M3MCP_CALENDAR_UNDO_LIVE"
     private static let calendarTitle = "M3MCP Undo Verification"
 
-    private var store: EKEventStore!
-    private var calendar: EKCalendar!
     private var provider: CalendarProvider!
+    private var calendarID: String!
 
-    override func setUpWithError() throws {
-        try super.setUpWithError()
+    override func setUp() async throws {
+        try await super.setUp()
 
         try XCTSkipUnless(
             ProcessInfo.processInfo.environment[Self.environmentKey] == "1",
@@ -37,27 +41,38 @@ final class CalendarUndoLiveTests: XCTestCase {
             "Calendar authorization is \(Self.statusName). This test reads the status and never requests it, so grant full access in System Settings first."
         )
 
-        store = EKEventStore()
-        guard let localSource = store.sources.first(where: { $0.sourceType == .local }) else {
-            throw XCTSkip("No local calendar source, and this test refuses to write into a synced account.")
-        }
-
-        let created = EKCalendar(for: .event, eventStore: store)
-        created.title = Self.calendarTitle
-        created.source = localSource
-        try store.saveCalendar(created, commit: true)
-        calendar = created
         provider = CalendarProvider()
+
+        // A leftover calendar from an interrupted run would make the create fail on the duplicate
+        // title, so it is removed first.
+        await removeScratchCalendar()
+
+        let created = await provider.createCalendar(input: [
+            "title": .string(Self.calendarTitle)
+        ])
+        guard created.ok, let id = created.items.first?.id else {
+            throw XCTSkip("Could not create a local scratch calendar: \(created.message ?? "no message")")
+        }
+        calendarID = id
     }
 
-    override func tearDownWithError() throws {
-        if let calendar, let store {
-            try? store.removeCalendar(calendar, commit: true)
+    override func tearDown() async throws {
+        if provider != nil {
+            await removeScratchCalendar()
         }
         provider = nil
-        calendar = nil
-        store = nil
-        try super.tearDownWithError()
+        calendarID = nil
+        try await super.tearDown()
+    }
+
+    private func removeScratchCalendar() async {
+        let listed = await provider.listCalendars(input: ["query": .string(Self.calendarTitle)])
+        for item in listed.items where item.title == Self.calendarTitle {
+            _ = await provider.deleteCalendar(input: [
+                "id": .string(item.id),
+                "title": .string(Self.calendarTitle)
+            ])
+        }
     }
 
     private static var statusName: String {
@@ -78,7 +93,7 @@ final class CalendarUndoLiveTests: XCTestCase {
             "duration_minutes": .number(45),
             "location": .string("Room 3"),
             "notes": .string("live undo verification"),
-            "calendar_id": .string(calendar.calendarIdentifier)
+            "calendar_id": .string(calendarID)
         ])
 
         XCTAssertTrue(response.ok, response.message ?? "")
@@ -87,17 +102,22 @@ final class CalendarUndoLiveTests: XCTestCase {
         return (id, token)
     }
 
+    /// Read-back through the same provider, so the assertions are about the write and not about
+    /// cross-store propagation.
+    private func readEvent(_ id: String) async -> DataItem? {
+        let response = await provider.readEvent(input: ["id": .string(id)])
+        return response.ok ? response.items.first : nil
+    }
+
     func testADeletedEventComesBackWithItsContentAndANewIdentifier() async throws {
         let created = try await createEvent(title: "Delete and restore")
-        let before = try XCTUnwrap(store.event(withIdentifier: created.id))
-        let title = before.title
-        let start = before.startDate
-        let end = before.endDate
-        let location = before.location
+        let beforeItem = await readEvent(created.id)
+        let before = try XCTUnwrap(beforeItem)
 
         let deletion = await provider.deleteEvent(input: ["id": .string(created.id)])
         XCTAssertTrue(deletion.ok, deletion.message ?? "")
-        XCTAssertNil(store.event(withIdentifier: created.id), "the delete must really have happened")
+        let gone = await readEvent(created.id)
+        XCTAssertNil(gone, "the delete must really have happened")
 
         let token = try XCTUnwrap(deletion.meta?["undo_token"])
         XCTAssertEqual(deletion.meta?["undo_restores_identifier"], "false")
@@ -108,17 +128,19 @@ final class CalendarUndoLiveTests: XCTestCase {
         let restoredID = try XCTUnwrap(undo.items.first?.id)
         XCTAssertNotEqual(restoredID, created.id, "EventKit cannot return the old identifier")
 
-        let restored = try XCTUnwrap(store.event(withIdentifier: restoredID))
-        XCTAssertEqual(restored.title, title)
-        XCTAssertEqual(restored.startDate, start)
-        XCTAssertEqual(restored.endDate, end)
-        XCTAssertEqual(restored.location, location)
-        XCTAssertEqual(restored.calendar.calendarIdentifier, calendar.calendarIdentifier)
+        let restoredItem = await readEvent(restoredID)
+        let restored = try XCTUnwrap(restoredItem)
+        XCTAssertEqual(restored.title, before.title)
+        XCTAssertEqual(restored.metadata["start"], before.metadata["start"])
+        XCTAssertEqual(restored.metadata["end"], before.metadata["end"])
+        XCTAssertEqual(restored.subtitle, before.subtitle, "location")
+        XCTAssertEqual(restored.metadata["calendar_id"], calendarID)
 
         // Single use: the token is spent and a replay must not remove the restored event.
         let replay = await provider.undoWrite(input: ["undo_token": .string(token)])
         XCTAssertFalse(replay.ok)
-        XCTAssertNotNil(store.event(withIdentifier: restoredID))
+        let survived = await readEvent(restoredID)
+        XCTAssertNotNil(survived)
     }
 
     func testAChangedEventGoesBackToItsPreviousValues() async throws {
@@ -131,9 +153,10 @@ final class CalendarUndoLiveTests: XCTestCase {
         ])
         XCTAssertTrue(update.ok, update.message ?? "")
 
-        let changed = try XCTUnwrap(store.event(withIdentifier: created.id))
+        let changedItem = await readEvent(created.id)
+        let changed = try XCTUnwrap(changedItem)
         XCTAssertEqual(changed.title, "Changed by mistake")
-        XCTAssertEqual(changed.location, "Room 9")
+        XCTAssertEqual(changed.subtitle, "Room 9")
 
         let token = try XCTUnwrap(update.meta?["undo_token"])
         XCTAssertEqual(update.meta?["undo_restores_identifier"], "true")
@@ -141,11 +164,12 @@ final class CalendarUndoLiveTests: XCTestCase {
         let undo = await provider.undoWrite(input: ["undo_token": .string(token)])
         XCTAssertTrue(undo.ok, undo.message ?? "")
 
-        let restored = try XCTUnwrap(store.event(withIdentifier: created.id))
+        let restoredItem = await readEvent(created.id)
+        let restored = try XCTUnwrap(restoredItem)
         XCTAssertEqual(restored.title, "Update and restore")
-        XCTAssertEqual(restored.location, "Room 3")
+        XCTAssertEqual(restored.subtitle, "Room 3")
         // A field the update never touched must not be dragged along by the undo.
-        XCTAssertEqual(restored.notes, "live undo verification")
+        XCTAssertEqual(restored.preview, "live undo verification")
     }
 
     func testAPreviewLeavesTheCalendarExactlyAsItWas() async throws {
@@ -158,7 +182,8 @@ final class CalendarUndoLiveTests: XCTestCase {
         XCTAssertTrue(deletePreview.ok, deletePreview.message ?? "")
         XCTAssertEqual(deletePreview.meta?["dry_run"], "true")
         XCTAssertNil(deletePreview.meta?["undo_token"])
-        XCTAssertNotNil(store.event(withIdentifier: created.id), "a preview must not delete")
+        let stillThere = await readEvent(created.id)
+        XCTAssertNotNil(stillThere, "a preview must not delete")
 
         let updatePreview = await provider.updateEvent(input: [
             "id": .string(created.id),
@@ -168,14 +193,15 @@ final class CalendarUndoLiveTests: XCTestCase {
         XCTAssertTrue(updatePreview.ok, updatePreview.message ?? "")
         XCTAssertEqual(updatePreview.meta?["would_change"], "title")
 
-        let untouched = try XCTUnwrap(store.event(withIdentifier: created.id))
+        let untouchedItem = await readEvent(created.id)
+        let untouched = try XCTUnwrap(untouchedItem)
         XCTAssertEqual(untouched.title, "Preview only", "a preview must not write, not even in memory")
 
         let createPreview = await provider.createEvent(input: [
             "title": .string("Never created"),
             "start": .string("2031-04-08T09:00:00+02:00"),
             "duration_minutes": .number(30),
-            "calendar_id": .string(calendar.calendarIdentifier),
+            "calendar_id": .string(calendarID),
             "dry_run": .bool(true)
         ])
         XCTAssertTrue(createPreview.ok, createPreview.message ?? "")
@@ -183,7 +209,7 @@ final class CalendarUndoLiveTests: XCTestCase {
 
         let search = await provider.search(input: [
             "query": .string("Never created"),
-            "calendar": .string(calendar.calendarIdentifier),
+            "calendar": .string(calendarID),
             "start_days": .number(-3_650),
             "end_days": .number(3_650)
         ])
@@ -192,10 +218,12 @@ final class CalendarUndoLiveTests: XCTestCase {
 
     func testACreatedEventCanBeTakenBack() async throws {
         let created = try await createEvent(title: "Created by mistake")
-        XCTAssertNotNil(store.event(withIdentifier: created.id))
+        let present = await readEvent(created.id)
+        XCTAssertNotNil(present)
 
         let undo = await provider.undoWrite(input: ["undo_token": .string(created.undoToken)])
         XCTAssertTrue(undo.ok, undo.message ?? "")
-        XCTAssertNil(store.event(withIdentifier: created.id), "undoing a create must remove the event")
+        let gone = await readEvent(created.id)
+        XCTAssertNil(gone, "undoing a create must remove the event")
     }
 }
