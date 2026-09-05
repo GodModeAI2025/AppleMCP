@@ -31,7 +31,7 @@ final class LegacySpeechRecognizerCancellationTests: XCTestCase {
         let elapsed = Double(
             DispatchTime.now().uptimeNanoseconds - started
         ) / 1_000_000_000
-        XCTAssertLessThan(elapsed, 0.15)
+        XCTAssertLessThan(elapsed, zeitbudget(0.15))
         XCTAssertEqual(admission.activeOperationCount, 1)
 
         do {
