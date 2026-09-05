@@ -32,8 +32,11 @@ arrives within two weeks, follow up in the private advisory.
 The maintained threat model, implemented controls, residual limitations, retention behavior, and
 release checklist are in [docs/SECURITY_MODEL.md](docs/SECURITY_MODEL.md). In particular:
 
-- a `0700` directory and `0600` socket exclude other users and normally sandboxed apps, but do not
-  authenticate an unsandboxed process running as the same user;
+- a `0700` directory and `0600` socket exclude other users and normally sandboxed apps; a same-user
+  unsandboxed process is stopped by the capability token, which every route other than `GET /health`
+  requires, and by a pin on the connecting binary's code directory hash;
+- the pin identifies a binary, not a caller: the bundled `M3MCPBridge` satisfies it whichever process
+  starts it, so a stolen token used through that bridge is still a working client;
 - Mail, Notes, Calendar text, transcripts, filenames, and other provider data remain untrusted
   content even when marked with the machine-readable provenance boundary;
 - Calendar mutation, permission UI, and user-created Shortcuts are separate launch-time opt-ins;

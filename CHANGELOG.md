@@ -2,6 +2,37 @@
 
 ## Unreleased
 
+### Security
+
+- **Capability token on the socket.** The app generates a 32-byte secret on its first start, keeps it
+  in the login keychain, and refuses every request other than `GET /health` that does not present it
+  as `Authorization: Bearer <token>`, compared in constant time. `M3MCP_TOKEN` overrides the keychain
+  in both processes. If no token can be read or created the listener does not start. `Server › Copy
+  MCP Client Token` puts it on the pasteboard; the bridge resolves it on its first tool call, so
+  `initialize` and `tools/list` still answer on a machine with no app and no keychain item.
+- **`/status` is no longer open.** It carries the activity log with tool inputs and bounded outputs,
+  so it now needs the token. `/health` stays open and keeps omitting the log.
+- **Pinned client binary.** At every start the app reads the code directory hash of the
+  `M3MCPBridge` next to its own executable and accepts connections from that binary alone; a valid
+  token from anywhere else is `403`. The identity comes from the peer's audit token rather than its
+  pid, and `SecCodeCheckValidity` runs alongside the hash comparison. `M3MCP_TRUSTED_CLIENT_CDHASH`
+  overrides the sibling lookup. Where no sibling bridge exists the pin cannot be computed and the
+  endpoint says so instead of implying it. `script/install_local.sh` now stages, signs, and commits
+  the bridge together with the app, the way `script/package_release.sh` already did, and
+  `script/build_and_run.sh` stages one into its `dist/M3MCP.app` for the same reason. README and the
+  landing page now name which bridge to configure for each way of running the app: after an install
+  the copy in `.build/release/` is a different binary to the pin and is refused.
+- **Silence no longer takes the endpoint away.** Accepted connections are read through a dispatch
+  source on a serial queue instead of a thread parked in `read`, so a connection that has sent
+  nothing costs a descriptor and a deadline. Two caps replace one: 128 connections waiting for a
+  request, 16 requests being served. At the waiting cap the connection that has waited longest
+  without sending a byte is displaced by a new arrival, and the listen backlog is matched to the cap
+  so a burst is queued rather than met with ECONNREFUSED. Measured on the same probe: with 16 silent
+  connections the previous build answered `GET /health` and every tool call with 503, and this one
+  answers 200; under a four-thread reconnect flood it went from 4 percent of calls answered to 98
+  percent. A connection that has sent something is never displaced, and when every serving slot is
+  busy the refusal is still 503.
+
 ## 0.3.0 — 2026-09-04
 
 ### Security

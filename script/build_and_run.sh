@@ -3,6 +3,7 @@ set -euo pipefail
 
 MODE="${1:-run}"
 APP_NAME="M3MCPApp"
+BRIDGE_NAME="M3MCPBridge"
 BUNDLE_NAME="M3MCP"
 BUNDLE_ID="de.markzimmermann.m3mcp"
 MIN_SYSTEM_VERSION="15.0"
@@ -14,6 +15,7 @@ APP_BUNDLE="$DIST_DIR/$BUNDLE_NAME.app"
 APP_CONTENTS="$APP_BUNDLE/Contents"
 APP_MACOS="$APP_CONTENTS/MacOS"
 APP_BINARY="$APP_MACOS/$APP_NAME"
+BRIDGE_BINARY="$APP_MACOS/$BRIDGE_NAME"
 INFO_PLIST="$APP_CONTENTS/Info.plist"
 SOURCE_INFO_PLIST="$ROOT_DIR/Sources/M3MCPApp/Resources/Info.plist"
 source "$ROOT_DIR/script/signing_identity.sh"
@@ -36,12 +38,18 @@ pick_identity() {
 pkill -x "$APP_NAME" >/dev/null 2>&1 || true
 
 swift build
-BUILD_BINARY="$(swift build --show-bin-path)/$APP_NAME"
+BIN_PATH="$(swift build --show-bin-path)"
+BUILD_BINARY="$BIN_PATH/$APP_NAME"
+BUILD_BRIDGE="$BIN_PATH/$BRIDGE_NAME"
 
 rm -rf "$APP_BUNDLE"
 mkdir -p "$APP_MACOS"
 cp "$BUILD_BINARY" "$APP_BINARY"
 chmod +x "$APP_BINARY"
+# The app pins the client it accepts to the M3MCPBridge next to its own executable. Without this
+# copy every run of this script would be token-only, and the app window would say so.
+cp "$BUILD_BRIDGE" "$BRIDGE_BINARY"
+chmod +x "$BRIDGE_BINARY"
 cp "$SOURCE_INFO_PLIST" "$INFO_PLIST"
 /usr/bin/xattr -cr "$APP_BUNDLE" >/dev/null 2>&1 || true
 

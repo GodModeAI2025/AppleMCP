@@ -70,7 +70,7 @@ jobs:
       - name: Run concurrency security tests with ThreadSanitizer
         run: >-
           swift test --sanitize=thread --filter
-          'PermissionProviderCancellationTests|RemindersProviderCancellationTests|LegacySpeechRecognizerCancellationTests|SpeechPrivacyPolicyTests|NativeToolApprovalCoordinatorTests|AppleScriptRunnerCancellationTests|AutomationPermissionPreflightTests|MailProviderCancellationTests|MailProviderSQLiteSecurityTests|LocalHTTPServerCancellationTests|LocalHTTPServerStartLockTests|MCPServerFormattingTests|LocalHTTPResponseTests|InFlightRequestRegistryTests|BoundedProcessRunnerTests|SensitiveTemporaryArtifactsTests|AppStartupCleanupTests|ShortcutRunnerTests|VoiceMemosRecordingSecurityTests|VoiceMemosSnapshotSecurityTests'
+          'PermissionProviderCancellationTests|RemindersProviderCancellationTests|LegacySpeechRecognizerCancellationTests|SpeechPrivacyPolicyTests|NativeToolApprovalCoordinatorTests|AppleScriptRunnerCancellationTests|AutomationPermissionPreflightTests|MailProviderCancellationTests|MailProviderSQLiteSecurityTests|LocalHTTPServerCancellationTests|LocalHTTPServerStartLockTests|MCPServerFormattingTests|LocalHTTPResponseTests|InFlightRequestRegistryTests|BoundedProcessRunnerTests|SensitiveTemporaryArtifactsTests|AppStartupCleanupTests|ShortcutRunnerTests|VoiceMemosRecordingSecurityTests|VoiceMemosSnapshotSecurityTests|SocketAuthenticationTests|SocketPeerPinTests|SocketAvailabilityTests'
 
       - name: Build release binaries
         run: swift build -c release

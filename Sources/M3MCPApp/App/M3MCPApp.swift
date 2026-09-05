@@ -28,6 +28,13 @@ struct M3MCPApp: App {
                 }
                 .keyboardShortcut("p", modifiers: [.command, .shift])
 
+                Button("Copy MCP Client Token") {
+                    model.copyCapabilityToken()
+                }
+                .keyboardShortcut("t", modifiers: [.command, .shift])
+
+                Divider()
+
                 Button("Start") {
                     model.startIfNeeded()
                 }

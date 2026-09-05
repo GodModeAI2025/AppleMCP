@@ -37,6 +37,7 @@ final class LocalHTTPServerCancellationTests: XCTestCase {
 
         let server = LocalHTTPServer(
             socketURL: socketURL,
+            authorizer: SocketAuthorizer(token: testCapabilityToken),
             configuration: configuration,
             toolHandler: { _, _ in
                 handlerStarted.fulfill()
@@ -68,7 +69,7 @@ final class LocalHTTPServerCancellationTests: XCTestCase {
         defer { Darwin.close(client) }
         try writeAll(
             Data(
-                "POST /tools/source_status HTTP/1.1\r\nContent-Type: application/json\r\nContent-Length: 2\r\n\r\n{}".utf8
+                "POST /tools/source_status HTTP/1.1\r\nContent-Type: application/json\r\nAuthorization: Bearer \(testCapabilityToken)\r\nContent-Length: 2\r\n\r\n{}".utf8
             ),
             to: client
         )
@@ -106,6 +107,7 @@ final class LocalHTTPServerCancellationTests: XCTestCase {
 
         let server = LocalHTTPServer(
             socketURL: socketURL,
+            authorizer: SocketAuthorizer(token: testCapabilityToken),
             configuration: configuration,
             toolHandler: { _, _ in
                 ToolResponse(ok: true, source: "test", message: "unexpected dispatch")
@@ -169,6 +171,7 @@ final class LocalHTTPServerCancellationTests: XCTestCase {
 
         let server = LocalHTTPServer(
             socketURL: socketURL,
+            authorizer: SocketAuthorizer(token: testCapabilityToken),
             configuration: configuration,
             toolHandler: { _, _ in
                 ToolResponse(ok: true, source: "test", message: "unexpected dispatch")
@@ -232,6 +235,7 @@ final class LocalHTTPServerCancellationTests: XCTestCase {
 
         let server = LocalHTTPServer(
             socketURL: socketURL,
+            authorizer: SocketAuthorizer(token: testCapabilityToken),
             toolHandler: { _, _ in
                 handlerStarted.fulfill()
                 do {
@@ -260,7 +264,7 @@ final class LocalHTTPServerCancellationTests: XCTestCase {
         defer { Darwin.close(client) }
         try writeAll(
             Data(
-                "POST /tools/source_status HTTP/1.1\r\nContent-Type: application/json\r\nContent-Length: 2\r\n\r\n{}".utf8
+                "POST /tools/source_status HTTP/1.1\r\nContent-Type: application/json\r\nAuthorization: Bearer \(testCapabilityToken)\r\nContent-Length: 2\r\n\r\n{}".utf8
             ),
             to: client
         )
@@ -331,6 +335,7 @@ final class LocalHTTPServerCancellationTests: XCTestCase {
         )
         let server = LocalHTTPServer(
             socketURL: socketURL,
+            authorizer: SocketAuthorizer(token: testCapabilityToken),
             toolHandler: { _, _ in
                 ToolResponse(ok: true, source: "hostile-provider", message: oversizedMessage)
             },
@@ -351,7 +356,7 @@ final class LocalHTTPServerCancellationTests: XCTestCase {
         defer { Darwin.close(client) }
         try writeAll(
             Data(
-                "POST /tools/source_status HTTP/1.1\r\nContent-Type: application/json\r\nContent-Length: 2\r\n\r\n{}".utf8
+                "POST /tools/source_status HTTP/1.1\r\nContent-Type: application/json\r\nAuthorization: Bearer \(testCapabilityToken)\r\nContent-Length: 2\r\n\r\n{}".utf8
             ),
             to: client
         )

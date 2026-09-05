@@ -24,21 +24,88 @@ final class LocalAppClient: @unchecked Sendable {
         attributes: .concurrent
     )
 
+    /// Resolved on the first tool call, not at start-up.
+    ///
+    /// `initialize` and `tools/list` are answered out of the catalog without ever touching the app,
+    /// and an MCP client sends them the moment it launches the bridge. Reading the keychain there
+    /// would spend the user's keychain on someone who has not asked for any data yet, and it would
+    /// break `script/check_release_artifact.sh`, which pipes `initialize` and `tools/list` into the
+    /// packaged bridge on a machine with no app, no keychain item and no token.
+    ///
+    /// The outer optional is "not looked yet", the inner one is "looked and found nothing".
+    private var credentials: CapabilityToken.Resolution??
+
+    /// Why there is no token, kept so the refusal can say it.
+    private var missingTokenReason: String?
+
+    /// `queue` is concurrent and `call` can be entered from several tasks, so the one-shot lookup
+    /// needs a lock of its own.
+    private let credentialsLock = NSLock()
+
     /// Speech recognition and transcript searches can take minutes; a short timeout would report the
     /// app as unreachable while it is still working.
+    /// `capabilityToken` is a seam for tests that drive the transport against a fixture socket, the
+    /// same way `registeredSocketHook` is. Production leaves it nil, and the token is then resolved
+    /// once, lazily, on the first tool call.
     init(
         socketURL: URL = M3MCPEndpoint.socketURL,
         timeout: TimeInterval = defaultResponseTimeout,
+        capabilityToken: String? = nil,
         registeredSocketHook: @escaping RegisteredSocketHook = { _ in }
     ) {
         self.socketURL = socketURL
         let finiteTimeout = timeout.isFinite ? timeout : Self.defaultResponseTimeout
         self.timeout = min(max(finiteTimeout, 0.001), 86_400)
         self.registeredSocketHook = registeredSocketHook
+        if let capabilityToken {
+            self.credentials = .some(
+                CapabilityToken.Resolution(token: capabilityToken, origin: "caller-supplied token")
+            )
+        }
+    }
+
+    /// Looks the token up once and keeps the answer, negative answers included: a keychain read that
+    /// was refused will be refused again, and repeating it per call would only add latency.
+    private func resolvedCredentials() -> CapabilityToken.Resolution? {
+        credentialsLock.lock()
+        defer { credentialsLock.unlock() }
+
+        if let credentials {
+            return credentials
+        }
+        switch CapabilityToken.forClient() {
+        case .resolved(let resolution):
+            credentials = .some(resolution)
+            return resolution
+        case .missing(let reason):
+            missingTokenReason = reason
+            credentials = .some(nil)
+            return nil
+        }
+    }
+
+    private func missingTokenResponse() -> ToolResponse {
+        credentialsLock.lock()
+        let reason = missingTokenReason
+        credentialsLock.unlock()
+
+        return ToolResponse(
+            ok: false,
+            source: "M3MCPBridge",
+            message: "No capability token, so M3MCPApp will refuse this call: "
+                + (reason ?? "none is configured.")
+                + " Open the M3MCP app, choose Server › Copy MCP Client Token, and add it to this "
+                + "client's configuration as \"env\": {\"\(CapabilityToken.environmentKey)\": "
+                + "\"<token>\"}. That path needs no keychain access at all."
+        )
     }
 
     func call(tool: String, arguments: [String: Any]) async -> ToolResponse {
         let path = "/tools/\(tool.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? tool)"
+
+        guard let credentials = resolvedCredentials() else {
+            return missingTokenResponse()
+        }
 
         let body: Data
         do {
@@ -62,6 +129,7 @@ final class LocalAppClient: @unchecked Sendable {
                     method: "POST",
                     path: path,
                     body: body,
+                    token: credentials.token,
                     cancellationController: cancellationController
                 )
             }, onCancel: {
@@ -125,6 +193,7 @@ final class LocalAppClient: @unchecked Sendable {
         method: String,
         path: String,
         body: Data,
+        token: String,
         cancellationController: SocketCancellationController
     ) async throws -> HTTPReply {
         try await withCheckedThrowingContinuation { continuation in
@@ -135,6 +204,7 @@ final class LocalAppClient: @unchecked Sendable {
                         method: method,
                         path: path,
                         body: body,
+                        token: token,
                         timeout: timeout,
                         cancellationController: cancellationController,
                         registeredSocketHook: registeredSocketHook
@@ -152,6 +222,7 @@ final class LocalAppClient: @unchecked Sendable {
         method: String,
         path: String,
         body: Data,
+        token: String,
         timeout: TimeInterval,
         cancellationController: SocketCancellationController,
         registeredSocketHook: RegisteredSocketHook
@@ -217,6 +288,7 @@ final class LocalAppClient: @unchecked Sendable {
         request.append(Data("\(method) \(path) HTTP/1.1\r\n".utf8))
         request.append(Data("Host: localhost\r\n".utf8))
         request.append(Data("Content-Type: application/json\r\n".utf8))
+        request.append(Data("Authorization: Bearer \(token)\r\n".utf8))
         request.append(Data("Content-Length: \(body.count)\r\n".utf8))
         request.append(Data("Connection: close\r\n\r\n".utf8))
         request.append(body)

@@ -13,14 +13,37 @@ private func m3mcpFlock(_ descriptor: Int32, _ operation: Int32) -> Int32
 /// the socket replaces the former loopback TCP port. Access control is now the filesystem's job:
 /// the socket lives in a `0700` directory and is itself `0600`, so a sandboxed app — the case macOS
 /// TCC is meant to stop — cannot reach it, and neither can a web page.
+///
+/// The filesystem is only part of the access control, because it stops at the user boundary: every
+/// unsandboxed process of the same user could connect and inherit the app's Full Disk Access. So
+/// every request other than `GET /health` has to present the capability token, and where the app
+/// could work out which binary its bridge is, the connecting process is checked against that
+/// binary's code directory hash. `SocketAuthorizer` holds the rules, `PeerIdentity` reads the peer.
 final class LocalHTTPServer {
     typealias ToolHandler = (String, [String: JSONValue]) async -> ToolResponse
     /// `includeActivity` is false for the public health probe and true for the diagnostic endpoint.
     typealias StatusHandler = (_ includeActivity: Bool) async -> StatusResponse
+    /// Called for every authorization outcome that was refused, so a refusal is visible in the app
+    /// rather than silent.
+    typealias AuditHandler = @Sendable (AccessAttempt) -> Void
 
     struct Configuration {
         var requestLimits = LocalHTTPRequestParser.Limits()
+        /// How many complete requests may be served at once.
+        ///
+        /// `connectionQueue` is concurrent and each served request blocks a thread on it while its
+        /// async handler runs, so this bounds the endpoint's share of a thread pool. Only a
+        /// connection that has already delivered a whole request gets one; see
+        /// `maximumOpenConnections` for the connections that have not.
         var maximumConcurrentConnections = 16
+        /// How many accepted connections may be waiting for a request at once.
+        ///
+        /// A waiting connection costs a file descriptor and a dispatch source and no thread, so this
+        /// bounds descriptors rather than threads and can be an order of magnitude larger.
+        ///
+        /// The cap does not by itself decide who is turned away when it is reached: a connection that
+        /// has sent nothing yields its place to a newer one. See `acceptPendingConnections`.
+        var maximumOpenConnections = 128
         /// A pre-existing endpoint is probed before it can be classified as stale and removed.
         /// Keep this short because `start()` holds the endpoint lock for the complete probe.
         var existingSocketProbeDeadline: TimeInterval = 0.25
@@ -118,15 +141,26 @@ final class LocalHTTPServer {
     }
 
     private let socketURL: URL
+    private let authorizer: SocketAuthorizer
     private let toolHandler: ToolHandler
     private let statusHandler: StatusHandler
+    private let auditHandler: AuditHandler?
     private let acceptQueue = DispatchQueue(label: "de.markzimmermann.m3mcp.accept")
     private let connectionQueue = DispatchQueue(
         label: "de.markzimmermann.m3mcp.connections",
         attributes: .concurrent
     )
+    /// Serial: every pending connection's reads, its deadline and its teardown run here, so the
+    /// state of a connection needs no lock of its own. Nothing on it may block, because the accept
+    /// loop enters it synchronously to make room for a new arrival.
+    private let readQueue = DispatchQueue(label: "de.markzimmermann.m3mcp.reads")
     private let parser: LocalHTTPRequestParser
+    /// Requests being served. Claimed once a request is framed, released when its reply is done.
     private let connectionSlots: DispatchSemaphore
+    private let openConnectionLock = NSLock()
+    private var openConnections = 0
+    /// Only ever touched on `readQueue`.
+    private var pendingConnections: [PendingConnection] = []
     private let activeConnections = ActiveConnectionRegistry()
     private let configuration: Configuration
     private let socketProbeOperations: SocketProbeOperations
@@ -316,20 +350,26 @@ final class LocalHTTPServer {
         }
     }
 
+    /// `authorizer` has no default on purpose. A default that let the endpoint answer without a
+    /// token would be one forgotten argument away from putting the socket back where it was.
     init(
         socketURL: URL,
+        authorizer: SocketAuthorizer,
         configuration: Configuration = Configuration(),
         socketProbeOperations: SocketProbeOperations = .live,
         toolHandler: @escaping ToolHandler,
-        statusHandler: @escaping StatusHandler
+        statusHandler: @escaping StatusHandler,
+        auditHandler: AuditHandler? = nil
     ) {
         self.socketURL = socketURL
+        self.authorizer = authorizer
         self.configuration = configuration
         self.socketProbeOperations = socketProbeOperations
         self.parser = LocalHTTPRequestParser(limits: configuration.requestLimits)
         self.connectionSlots = DispatchSemaphore(value: max(1, configuration.maximumConcurrentConnections))
         self.toolHandler = toolHandler
         self.statusHandler = statusHandler
+        self.auditHandler = auditHandler
     }
 
     deinit {
@@ -422,7 +462,10 @@ final class LocalHTTPServer {
             _ = fcntl(descriptor, F_SETFL, flags | O_NONBLOCK)
         }
 
-        guard listen(descriptor, 16) == 0 else {
+        // The backlog is what the kernel holds between a client's connect and this server's accept.
+        // Matching it to the connection cap keeps a burst from being answered with ECONNREFUSED,
+        // which looks to a client like a server that is not running. 128 is where Darwin tops out.
+        guard listen(descriptor, Int32(min(max(1, configuration.maximumOpenConnections), 128))) == 0 else {
             let code = errno
             close(descriptor)
             unlink(path)
@@ -745,31 +788,273 @@ final class LocalHTTPServer {
             var on: Int32 = 1
             setsockopt(client, SOL_SOCKET, SO_NOSIGPIPE, &on, socklen_t(MemoryLayout<Int32>.size))
 
-            // Darwin does not pass O_NONBLOCK on to accepted sockets. Keep the descriptor blocking
-            // for its socket-level defence-in-depth timeouts; bounded response writes use
-            // `MSG_DONTWAIT` and `poll` below.
+            // Non-blocking is what makes a silent connection cheap: the request is collected by a
+            // dispatch source, and a connection that sends nothing simply never fires one, so it
+            // costs a descriptor and a deadline instead of a parked thread. Response writes set
+            // O_NONBLOCK themselves and drive their own absolute deadline.
             let clientFlags = fcntl(client, F_GETFL, 0)
             if clientFlags >= 0 {
-                _ = fcntl(client, F_SETFL, clientFlags & ~O_NONBLOCK)
+                _ = fcntl(client, F_SETFL, clientFlags | O_NONBLOCK)
             }
 
+            // Kept as defence in depth. No path below enters a blocking socket call, so these
+            // timeouts are a second bound rather than the primary one.
             guard configureTimeouts(on: client) else {
                 close(client)
                 continue
             }
 
-            // Admission is deliberately non-blocking so slow clients cannot stall the accept loop.
-            // A slot is held through a long-running tool call, but the socket timeouts only cover
-            // individual I/O operations; transcription and other legitimate work remain unbounded.
-            guard connectionSlots.wait(timeout: .now()) == .success else {
-                rejectOverloaded(client)
+            // At the cap, the connection that just arrived is the wrong one to turn away. It is the
+            // one that might have something to say; a slot held without a single byte in it belongs
+            // to a connection that has already shown it has not. So the oldest silent connection is
+            // dropped and the new one takes its place. A process without a token can still fill
+            // every slot, but it cannot keep them: every arrival after that costs it its oldest.
+            //
+            // The bridge writes its whole request in one call straight after `connect`, so it leaves
+            // the silent set within microseconds and is never the connection picked.
+            if !claimOpenConnection() {
+                // Synchronous on purpose. `pendingConnections` belongs to `readQueue`, and waiting
+                // here is also what stops the accept loop from running ahead of its own admissions
+                // and holding an unbounded number of descriptors while it does.
+                var displaced = false
+                readQueue.sync { displaced = self.dropOldestSilentConnection() }
+
+                // Nothing silent left means every slot holds a request being read, and then the
+                // refusal is the honest answer.
+                guard displaced, claimOpenConnection() else {
+                    rejectOverloaded(client)
+                    continue
+                }
+            }
+
+            // Registered before the hand-off to `readQueue`, so `stop()` reaches a connection that
+            // is still waiting for its request and shuts it down like any other.
+            guard activeConnections.register(client) else {
+                releaseOpenConnection()
+                close(client)
                 continue
             }
 
-            guard activeConnections.register(client) else {
-                connectionSlots.signal()
+            readQueue.async { [weak self] in
+                guard let self else {
+                    close(client)
+                    return
+                }
+                self.beginReading(client)
+            }
+        }
+    }
+
+    // MARK: - Reading a request without holding a thread
+
+    /// One connection that has been accepted and has not yet delivered a complete request.
+    ///
+    /// Everything on it belongs to `readQueue`. `outcome` is what the read source's cancel handler
+    /// does with the descriptor, which is the single point where ownership leaves the read phase.
+    private final class PendingConnection {
+        enum Outcome {
+            /// Close without saying anything: the peer hung up, or the descriptor failed.
+            case drop
+            /// Write this reply best-effort, then close.
+            case reply(Data)
+            /// A complete request: hand the descriptor to `connectionQueue`.
+            case serve(LocalHTTPRequest)
+        }
+
+        let descriptor: Int32
+        var buffer = Data()
+        var readSource: DispatchSourceRead?
+        var timer: DispatchSourceTimer?
+        var finished = false
+        var outcome: Outcome = .drop
+
+        init(descriptor: Int32) {
+            self.descriptor = descriptor
+        }
+    }
+
+    private func claimOpenConnection() -> Bool {
+        openConnectionLock.lock()
+        defer { openConnectionLock.unlock() }
+        guard openConnections < max(1, configuration.maximumOpenConnections) else { return false }
+        openConnections += 1
+        return true
+    }
+
+    private func releaseOpenConnection() {
+        openConnectionLock.lock()
+        openConnections = max(0, openConnections - 1)
+        openConnectionLock.unlock()
+    }
+
+    /// Ends the connection that has waited longest without sending a byte, so a newer one can have
+    /// its slot. Runs on `readQueue`, which owns `pendingConnections`.
+    ///
+    /// Returns false when there is nothing silent to drop, which means every slot is held by a
+    /// request that is actually being read. Those are not displaced: a half-read request is work in
+    /// progress, and throwing it away would turn a full endpoint into a lossy one.
+    private func dropOldestSilentConnection() -> Bool {
+        guard let victim = pendingConnections.first(where: { $0.buffer.isEmpty && !$0.finished }) else {
+            return false
+        }
+
+        finish(
+            victim,
+            outcome: .reply(
+                makeResponse(
+                    status: 503,
+                    data: encodedError("Displaced by a newer connection after sending nothing.")
+                )
+            )
+        )
+        return true
+    }
+
+    /// Runs on `readQueue`.
+    private func beginReading(_ client: Int32) {
+        let connection = PendingConnection(descriptor: client)
+
+        let readSource = DispatchSource.makeReadSource(fileDescriptor: client, queue: readQueue)
+        readSource.setEventHandler { [weak self] in
+            guard let self else {
+                // The server was released with this connection still pending. Read readiness is
+                // level-triggered, so the source has to be cancelled or it would spin on EOF; its
+                // cancel handler closes the descriptor.
+                connection.readSource?.cancel()
+                return
+            }
+            self.readAvailable(on: connection)
+        }
+        // The single hand-off point. Cancelling is how every path leaves the read phase, so the
+        // descriptor has exactly one owner at every moment and `stop()` still only shuts down.
+        readSource.setCancelHandler { [weak self] in
+            guard let self else {
                 close(client)
+                return
+            }
+            self.completePendingConnection(connection)
+        }
+        connection.readSource = readSource
+
+        // The deadline is what an idle connection actually costs: this long, then the slot is back.
+        // It runs from `accept` and not from the last read, so it also bounds a trickle.
+        let timer = DispatchSource.makeTimerSource(queue: readQueue)
+        timer.schedule(deadline: .now() + boundedIOInterval(configuration.requestReadDeadline))
+        timer.setEventHandler { [weak self] in
+            guard let self else { return }
+            self.finish(
+                connection,
+                outcome: .reply(
+                    self.makeResponse(
+                        status: 408,
+                        data: self.encodedError("Timed out while reading the request.")
+                    )
+                )
+            )
+        }
+        connection.timer = timer
+        pendingConnections.append(connection)
+
+        timer.resume()
+        readSource.resume()
+    }
+
+    /// Runs on `readQueue`, so everything it touches on the connection is serialized by the queue.
+    private func readAvailable(on connection: PendingConnection) {
+        guard !connection.finished else { return }
+
+        let maximumBufferedBytes = parser.limits.maximumBufferedBytes
+        var chunk = [UInt8](repeating: 0, count: 16 * 1_024)
+        while true {
+            let remainingCapacity = maximumBufferedBytes - connection.buffer.count
+            guard remainingCapacity > 0 else {
+                finish(connection, outcome: .reply(errorResponse(413, "Request body is too large.")))
+                return
+            }
+
+            let readCapacity = min(chunk.count, remainingCapacity)
+            let count = chunk.withUnsafeMutableBytes { raw -> Int in
+                guard let base = raw.baseAddress else { return -1 }
+                return recv(connection.descriptor, base, readCapacity, MSG_DONTWAIT)
+            }
+
+            if count < 0 {
+                if errno == EINTR { continue }
+                if errno == EAGAIN || errno == EWOULDBLOCK { return }
+                finish(connection, outcome: .reply(errorResponse(400, "Could not read a complete request.")))
+                return
+            }
+            if count == 0 {
+                // The peer hung up before finishing its request. The reply is still attempted, because
+                // a half-open client that shut down only its write side is still reading; a fully
+                // closed one drops it, which is what best-effort means.
+                finish(connection, outcome: .reply(errorResponse(400, "Could not read a complete request.")))
+                return
+            }
+
+            connection.buffer.append(contentsOf: chunk[0..<count])
+
+            switch parser.parse(connection.buffer) {
+            case .complete(let request):
+                finish(connection, outcome: .serve(request))
+                return
+            case .malformed(let reason):
+                finish(connection, outcome: .reply(errorResponse(400, reason.clientMessage)))
+                return
+            case .tooLarge(.headers):
+                finish(connection, outcome: .reply(errorResponse(431, "Request headers are too large.")))
+                return
+            case .tooLarge(.body):
+                finish(connection, outcome: .reply(errorResponse(413, "Request body is too large.")))
+                return
+            case .incomplete:
                 continue
+            }
+        }
+    }
+
+    /// Ends the read phase. Idempotent, and only ever called on `readQueue`.
+    ///
+    /// The open-connection slot is given back here rather than in the cancel handler, because the
+    /// accept loop re-claims it the instant `dropOldestSilentConnection` returns.
+    private func finish(_ connection: PendingConnection, outcome: PendingConnection.Outcome) {
+        guard !connection.finished else { return }
+        connection.finished = true
+        connection.outcome = outcome
+        pendingConnections.removeAll { $0 === connection }
+        connection.timer?.cancel()
+        connection.timer = nil
+        releaseOpenConnection()
+        connection.readSource?.cancel()
+    }
+
+    /// Runs on `readQueue` as the read source's cancel handler: the one place a pending connection's
+    /// descriptor changes hands.
+    private func completePendingConnection(_ connection: PendingConnection) {
+        connection.readSource = nil
+        let client = connection.descriptor
+
+        switch connection.outcome {
+        case .drop:
+            activeConnections.unregister(client)
+            close(client)
+        case .reply(let data):
+            writeBestEffort(data, to: client)
+            activeConnections.unregister(client)
+            close(client)
+        case .serve(let request):
+            // Only a connection that has actually asked for something is worth a thread.
+            guard connectionSlots.wait(timeout: .now()) == .success else {
+                writeBestEffort(
+                    makeResponse(
+                        status: 503,
+                        data: encodedError("Local endpoint is at its connection limit. Try again shortly.")
+                    ),
+                    to: client
+                )
+                activeConnections.unregister(client)
+                close(client)
+                return
             }
 
             connectionQueue.async { [self] in
@@ -780,9 +1065,13 @@ final class LocalHTTPServer {
                     close(client)
                     connectionSlots.signal()
                 }
-                serve(client)
+                serve(request, on: client)
             }
         }
+    }
+
+    private func errorResponse(_ status: Int, _ message: String) -> Data {
+        makeResponse(status: status, data: encodedError(message))
     }
 
     private func configureTimeouts(on client: Int32) -> Bool {
@@ -829,15 +1118,21 @@ final class LocalHTTPServer {
     }
 
     private func rejectOverloaded(_ client: Int32) {
-        let response = makeResponse(
-            status: 503,
-            data: encodedError("Local endpoint is at its connection limit. Try again shortly.")
+        writeBestEffort(
+            makeResponse(
+                status: 503,
+                data: encodedError("Local endpoint is at its connection limit. Try again shortly.")
+            ),
+            to: client
         )
+        close(client)
+    }
 
-        // The accept queue must never wait for an already-overloaded client. A fresh local socket
-        // normally accepts this small response immediately; if it stops accepting bytes, closing it
-        // is the safe fallback.
-        response.withUnsafeBytes { raw in
+    /// A refusal written without ever blocking. What does not go out is dropped: this path exists to
+    /// explain a refusal, not to guarantee delivery of one, and neither the accept loop nor the read
+    /// queue may wait for a client that will not read.
+    private func writeBestEffort(_ data: Data, to client: Int32) {
+        data.withUnsafeBytes { raw in
             guard let base = raw.baseAddress else { return }
             var offset = 0
             while offset < raw.count {
@@ -856,129 +1151,42 @@ final class LocalHTTPServer {
                 offset += written
             }
         }
-        close(client)
     }
 
-    private func serve(_ client: Int32) {
-        switch readRequest(from: client) {
-        case .request(let request):
-            // Once framing is complete no more client bytes are expected. Keep watching the read
-            // side while the async handler runs so a bridge cancellation (`shutdown`) or crashed
-            // client promptly cancels the work and returns the connection slot.
-            let done = DispatchSemaphore(value: 0)
-            let cancellation = RequestCancellationState()
-            activeConnections.attach(cancellation, to: client)
-            let monitor = PeerDisconnectMonitor(descriptor: client) {
-                cancellation.cancel()
-            }
-            monitor.start()
+    /// Runs on `connectionQueue` with a framed request in hand.
+    private func serve(_ request: LocalHTTPRequest, on client: Int32) {
+        // The peer is read here and not at `accept`: resolving it costs a code-signature check, and a
+        // connection that never delivered a request never reaches an authorization decision. Doing it
+        // on this queue also keeps that check off the serial read queue, where it would stall every
+        // other pending connection. The descriptor is still the one the peer connected on, so
+        // `LOCAL_PEERTOKEN` names the process that opened it.
+        //
+        // What this gives up: the window between `connect` and the identity check is as long as the
+        // request takes to arrive, so a process could write a request and then become the pinned
+        // binary. That buys nothing. The pin is a check on the binary, not on the caller, and
+        // docs/SECURITY_MODEL.md already grants that the shipped bridge plus a stolen token is a
+        // working client.
+        let peer = PeerIdentity.resolve(descriptor: client)
 
-            let task = Task { [weak self] in
-                defer { done.signal() }
-                await self?.respond(to: request, on: client, cancellation: cancellation)
-            }
-            cancellation.attach(task)
-            done.wait()
-            cancellation.detach()
-            monitor.stopAndWait()
-        case .tooLarge(.headers):
-            send(status: 431, body: ["error": "Request headers are too large."], to: client)
-        case .tooLarge(.body):
-            send(status: 413, body: ["error": "Request body is too large."], to: client)
-        case .malformed(let reason):
-            send(status: 400, body: ["error": reason.clientMessage], to: client)
-        case .timedOut:
-            send(status: 408, body: ["error": "Timed out while reading the request."], to: client)
-        case .failed:
-            send(status: 400, body: ["error": "Could not read a complete request."], to: client)
+        // Once framing is complete no more client bytes are expected. Keep watching the read
+        // side while the async handler runs so a bridge cancellation (`shutdown`) or crashed
+        // client promptly cancels the work and returns the connection slot.
+        let done = DispatchSemaphore(value: 0)
+        let cancellation = RequestCancellationState()
+        activeConnections.attach(cancellation, to: client)
+        let monitor = PeerDisconnectMonitor(descriptor: client) {
+            cancellation.cancel()
         }
-    }
+        monitor.start()
 
-    private enum ReadOutcome {
-        case request(LocalHTTPRequest)
-        case tooLarge(LocalHTTPRequestParser.TooLargeReason)
-        case malformed(LocalHTTPRequestParser.MalformedReason)
-        case timedOut
-        case failed
-    }
-
-    private func readRequest(from client: Int32) -> ReadOutcome {
-        var buffer = Data()
-        var chunk = [UInt8](repeating: 0, count: 16 * 1_024)
-        let maximumBufferedBytes = parser.limits.maximumBufferedBytes
-        let deadline = monotonicDeadline(after: configuration.requestReadDeadline)
-
-        while true {
-            guard DispatchTime.now().uptimeNanoseconds < deadline else {
-                return .timedOut
-            }
-            switch parser.parse(buffer) {
-            case .complete(let request):
-                return .request(request)
-            case .malformed(let reason):
-                return .malformed(reason)
-            case .tooLarge(let reason):
-                return .tooLarge(reason)
-            case .incomplete:
-                break
-            }
-
-            guard buffer.count < maximumBufferedBytes else {
-                return .tooLarge(.body)
-            }
-            let remainingCapacity = maximumBufferedBytes - buffer.count
-            let readCapacity = min(chunk.count, remainingCapacity)
-            guard readCapacity > 0 else {
-                return .tooLarge(.body)
-            }
-
-            let current = DispatchTime.now().uptimeNanoseconds
-            guard current < deadline else {
-                return .timedOut
-            }
-            let remainingNanoseconds = deadline - current
-            let roundedMilliseconds = (remainingNanoseconds + 999_999) / 1_000_000
-            let pollMilliseconds = Int32(min(roundedMilliseconds, UInt64(Int32.max)))
-
-            var readiness = pollfd(
-                fd: client,
-                events: Int16(POLLIN | POLLHUP | POLLERR),
-                revents: 0
-            )
-            let ready = Darwin.poll(&readiness, 1, pollMilliseconds)
-            if ready == 0 {
-                return .timedOut
-            }
-            if ready < 0 {
-                if errno == EINTR {
-                    continue
-                }
-                return .failed
-            }
-            if readiness.revents & Int16(POLLNVAL) != 0 {
-                return .failed
-            }
-
-            let count = chunk.withUnsafeMutableBytes { raw -> Int in
-                guard let base = raw.baseAddress else { return -1 }
-                return recv(client, base, readCapacity, MSG_DONTWAIT)
-            }
-
-            if count == 0 {
-                return .failed
-            }
-            if count < 0 {
-                if errno == EINTR {
-                    continue
-                }
-                if errno == EAGAIN || errno == EWOULDBLOCK {
-                    continue
-                }
-                return .failed
-            }
-
-            buffer.append(contentsOf: chunk[0..<count])
+        let task = Task { [weak self] in
+            defer { done.signal() }
+            await self?.respond(to: request, on: client, peer: peer, cancellation: cancellation)
         }
+        cancellation.attach(task)
+        done.wait()
+        cancellation.detach()
+        monitor.stopAndWait()
     }
 
     /// Kept from the loopback era as defence in depth.
@@ -1017,14 +1225,30 @@ final class LocalHTTPServer {
     private func respond(
         to request: LocalHTTPRequest,
         on client: Int32,
+        peer: PeerIdentity,
         cancellation: RequestCancellationState
     ) async {
         guard responseIsAllowed(cancellation) else { return }
 
         if let reason = RequestGuard.rejection(for: request) {
-            send(status: 403, body: ["error": reason], to: client, cancellation: cancellation)
+            report(request, peer: peer, allowed: false, reason: reason)
+            send(status: 403, refusal: reason, path: request.path, to: client, cancellation: cancellation)
             return
         }
+
+        let decision = authorizer.authorize(
+            method: request.method,
+            path: request.path,
+            authorizationHeader: request.headers["authorization"],
+            peer: peer
+        )
+        if case .deny(let status, let reason) = decision {
+            report(request, peer: peer, allowed: false, reason: reason)
+            send(status: status, refusal: reason, path: request.path, to: client, cancellation: cancellation)
+            return
+        }
+
+        report(request, peer: peer, allowed: true, reason: nil)
 
         if request.method == "GET", request.path == "/health" {
             let status = await statusHandler(false)
@@ -1063,6 +1287,41 @@ final class LocalHTTPServer {
         }
 
         send(status: 404, body: ["error": "Not found"], to: client, cancellation: cancellation)
+    }
+
+    private func report(_ request: LocalHTTPRequest, peer: PeerIdentity, allowed: Bool, reason: String?) {
+        guard let auditHandler else { return }
+        auditHandler(
+            AccessAttempt(
+                method: request.method,
+                path: request.path,
+                peer: peer,
+                allowed: allowed,
+                reason: reason
+            )
+        )
+    }
+
+    /// A refusal on a tool path has to decode as a `ToolResponse`, because that is the only shape
+    /// `LocalAppClient` reads for statuses in `200..<500`; anything else reaches the MCP client as
+    /// "unreadable response" instead of as the reason it was refused.
+    private func send(
+        status: Int,
+        refusal: String,
+        path: String,
+        to client: Int32,
+        cancellation: RequestCancellationState? = nil
+    ) {
+        if path.hasPrefix("/tools/") {
+            send(
+                status: status,
+                codable: ToolResponse(ok: false, source: "M3MCP Server", message: refusal),
+                to: client,
+                cancellation: cancellation
+            )
+        } else {
+            send(status: status, body: ["error": refusal], to: client, cancellation: cancellation)
+        }
     }
 
     private func responseIsAllowed(_ cancellation: RequestCancellationState?) -> Bool {
@@ -1140,6 +1399,7 @@ final class LocalHTTPServer {
         switch status {
         case 200: reason = "OK"
         case 400: reason = "Bad Request"
+        case 401: reason = "Unauthorized"
         case 408: reason = "Request Timeout"
         case 403: reason = "Forbidden"
         case 404: reason = "Not Found"

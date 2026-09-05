@@ -102,8 +102,23 @@ then run the staged installer:
 ```
 
 The installer builds the release configuration, validates the signed bundle, stages replacements,
-and commits them only after launchd and the Unix-socket health check succeed. Its bridge is at
-`.build/release/M3MCPBridge`; the one-off development commands below use `.build/debug/M3MCPBridge`.
+and commits them only after launchd and the Unix-socket health check succeed. It builds its bridge at
+`.build/release/M3MCPBridge` and installs a copy of it into the bundle; the one-off development
+commands below use `.build/debug/M3MCPBridge`.
+
+**Point the MCP client at the bridge that sits next to the app it will talk to.** The app accepts
+connections only from the `M3MCPBridge` beside its own executable, so:
+
+| The app you run | The bridge to configure |
+|---|---|
+| `swift build` plus `.build/<config>/M3MCPApp` | `.build/<config>/M3MCPBridge` |
+| `./script/build_and_run.sh` | `dist/M3MCP.app/Contents/MacOS/M3MCPBridge` |
+| `./script/install_local.sh` | `~/Applications/M3MCP.app/Contents/MacOS/M3MCPBridge` |
+| A downloaded release ZIP | `M3MCP.app/Contents/MacOS/M3MCPBridge` |
+
+After an install the copy in `.build/release/` is refused with `403`, even though it was built from
+the same source: the installer re-signs the staged bridge with your stable certificate, which changes
+its code directory hash. That is the pin working, not a bug. The installer prints the path to use.
 
 The app listens on a Unix domain socket at:
 
@@ -118,7 +133,17 @@ curl --unix-socket "$HOME/Library/Application Support/M3MCP/mcp.sock" \
   http://localhost/health
 ```
 
-`/health` omits recent tool activity. `/status` includes recent inputs and bounded outputs and should be treated as sensitive local diagnostics.
+`/health` omits recent tool activity and is the one route that answers without a capability token,
+because it is the readiness probe the installer waits on. Every other route, `/status` and every
+tool call included, needs `Authorization: Bearer <token>`. `/status` includes recent inputs and
+bounded outputs and should be treated as sensitive local diagnostics.
+
+```bash
+curl --unix-socket "$HOME/Library/Application Support/M3MCP/mcp.sock" \
+  -H "Authorization: Bearer $M3MCP_TOKEN" \
+  -H 'Content-Type: application/json' -d '{}' \
+  http://localhost/tools/source_status
+```
 
 ### Connect an MCP client
 
@@ -128,7 +153,8 @@ Claude Desktop example:
 {
   "mcpServers": {
     "applemcp": {
-      "command": "/path/to/AppleMCP/.build/debug/M3MCPBridge"
+      "command": "/path/to/AppleMCP/.build/debug/M3MCPBridge",
+      "env": { "M3MCP_TOKEN": "<token from the app's Server menu>" }
     }
   }
 }
@@ -137,8 +163,14 @@ Claude Desktop example:
 Claude Code example:
 
 ```bash
-claude mcp add applemcp /path/to/AppleMCP/.build/debug/M3MCPBridge
+claude mcp add applemcp -e M3MCP_TOKEN="<token>" -- /path/to/AppleMCP/.build/debug/M3MCPBridge
 ```
+
+The app creates the capability token on its first start and keeps it in the login keychain. Copy it
+with Server › Copy MCP Client Token and put it in the client's configuration. Without it the app
+refuses every tool call. The bridge can also read the item from the keychain, which works only for
+the binary the item is on the ACL of and never prompts, because an MCP client gives the bridge no
+session in which a panel could be answered.
 
 The app must be running while the bridge is in use. The app and bridge independently resolve their immutable security policy at process launch, so optional features must be enabled for both processes.
 
@@ -205,7 +237,8 @@ environment. Installation commits only after launchd reports the replacement job
 the installer restores the previous app bundle and LaunchAgent and attempts to restart the previous
 service.
 
-Pass the same variables to the bridge in the MCP client configuration:
+Pass the same variables to the bridge in the MCP client configuration, alongside the capability
+token, and use the bridge path from the table above for the app you actually run:
 
 ```json
 {
@@ -213,6 +246,7 @@ Pass the same variables to the bridge in the MCP client configuration:
     "applemcp": {
       "command": "/path/to/AppleMCP/.build/release/M3MCPBridge",
       "env": {
+        "M3MCP_TOKEN": "<token from the app's Server menu>",
         "M3MCP_ENABLE_CALENDAR_MUTATIONS": "1",
         "M3MCP_ENABLE_PERMISSION_UI": "1",
         "M3MCP_ENABLE_USER_SHORTCUTS": "1"
@@ -255,9 +289,33 @@ MCP client <--stdio--> M3MCPBridge <--HTTP over Unix socket--> M3MCPApp
 
 ## Security boundary
 
-The Unix socket prevents browser access and restricts other macOS users. It is not authentication against an unsandboxed process running under the same user account: such a process can normally reach a `0600` socket owned by that user and would inherit whatever data access the app exposes. Treat every MCP client and every same-user unsandboxed process as inside the local trust boundary.
+The Unix socket prevents browser access and restricts other macOS users. It is not authentication on
+its own: a `0600` socket is reachable by every unsandboxed process of the same user. That is what the
+capability token is for. The app generates a 32-byte secret on its first start, keeps it in the login
+keychain, and refuses every request other than `GET /health` that does not present it as
+`Authorization: Bearer <token>`, compared in constant time. A process without the token can still
+open the socket and can still read `/health`; it cannot call a tool.
 
-The server rejects malformed or oversized framing, limits concurrent connections, enforces an absolute request-receive deadline plus I/O timeouts, and closes active work on shutdown. These controls reduce accidental and hostile resource consumption but do not turn the endpoint into a multi-tenant service.
+A token is a secret in a configuration file, so a copy of it works. That is what the second factor is
+for. At every start the app reads the code directory hash of the `M3MCPBridge` sitting next to its own
+executable and accepts connections from that binary and no other. A valid token presented by anything
+else is `403`, not `401`, because the two say different things: the first means "configure a token",
+the second means "that token is not yours to use from there". Where no sibling bridge is found the pin
+cannot be computed; the app then runs token-only and says so in its window, in `source_status`, and in
+`/health`.
+
+What the pin is not: proof of who is calling. It identifies the binary on the other end, and the
+bundled bridge satisfies it whichever process starts it. A stolen token plus that bridge is still a
+working client, so treat every MCP client that holds the token as inside the local trust boundary.
+
+The server rejects malformed or oversized framing, enforces an absolute request-receive deadline plus
+I/O timeouts, and closes active work on shutdown. Its two connection caps are separate on purpose: up
+to 128 accepted connections may be waiting for a request, each costing a descriptor and no thread, and
+up to 16 framed requests may be served at once. At the waiting cap the connection that has waited
+longest without sending a byte yields its place to a new arrival, so a process that opens connections
+and says nothing cannot take the endpoint away from the client that holds the token. These controls
+reduce accidental and hostile resource consumption but do not turn the endpoint into a multi-tenant
+service.
 
 For vulnerability reporting and supported versions, see [SECURITY.md](SECURITY.md). For the detailed
 threat model, network caveats, diagnostics, data retention, and release checklist, see

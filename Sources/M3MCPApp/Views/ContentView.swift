@@ -21,6 +21,7 @@ struct ContentView: View {
                 permissionItems: model.permissionItems,
                 permissionMessage: model.permissionMessage,
                 serverState: model.serverState,
+                authenticationSummary: model.authenticationSummary,
                 securityPolicy: model.securityPolicy,
                 onPermissions: {
                     Task {

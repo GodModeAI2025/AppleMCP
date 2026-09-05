@@ -22,7 +22,33 @@ still governs enabled Calendar and Shortcut calls.
 
 The bridge explicitly supports MCP revisions `2024-11-05`, `2025-03-26`, `2025-06-18`, and `2025-11-25`. It requires the initialize response to be followed by the initialized notification before tools can be listed or called. Tool annotations are emitted for revisions that define them, and structured results are added for revisions that support them while retaining the text result for compatibility. Each incoming newline-delimited stdio message is limited to 1 MiB; bounded tool responses can be larger and use a separate 16 MiB stdout limit.
 
-The local operating-system account remains a trust boundary. The socket directory is `0700` and the socket is `0600`, which excludes other users and normally excludes sandboxed processes without access to that path. It does **not** authenticate another unsandboxed process running under the same user ID. Such a process can normally connect and exercise every tool enabled in the app process. Full Disk Access therefore raises the impact of compromise of any same-user unsandboxed process.
+The local operating-system account remains a trust boundary. The socket directory is `0700` and the socket is `0600`, which excludes other users and normally excludes sandboxed processes without access to that path. Filesystem permissions alone do **not** authenticate another unsandboxed process running under the same user ID, so the endpoint adds a capability token on top of them. See [Client authentication](#client-authentication). Full Disk Access raises the impact of compromise of any same-user unsandboxed process that holds a copy of the token.
+
+## Client authentication
+
+Every request other than `GET /health` must carry `Authorization: Bearer <token>`. `/health` stays open because it is the readiness probe `script/install_local.sh` waits on and it never carries the activity log.
+
+The token is 32 bytes from `SecRandomCopyBytes`, encoded as unpadded base64url so it survives an environment variable, a JSON configuration file, and an HTTP header unchanged. The app creates it on its first start and stores it in the login keychain as a generic password. `M3MCP_TOKEN` overrides the keychain in the app and in the bridge alike, which is how an MCP client is configured and how tests run without a keychain. Comparison is constant time in the token contents; the length is fixed by the generator and is allowed to leak.
+
+If the token cannot be read or created, the app does not start the listener. Coming up without one would put the endpoint back where it was.
+
+The bridge resolves the token on its first tool call and not at start-up, so `initialize` and `tools/list` are still answered by a bridge on a machine with no app, no keychain item, and no token. A keychain read from the bridge refuses interaction: an MCP client gives the bridge no session in which an authorization panel could be answered, and a panel there is indistinguishable from a server that never replies.
+
+What a token does not do: it is a secret in a file, and a copy of it works. It raises "connect to the socket", which every process of the user can do, to "be configured for this endpoint". The second factor covers the copy.
+
+### Pinned client binary
+
+At every start the app reads the code directory hash of the `M3MCPBridge` next to its own executable and accepts connections from that binary alone. A valid token from any other binary is refused with `403`. `M3MCP_TRUSTED_CLIENT_CDHASH` replaces the sibling lookup with an explicit comma-separated list; it is read from the server's environment, which only the person starting the server controls.
+
+The identity comes from the peer's audit token (`LOCAL_PEERTOKEN`) rather than its pid, because a pid can be recycled between `accept` and the lookup while a connection stays open through an asynchronous tool call. `SecCodeCheckValidity` runs as well as the hash comparison, so a binary whose pages were changed after signing is refused even when the recorded hash still matches.
+
+Why the hash and not a team identifier or a certificate: `swift build` produces an ad-hoc signature whose designated requirement is the hash itself, so for a source build there is nothing else to pin. `script/install_local.sh` and `script/package_release.sh` do sign with a stable certificate, which would make a leaf-certificate pin possible and would also make it weaker: `script/create_local_identity.sh` creates one self-signed certificate that signs every binary its owner signs, a hand-written socket client included. The hash does not go stale, because it is read at each start rather than compiled in, and an install replaces app and bridge together.
+
+Where no sibling bridge is found the pin cannot be computed. The app then runs token-only and reports that state in its window, in `source_status`, and in `/health`, rather than implying a protection that is not there.
+
+### Known limits
+
+The pin identifies a binary, not a caller. Any process that can start the bundled bridge and holds the token is a working client. The window between `connect` and the identity check is the time the request takes to arrive, so a process could in principle deliver a request and then become the pinned binary; that reaches only what the previous sentence already grants.
 
 The endpoint is not reachable from a web page because browsers cannot open Unix domain sockets. Origin-style request headers are also rejected as defense in depth.
 
@@ -90,8 +116,18 @@ Implemented limits include:
 - a nonblocking liveness probe for any pre-existing socket under one 250 ms absolute monotonic
   deadline; timeout, unexpected poll state, or another ambiguous error preserves the endpoint and
   fails startup instead of replacing it;
-- at most 16 accepted connections doing work at once;
-- a 15-second absolute request-receive deadline, even when a client trickles bytes;
+- two separate caps, because a connection that has said nothing and one that is being served do not
+  cost the same thing: at most 128 accepted connections waiting for a request, each costing a file
+  descriptor and a dispatch source and no thread, and at most 16 framed requests being served at
+  once, each holding a thread while its handler runs;
+- displacement rather than refusal at the waiting cap: the connection that has waited longest without
+  sending a byte yields its place to a new arrival, so filling every slot buys a silent process a
+  burst and not an outage. A connection that has sent something is work in progress and is never
+  displaced; when every slot holds one of those, a new arrival is refused with 503;
+- a listen backlog matched to the waiting cap, so a burst is queued rather than answered with
+  ECONNREFUSED, which a client cannot tell from a server that is not running;
+- a 15-second absolute request-receive deadline measured from `accept`, even when a client trickles
+  bytes or says nothing at all;
 - 15-second blocked read and write timeouts as defence in depth;
 - 32 KiB maximum HTTP header block;
 - 1,048,576-byte (1 MiB) maximum HTTP request body, matching the bridge's MCP message limit;
