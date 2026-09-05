@@ -8,9 +8,19 @@ public struct M3MCPToolApprovalRequest: Equatable, Sendable {
     public let tool: M3MCPToolName
     public let argumentPreview: String
 
+    /// What the call would do, when the arguments do not say.
+    ///
+    /// `calendar_undo_write` is the case that forced this. Its only argument is an opaque token, and
+    /// "token" is a redacted key, so the sheet had nothing on it but `undo_token: [REDACTED]`. A
+    /// decision needs the effect, not the handle: this carries the recorded summary of the write
+    /// that would be reversed. It is server-side text, never client-supplied, and it is bounded the
+    /// same way the argument preview is.
+    public let effectPreview: String?
+
     public init(
         tool: M3MCPToolName,
         input: [String: JSONValue],
+        effectPreview: String? = nil,
         maximumPreviewCharacters: Int = M3MCPInteractiveApproval.defaultMaximumPreviewCharacters
     ) {
         self.tool = tool
@@ -18,6 +28,12 @@ public struct M3MCPToolApprovalRequest: Equatable, Sendable {
             input,
             maximumCharacters: maximumPreviewCharacters
         )
+        self.effectPreview = effectPreview.map {
+            M3MCPInteractiveApproval.boundedEffectPreview(
+                $0,
+                maximumCharacters: maximumPreviewCharacters
+            )
+        }
     }
 }
 
@@ -104,6 +120,18 @@ public enum M3MCPInteractiveApproval {
                 maximumCharacters: lineBudget - prefix.count
             )
         }.joined(separator: "\n")
+    }
+
+    /// Escapes and bounds server-authored effect text with the same rules the argument preview uses,
+    /// so a title copied out of a calendar cannot smuggle control characters into the sheet.
+    public static func boundedEffectPreview(
+        _ text: String,
+        maximumCharacters: Int = defaultMaximumPreviewCharacters
+    ) -> String {
+        bounded(
+            boundedEscapedString(text, maximumCharacters: max(0, maximumCharacters)),
+            maximumCharacters: max(0, maximumCharacters)
+        )
     }
 
     private static let sensitiveKeyFragments: [String] = [

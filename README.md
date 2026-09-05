@@ -309,6 +309,24 @@ What it does not cover, in the order you are likely to hit it:
   changed the event in the meantime. It writes the recorded previous values over whatever is there
   now. When it fails, nothing changes and the token stays valid.
 
+The approval sheet for `calendar_undo_write` shows what the token stands for, not the token: its only
+argument matches the credential-redaction rule and would otherwise read `undo_token: [REDACTED]`. The
+sheet carries the recorded summary of the write that would be reversed, and says plainly when a token
+resolves to nothing.
+
+The snapshot mapping is covered by ordinary tests against real `EKEvent` objects. The round trip
+through the calendar itself needs Calendar access, which no CI runner has, so it lives in a test that
+skips unless it is asked for twice:
+
+```bash
+M3MCP_CALENDAR_UNDO_LIVE=1 swift test --filter CalendarUndoLiveTests
+```
+
+It also requires full Calendar authorization to be granted already; it reads the status and never
+requests it, so it can never raise a permission panel. It creates its own calendar in the local
+("On My Mac") source, works only inside it, and removes it again. Without a local source it skips
+rather than write into an account that syncs.
+
 ## Voice Memos and speech privacy
 
 Stored transcripts are read directly from a private `tsrp` atom inside each recording. For a fresh transcription, AppleMCP uses `SpeechAnalyzer` on macOS 26 when available and otherwise `SFSpeechRecognizer` with `requiresOnDeviceRecognition = true`.

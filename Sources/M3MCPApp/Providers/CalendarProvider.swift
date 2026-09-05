@@ -387,6 +387,12 @@ final class CalendarProvider {
             return failure("Event '\(event.title ?? id)' is in read-only calendar '\(event.calendar.title)'.")
         }
 
+        // EventKit can hand back the same instance to two calls. An earlier call that mutated it and
+        // then failed validation would otherwise leave those unsaved values here, and the snapshot
+        // would record a state the calendar never held. Dropping to the last saved state costs
+        // nothing on a clean instance.
+        event.reset()
+
         // Taken before the first assignment below, because after it the previous state exists
         // nowhere else.
         let before = snapshot(of: event)
@@ -397,7 +403,7 @@ final class CalendarProvider {
         if let title = input["title"]?.stringValue {
             let trimmed = title.trimmingCharacters(in: .whitespacesAndNewlines)
             guard !trimmed.isEmpty else {
-                return failure("'title' must not be blank.")
+                return rejectUpdate(event, "'title' must not be blank.")
             }
             event.title = trimmed
             changed.append("title")
@@ -411,7 +417,7 @@ final class CalendarProvider {
 
         if let raw = input["start"]?.stringValue {
             guard let start = date(from: raw, allDay: event.isAllDay) else {
-                return failure("'start' is not an ISO 8601 timestamp: \(raw)")
+                return rejectUpdate(event, "'start' is not an ISO 8601 timestamp: \(raw)")
             }
             event.startDate = start
             changed.append("start")
@@ -419,20 +425,20 @@ final class CalendarProvider {
 
         if let raw = input["end"]?.stringValue {
             guard let end = date(from: raw, allDay: event.isAllDay) else {
-                return failure("'end' is not an ISO 8601 timestamp: \(raw)")
+                return rejectUpdate(event, "'end' is not an ISO 8601 timestamp: \(raw)")
             }
             event.endDate = end
             changed.append("end")
         } else if let minutes = input["duration_minutes"]?.intValue {
             guard (1...525_600).contains(minutes) else {
-                return failure("'duration_minutes' must be between 1 and 525600.")
+                return rejectUpdate(event, "'duration_minutes' must be between 1 and 525600.")
             }
             event.endDate = event.startDate.addingTimeInterval(TimeInterval(minutes) * 60)
             changed.append("end")
         }
 
         guard CalendarEventTiming.isValid(start: event.startDate, end: event.endDate) else {
-            return failure("The resulting 'end' must be after 'start'.")
+            return rejectUpdate(event, "The resulting 'end' must be after 'start'.")
         }
 
         if let location = input["location"]?.stringValue {
@@ -445,7 +451,7 @@ final class CalendarProvider {
                 event.url = nil
             } else {
                 guard let url = URL(string: urlString) else {
-                    return failure("'url' is not a valid URL: \(urlString)")
+                    return rejectUpdate(event, "'url' is not a valid URL: \(urlString)")
                 }
                 event.url = url
             }
@@ -465,7 +471,7 @@ final class CalendarProvider {
                     event.notes = (body?.isEmpty ?? true) ? nil : body
                 } else {
                     guard let notes = CalendarProjectSlug.embed(slug: slugGiven, in: body) else {
-                        return failure(invalidSlugMessage(slugGiven))
+                        return rejectUpdate(event, invalidSlugMessage(slugGiven))
                     }
                     event.notes = notes
                 }
@@ -485,19 +491,19 @@ final class CalendarProvider {
             case .found(let resolved):
                 target = resolved
             case .notFound:
-                return failure("No calendar matches '\(named)'. Use calendar_list_calendars to see the available ones.")
+                return rejectUpdate(event, "No calendar matches '\(named)'. Use calendar_list_calendars to see the available ones.")
             case .ambiguous:
-                return failure("More than one calendar is titled '\(named)'. Pass the exact calendar_id from calendar_list_calendars.")
+                return rejectUpdate(event, "More than one calendar is titled '\(named)'. Pass the exact calendar_id from calendar_list_calendars.")
             }
             guard target.allowsContentModifications else {
-                return failure("Calendar '\(target.title)' is read-only.")
+                return rejectUpdate(event, "Calendar '\(target.title)' is read-only.")
             }
             event.calendar = target
             changed.append("calendar")
         }
 
         guard !changed.isEmpty else {
-            return failure("Nothing to change. Pass at least one of title, start, end, duration_minutes, all_day, location, url, notes, project_slug, calendar.")
+            return rejectUpdate(event, "Nothing to change. Pass at least one of title, start, end, duration_minutes, all_day, location, url, notes, project_slug, calendar.")
         }
 
         if intent == .dryRun {
@@ -538,21 +544,23 @@ final class CalendarProvider {
         do {
             try store.save(event, span: recurrenceSpan, commit: true)
         } catch {
-            event.reset()
-            return failure("Could not save the event: \(error.localizedDescription)")
+            return rejectUpdate(event, "Could not save the event: \(error.localizedDescription)")
         }
 
         var meta = ["dry_run": "false"]
         if let undoReason {
             meta["undo_unavailable"] = undoReason
         } else {
+            // Read after the save, not before: moving an event between accounts can give it a new
+            // identifier, and the undo has to address the event that now exists.
+            let savedIdentifier = event.eventIdentifier ?? id
             let record = await undoJournal.record(
                 tool: .calendarUpdateEvent,
                 summary: Self.undoSummary(
                     "updating \(changed.sorted().joined(separator: ", ")) on '\(event.title ?? id)'"
                 ),
                 action: .restorePreviousValues(
-                    eventIdentifier: id,
+                    eventIdentifier: savedIdentifier,
                     previous: Self.previousValues(from: before, changedFieldNames: changed)
                 )
             )
@@ -591,6 +599,10 @@ final class CalendarProvider {
         guard event.calendar.allowsContentModifications else {
             return failure("Event '\(event.title ?? id)' is in read-only calendar '\(event.calendar.title)'.")
         }
+
+        // Same reason as in updateEvent: a shared instance left dirty by an earlier failed call must
+        // not be mistaken for what the calendar holds.
+        event.reset()
 
         let title = event.title ?? "(untitled event)"
         let calendarTitle = event.calendar.title
@@ -894,6 +906,16 @@ final class CalendarProvider {
             1,
             min(input.int("max_candidates", default: defaultSearchCandidates), maximumSearchCandidates)
         )
+    }
+
+    /// Rejects an update and drops the values already assigned to the shared event instance.
+    ///
+    /// Without this, a call that failed halfway would leave the in-memory event holding values the
+    /// calendar never accepted, and the next call to reach the same instance would read them as the
+    /// state to snapshot.
+    private func rejectUpdate(_ event: EKEvent, _ message: String) -> ToolResponse {
+        event.reset()
+        return failure(message)
     }
 
     private func cancelledBeforeWrite(_ operation: String) -> ToolResponse {
@@ -1339,15 +1361,18 @@ extension CalendarProvider {
 
     /// Builds a deleted event again from its snapshot.
     func rebuild(from snapshot: M3MCPCalendarEventSnapshot) -> Result<EKEvent, UndoProblem> {
+        // The snapshot is checked before the calendar is looked up: a record that cannot describe an
+        // event is a different problem from a calendar that has gone, and the caller can act on
+        // neither if they are reported as one.
+        guard let start = snapshot.startDate, let end = snapshot.endDate else {
+            return .failure(UndoProblem(message: "The snapshot has no start or end, so the event cannot be rebuilt."))
+        }
         guard let identifier = snapshot.calendarIdentifier,
               let calendar = store.calendar(withIdentifier: identifier) else {
             return .failure(UndoProblem(message: "The calendar the event was deleted from no longer exists, so it cannot be put back."))
         }
         guard calendar.allowsContentModifications else {
             return .failure(UndoProblem(message: "Calendar '\(calendar.title)' is read-only, so the event cannot be put back into it."))
-        }
-        guard let start = snapshot.startDate, let end = snapshot.endDate else {
-            return .failure(UndoProblem(message: "The snapshot has no start or end, so the event cannot be rebuilt."))
         }
 
         let event = EKEvent(eventStore: store)
@@ -1373,6 +1398,30 @@ extension CalendarProvider {
     }
 
     // MARK: - Tool
+
+    /// The line the approval sheet shows instead of a redacted token.
+    ///
+    /// Reads the journal without spending the token, and says plainly when the token resolves to
+    /// nothing, so that a sheet is never approved on the assumption that something will be reversed.
+    func undoEffectDescription(input: [String: JSONValue]) async -> String? {
+        let token = input.string("undo_token").trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !token.isEmpty else { return nil }
+        if M3MCPWriteIntent.resolve(from: input) == .dryRun { return nil }
+
+        switch await undoJournal.peek(token: token) {
+        case .found(let record):
+            let identifier = record.restoresIdentifier
+                ? ""
+                : " The event gets a new id."
+            return "Reverses \(record.summary).\(identifier)"
+        case .alreadyUndone:
+            return "This token has already been spent. Nothing would be reversed."
+        case .expired:
+            return "This token has expired. Nothing would be reversed."
+        case .unknown:
+            return "No snapshot matches this token. Nothing would be reversed."
+        }
+    }
 
     /// Spends one undo token.
     func undoWrite(input: [String: JSONValue]) async -> ToolResponse {
