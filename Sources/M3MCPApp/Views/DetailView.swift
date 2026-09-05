@@ -7,6 +7,7 @@ struct DetailView: View {
     let permissionItems: [DataItem]
     let permissionMessage: String?
     let serverState: String
+    let authenticationSummary: String
     let securityPolicy: M3MCPSecurityPolicy
     let onPermissions: () -> Void
     let onPermissionRefresh: () -> Void
@@ -55,6 +56,13 @@ struct DetailView: View {
                 Text("\(M3MCPEndpoint.displayPath)  \(serverState)")
                     .font(.caption)
                     .foregroundStyle(.secondary)
+                // A degraded door has to be visible. Token-only, because no bridge was found next to
+                // the app, reads the same as fully pinned unless it is written down somewhere.
+                Text(authenticationSummary)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+                    .truncationMode(.middle)
             }
 
             Spacer()

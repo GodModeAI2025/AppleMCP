@@ -916,7 +916,14 @@ final class LocalHTTPServer {
 
         let readSource = DispatchSource.makeReadSource(fileDescriptor: client, queue: readQueue)
         readSource.setEventHandler { [weak self] in
-            self?.readAvailable(on: connection)
+            guard let self else {
+                // The server was released with this connection still pending. Read readiness is
+                // level-triggered, so the source has to be cancelled or it would spin on EOF; its
+                // cancel handler closes the descriptor.
+                connection.readSource?.cancel()
+                return
+            }
+            self.readAvailable(on: connection)
         }
         // The single hand-off point. Cancelling is how every path leaves the read phase, so the
         // descriptor has exactly one owner at every moment and `stop()` still only shuts down.
