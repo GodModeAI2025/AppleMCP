@@ -4,9 +4,13 @@
 
 AppleMCP is a native macOS 15+ MCP server for bounded access to local Apple data and selected Apple Intelligence APIs. It consists of a SwiftUI app that holds macOS privacy permissions and a `stdio` bridge used by MCP clients.
 
-Version 0.3.0 starts in a **default-safe profile**. The bridge advertises 21 observation or local-processing tools. Calendar mutations, permission UI, and user-created Shortcuts are absent unless the corresponding launch-time environment variable is explicitly enabled. Calendar mutations and Shortcut invocations also require a one-call approval in the native app.
+Version 0.3.1 starts in a **default-safe profile**. The bridge advertises 21 observation or local-processing tools. Calendar mutations, permission UI, and user-created Shortcuts are absent unless the corresponding launch-time environment variable is explicitly enabled. Calendar mutations and Shortcut invocations also require a one-call approval in the native app.
 
 AppleMCP is local-first, but it is not an isolation boundary for every process running as you. Read [Security model](docs/SECURITY_MODEL.md) before granting Full Disk Access or enabling optional tools.
+
+[Product website](https://godmodeai2025.github.io/AppleMCP/) · [Original app screenshots](docs/SCREENSHOTS.md)
+
+![M3MCP native app overview](assets/screenshots/overview.jpg)
 
 ## Access methods and permissions
 
@@ -23,7 +27,7 @@ AppleMCP is local-first, but it is not an isolation boundary for every process r
 | Image Playground | Native ImagePlayground API | Image Playground availability on macOS 15.4+ |
 | User Shortcuts | `/usr/bin/shortcuts` with JSON over standard input | Disabled by default; behavior depends on the user's Shortcut |
 
-All 21 default tools preflight any TCC state they require and do not request a permission or open System Settings. When fresh Voice Memos transcription reaches the legacy `SFSpeechRecognizer` fallback, missing Speech Recognition permission returns an error instead of prompting; the macOS 26 `SpeechAnalyzer` path does not use that legacy authorization callback. To let AppleMCP request permissions or open settings, launch both the app and bridge with `M3MCP_ENABLE_PERMISSION_UI=1`, or grant permissions manually in System Settings. An Apple framework can still present system behavior while acquiring an on-device model asset.
+All 21 default tools preflight any TCC state they require and do not request a permission or open System Settings. When fresh Voice Memos transcription reaches the legacy `SFSpeechRecognizer` fallback, missing Speech Recognition permission returns an error instead of prompting; the macOS 26 `SpeechAnalyzer` path does not use that legacy authorization callback. The native **Freigaben** page and setup assistant can request individual permissions and open System Settings after an explicit click, including in the default profile. Remote MCP permission tools remain disabled unless both app and bridge are launched with `M3MCP_ENABLE_PERMISSION_UI=1`. An Apple framework can still present system behavior while acquiring an on-device model asset.
 
 `permissions_status` never launches Notes or enables an Automation prompt. An explicit
 `notes_search` or `notes_read` may start Notes hidden when it is closed, because macOS reports a
@@ -74,6 +78,28 @@ update. For a stable local development identity, build from source and use
 `script/create_local_identity.sh` plus `script/install_local.sh`. Public production distribution
 still requires a separately protected Developer ID, hardened-runtime, trusted-timestamp,
 notarization, and stapling pipeline.
+
+## Native setup assistant (0.3.1 local build)
+
+The app opens a four-step German setup assistant on first launch. Reopen it with **Einrichten**.
+Before setup, **Nutzung auf eigene Gefahr** explains possible data changes, deletion, disclosure,
+iCloud propagation and backup precautions. Its checkbox is initially unchecked. The server stays
+stopped until the user explicitly confirms; cancelling does not confirm. Existing installations also
+see this notice once after updating. The versioned confirmation is stored locally in preferences,
+independently of setup progress, macOS permissions and optional tool approvals. Reopen the notice
+with **Risikohinweis** in the assistant. This onboarding confirmation is not an authorization or
+security boundary against other software running as the same user.
+**Verbindung** exposes a masked token, **MCP-Token kopieren**, and complete Codex TOML or MCP JSON
+configuration. The configuration preview always uses a placeholder; the copy action includes the
+real token and current bundled bridge path. Paste only into the intended client. Copied credentials
+expire from the clipboard after 90 seconds if the clipboard has not changed; revealed tokens hide
+after 30 seconds or when the window loses application focus. No client configuration is edited automatically.
+
+**Lokale Verbindung testen** starts the bundled bridge with the current token and checks
+`source_status`, exercising server authentication and peer pinning without reading personal contents.
+The local test does not establish that an external client is configured. Complete the client setup
+and make a first request there. On another Mac, use its newly generated token and grant its own
+privacy permissions.
 
 ## Quick start
 
@@ -167,7 +193,7 @@ claude mcp add applemcp -e M3MCP_TOKEN="<token>" -- /path/to/AppleMCP/.build/deb
 ```
 
 The app creates the capability token on its first start and keeps it in the login keychain. Copy it
-with Server › Copy MCP Client Token and put it in the client's configuration. Without it the app
+with Verbindung → MCP-Token kopieren and put it in the client's configuration. Without it the app
 refuses every tool call. The bridge can also read the item from the keychain, which works only for
 the binary the item is on the ACL of and never prompts, because an MCP client gives the bridge no
 session in which a panel could be answered.

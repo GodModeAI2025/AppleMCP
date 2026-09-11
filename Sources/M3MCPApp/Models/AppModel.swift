@@ -12,6 +12,35 @@ final class AppModel: ObservableObject {
     @Published private(set) var authenticationSummary = "not started"
     @Published var selectedServiceName: String?
 
+    @Published var destination: AppDestination = .overview
+    @Published var showsSetup = false
+    @Published private(set) var usageRiskAccepted: Bool
+    private let preferences: UserDefaults
+    private static let usageRiskVersion = 1
+    private static let usageRiskKey = "m3mcp.setup.usageRisk.acceptedVersion"
+    @Published private(set) var copyMessage: String?
+    @Published private(set) var checkingConnection = false
+    @Published private(set) var connectionVerified: Bool?
+    @Published private(set) var connectionMessage: String?
+    @Published private(set) var permissionBusy = false
+    private let nativePermissions = PermissionProvider()
+    private var permissionPresentation = NativePermissionPresentation()
+    private var permissionRefreshGeneration = UUID()
+    var permissionRestartRequired: Bool {
+        permissionItems.contains { $0.metadata["restart_required"] == "true" }
+    }
+    private var clipboardCleanup: Task<Void, Never>?
+    private var connectionGeneration = UUID()
+
+    var hasCapabilityToken: Bool { capabilityToken != nil }
+    var tokenForDisplay: String { capabilityToken ?? "" }
+    var bridgeURL: URL {
+        (Bundle.main.executableURL?.deletingLastPathComponent() ?? Bundle.main.bundleURL)
+            .appendingPathComponent("M3MCPBridge")
+    }
+    var bridgeAvailable: Bool { FileManager.default.isExecutableFile(atPath: bridgeURL.path) }
+    var enabledToolCount: Int { securityPolicy.toolAvailability.filter(\.isEnabled).count }
+
     let securityPolicy: M3MCPSecurityPolicy
     private let approvalCoordinator: NativeToolApprovalCoordinator
     private let service: LocalMCPService
@@ -22,7 +51,9 @@ final class AppModel: ObservableObject {
     /// into `/health`, or into a log line.
     private var capabilityToken: String?
 
-    init(securityPolicy: M3MCPSecurityPolicy = .fromProcessEnvironment()) {
+    init(securityPolicy: M3MCPSecurityPolicy = .fromProcessEnvironment(), preferences: UserDefaults = .standard) {
+        self.preferences = preferences
+        usageRiskAccepted = preferences.integer(forKey: Self.usageRiskKey) == Self.usageRiskVersion
         let approvalCoordinator = NativeToolApprovalCoordinator()
         self.securityPolicy = securityPolicy
         self.approvalCoordinator = approvalCoordinator
@@ -38,7 +69,17 @@ final class AppModel: ObservableObject {
         AppLogger.log("AppModel init")
     }
 
+    /// Records an explicit native setup confirmation. This grants no macOS permissions or tool opt-ins.
+    func acceptUsageRisk() {
+        preferences.set(Self.usageRiskVersion, forKey: Self.usageRiskKey)
+        usageRiskAccepted = true
+    }
+
     func startIfNeeded() {
+        guard usageRiskAccepted else {
+            showsSetup = true
+            return
+        }
         guard server == nil else { return }
         serverState = "starting"
 
@@ -172,13 +213,82 @@ final class AppModel: ObservableObject {
         guard let capabilityToken else {
             return "The server is not running, so there is no token to copy."
         }
-        NSPasteboard.general.clearContents()
-        NSPasteboard.general.setString(capabilityToken, forType: .string)
-        return "Capability token copied. Put it in your MCP client config as "
-            + "\"env\": {\"\(CapabilityToken.environmentKey)\": \"…\"}."
+        copySensitiveText(capabilityToken)
+        copyMessage = "Token kopiert. Jetzt im MCP-Client als M3MCP_TOKEN einfügen."
+        return copyMessage!
+    }
+
+    func configurationPreview(format: ClientConfiguration.Format) -> String {
+        (try? ClientConfiguration.render(format: format, bridgePath: bridgeURL.path,
+            token: "<MCP_TOKEN>", policy: securityPolicy)) ?? "Konfiguration nicht verfügbar."
+    }
+
+    func copyClientConfiguration(format: ClientConfiguration.Format) {
+        guard let capabilityToken, bridgeAvailable else {
+            copyMessage = "Bitte zuerst den Server starten und die vollständige App verwenden."
+            return
+        }
+        do {
+            let text = try ClientConfiguration.render(format: format, bridgePath: bridgeURL.path,
+                token: capabilityToken, policy: securityPolicy)
+            copySensitiveText(text)
+            copyMessage = "Konfiguration inklusive Token kopiert. Im Client einfügen und die Verbindung neu starten."
+        } catch {
+            copyMessage = "Die Konfiguration konnte nicht erstellt werden."
+        }
+    }
+
+    private func copySensitiveText(_ text: String) {
+        clipboardCleanup?.cancel()
+        let board = NSPasteboard.general
+        board.clearContents()
+        board.setString(text, forType: .string)
+        // Keep credentials out of Universal Clipboard and password-manager clipboard history.
+        board.setString("", forType: NSPasteboard.PasteboardType("org.nspasteboard.ConcealedType"))
+        board.setString("", forType: NSPasteboard.PasteboardType("org.nspasteboard.TransientType"))
+        board.setString("", forType: NSPasteboard.PasteboardType("org.nspasteboard.localOnly"))
+        let generation = board.changeCount
+        clipboardCleanup = Task { @MainActor in
+            try? await Task.sleep(for: .seconds(90))
+            guard !Task.isCancelled, board.changeCount == generation else { return }
+            board.clearContents()
+            self.copyMessage = nil
+        }
+    }
+
+    func revealApplication() {
+        NSWorkspace.shared.activateFileViewerSelecting([Bundle.main.bundleURL])
+    }
+
+    func checkConnection() async {
+        guard !checkingConnection else { return }
+        guard hasCapabilityToken, serverState == "running", bridgeAvailable else {
+            connectionVerified = false
+            connectionMessage = "Server starten und prüfen, ob die MCP-Bridge im App-Paket vorhanden ist."
+            return
+        }
+        checkingConnection = true
+        connectionVerified = nil
+        connectionMessage = "App und Bridge prüfen die Anmeldung …"
+        let generation = connectionGeneration
+        var environment = ProcessInfo.processInfo.environment
+        for (key, value) in ClientConfiguration.environment(token: capabilityToken!, policy: securityPolicy) {
+            environment[key] = value
+        }
+        let ok = await ConnectionCheck.run(bridge: bridgeURL, environment: environment)
+        checkingConnection = false
+        guard generation == connectionGeneration else { return }
+        connectionVerified = ok
+        connectionMessage = ok
+            ? "Lokale Verbindung bestätigt: Die mitgelieferte Bridge wird mit deinem Token akzeptiert."
+            : "Verbindung fehlgeschlagen. Server neu starten und App sowie Bridge aus derselben Installation verwenden."
     }
 
     func stop() {
+        connectionGeneration = UUID()
+        connectionVerified = nil
+        connectionMessage = nil
+        copyMessage = nil
         server?.stop()
         server = nil
         serverState = "stopped"
@@ -197,33 +307,60 @@ final class AppModel: ObservableObject {
         startIfNeeded()
     }
 
+    /// Native, deliberate clicks can request permissions even when remote permission tools are
+    /// disabled. The remote LocalMCPService policy remains immutable and unchanged.
     func requestPermissions() async {
-        NSApp.setActivationPolicy(.regular)
-        NSApp.activate(ignoringOtherApps: true)
-        let started = Date()
-        let response = await service.handle(tool: "permissions_request", input: [:])
-        permissionItems = response.items
-        permissionMessage = response.message
-        let elapsed = Int(Date().timeIntervalSince(started) * 1_000)
-        record(tool: "permissions_request", response: response, durationMilliseconds: elapsed)
+        guard !permissionBusy else { return }
+        permissionBusy = true
+        defer { permissionBusy = false }
+        permissionRefreshGeneration = UUID()
+        let result = await nativePermissions.requestAll()
+        permissionRefreshGeneration = UUID()
+        for item in result.items { permissionPresentation.received(item) }
+        await refreshPermissions()
+    }
+
+    func requestPermission(id: String) async {
+        guard !permissionBusy else { return }
+        permissionBusy = true
+        defer { permissionBusy = false }
+        permissionRefreshGeneration = UUID()
+        let result = await nativePermissions.requestFromNativeUI(id: id)
+        permissionRefreshGeneration = UUID()
+        if let result { permissionPresentation.received(result) }
+        await refreshPermissions()
     }
 
     func refreshPermissions() async {
-        let started = Date()
+        permissionRefreshGeneration = UUID()
+        let generation = permissionRefreshGeneration
         let response = await service.handle(tool: "permissions_status", input: [:])
-        permissionItems = response.items
+        guard generation == permissionRefreshGeneration else { return }
+        permissionItems = permissionPresentation.reconcile(response.items)
         permissionMessage = response.message
-        let elapsed = Int(Date().timeIntervalSince(started) * 1_000)
-        record(tool: "permissions_status", response: response, durationMilliseconds: elapsed)
+    }
+
+    func restartApplication() {
+        let configuration = NSWorkspace.OpenConfiguration()
+        configuration.createsNewApplicationInstance = true
+        // Preserve explicit launch opt-ins. The token remains in the keychain, never in arguments.
+        configuration.environment = ProcessInfo.processInfo.environment
+        stop()
+        NSWorkspace.shared.openApplication(at: Bundle.main.bundleURL, configuration: configuration) { _, error in
+            Task { @MainActor in
+                if error != nil {
+                    self.permissionMessage = "Die App konnte nicht neu geöffnet werden. Bitte M3MCP mit ⌘Q beenden und erneut öffnen."
+                    self.startIfNeeded()
+                } else {
+                    NSApplication.shared.terminate(nil)
+                }
+            }
+        }
     }
 
     func openPermissionSettings(pane: String) {
-        Task {
-            let started = Date()
-            let response = await service.handle(tool: "permissions_open_settings", input: ["pane": .string(pane)])
-            let elapsed = Int(Date().timeIntervalSince(started) * 1_000)
-            record(tool: "permissions_open_settings", response: response, durationMilliseconds: elapsed)
-        }
+        let response = nativePermissions.openSettings(input: ["pane": .string(pane)])
+        if !response.ok { permissionMessage = "Die Systemeinstellungen konnten nicht geöffnet werden." }
     }
 
     func statusResponse(includeActivity: Bool = true) -> StatusResponse {

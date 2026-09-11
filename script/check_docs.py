@@ -239,7 +239,7 @@ def check_policy_surfaces(
         ("index.html", page_text),
         ("docs/SECURITY_MODEL.md", security_model_text),
     ):
-        stated_counts = re.findall(r'\b([0-9]+)\s+default tools\b', text, re.I)
+        stated_counts = re.findall(r'\b([0-9]+)\s+(?:default tools|Standardwerkzeuge)\b', text, re.I)
         if not stated_counts:
             fail("tool parity", f"{document_name} does not state a default-tool count")
         for stated_count in stated_counts:
@@ -249,7 +249,7 @@ def check_policy_surfaces(
                     f"{document_name} default-tool count {stated_count} differs from source policy",
                 )
 
-    page_count = re.search(r'<h3>\s*([0-9]+)\s+default tools\s*</h3>', page_text, re.I)
+    page_count = re.search(r'<h3>\s*([0-9]+)\s+(?:default tools|Standardwerkzeuge)\s*</h3>', page_text, re.I)
     if not page_count:
         fail("tool parity", "index.html does not state its default-tool count")
     elif int(page_count.group(1)) != len(default_tools):
@@ -360,7 +360,7 @@ def check_shortcut_contract(shortcut_text: str, readme_text: str, page_text: str
 
 def check_reminder_claim(catalog_text: str, page_text: str) -> None:
     reminder_section = re.search(
-        r'<h3>Reminders</h3>\s*<p>(.*?)</p>', page_text, re.S | re.I
+        r'<h3>(?:Reminders|Erinnerungen)</h3>\s*<p>(.*?)</p>', page_text, re.S | re.I
     )
     if not reminder_section:
         fail("reminders", "index.html has no Reminders card")
@@ -372,7 +372,7 @@ def check_reminder_claim(catalog_text: str, page_text: str) -> None:
         re.S,
     )
     schema_text = reminder_schema.group(1) if reminder_schema else ""
-    if ("due dates" in card or "priorities" in card) and not (
+    if any(term in card for term in ("due dates", "priorities", "fälligkeit", "priorität")) and not (
         '"due"' in schema_text or '"priority"' in schema_text
     ):
         fail("reminders", "index.html advertises due-date or priority filters absent from the schema")
@@ -525,15 +525,15 @@ def check_release_contracts(
     if "PlistBuddy -c \"Add :CFBundle" in package_text:
         fail("release", "packaging still attempts to add and overwrite source version fields")
     for document_name, text in (("README.md", readme_text), ("index.html", page_text)):
-        for required in (
-            "M3MCP.app.zip.sha256",
-            "ad-hoc",
-            "unnotarized",
-            "publisher authenticity",
-            "--signer-workflow GodModeAI2025/AppleMCP/.github/workflows/release.yml",
+        for alternatives in (
+            ("M3MCP.app.zip.sha256",),
+            ("ad-hoc",),
+            ("unnotarized", "nicht notarisiert"),
+            ("publisher authenticity", "nicht allein die Identität des Herausgebers"),
+            ("--signer-workflow GodModeAI2025/AppleMCP/.github/workflows/release.yml",),
         ):
-            if required not in text:
-                fail("release docs", f"{document_name} omits release-candidate caveat {required}")
+            if not any(required in text for required in alternatives):
+                fail("release docs", f"{document_name} omits release-candidate caveat {alternatives[0]}")
 
 
 def main() -> int:

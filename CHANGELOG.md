@@ -2,6 +2,19 @@
 
 ## Unreleased
 
+## 0.3.1 — 2026-09-11 (local build)
+
+- Rebuilt the German repository landing page with four original app screenshots, guided setup instructions and explicit access and release limitations.
+- Added an explicit German usage-risk dialog before server startup, with an unchecked confirmation, cancellation and a locally stored versioned acknowledgement; existing installs must also acknowledge it.
+- Redesigned German native interface with overview, connection, permission and activity pages.
+- Four-step setup assistant with resumable progress and a permanently visible token entry point.
+- Masked/revealable token, explicit copy feedback and JSON/Codex configuration copying.
+- Native permission buttons work independently of the unchanged remote MCP permission opt-in.
+- Native EventKit permission results remain visible while macOS preflight catches up; a restart action is offered for stale process-local status. Newer refreshes supersede older requests.
+- Bounded connection check through the signed bundled bridge, without reading personal content.
+
+### Carried forward from main
+
 ### Added
 
 - **`dry_run` on every calendar write.** `calendar_create_event`, `calendar_update_event`,

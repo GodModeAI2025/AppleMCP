@@ -13,39 +13,41 @@ struct M3MCPApp: App {
     var body: some Scene {
         WindowGroup("M3MCP") {
             ContentView(model: model)
-                .frame(minWidth: 960, minHeight: 640)
+                .frame(minWidth: 1000, minHeight: 700)
                 .task {
                     model.startIfNeeded()
                 }
         }
+        .defaultSize(width: 1180, height: 820)
         .commands {
             CommandGroup(replacing: .newItem) {}
             CommandMenu("Server") {
-                Button("Request Permissions") {
-                    Task {
-                        await model.requestPermissions()
-                    }
+                Button("Einrichtungsassistent öffnen") { model.showsSetup = true }
+                Button("MCP-Token & Verbindung") { model.destination = .connection }
+                Divider()
+                Button("Datenschutzfreigaben verwalten") {
+                    model.destination = .permissions
                 }
                 .keyboardShortcut("p", modifiers: [.command, .shift])
 
-                Button("Copy MCP Client Token") {
+                Button("MCP-Token kopieren") {
                     model.copyCapabilityToken()
                 }
                 .keyboardShortcut("t", modifiers: [.command, .shift])
 
                 Divider()
 
-                Button("Start") {
+                Button("Starten") {
                     model.startIfNeeded()
                 }
                 .keyboardShortcut("s", modifiers: [.command, .shift])
 
-                Button("Restart") {
+                Button("Neu starten") {
                     model.restart()
                 }
                 .keyboardShortcut("r", modifiers: [.command, .shift])
 
-                Button("Stop") {
+                Button("Stoppen") {
                     model.stop()
                 }
             }

@@ -3,66 +3,50 @@ import SwiftUI
 
 struct SidebarView: View {
     let services: [ServiceHealth]
-    @Binding var selectedServiceName: String?
+    @Binding var destination: AppDestination
+    let running: Bool
+    let onSetup: () -> Void
 
+    private var sources: [ServiceHealth] {
+        services.filter { $0.name != "Permissions" && $0.name != "Client Authentication" }
+    }
     var body: some View {
-        List(selection: $selectedServiceName) {
-            Section("Access") {
-                ForEach(accessServices) { service in
-                    serviceRow(service)
-                        .tag(Optional(service.name))
+        VStack(spacing: 0) {
+            HStack(spacing: 11) {
+                Image(systemName: "point.3.connected.trianglepath.dotted")
+                    .font(.title).foregroundStyle(.white).frame(width: 42, height: 42)
+                    .background(.indigo.gradient, in: RoundedRectangle(cornerRadius: 12))
+                VStack(alignment: .leading, spacing: 3) {
+                    Text("M3MCP").font(.title3.weight(.bold))
+                    Text("Dein Mac. Verbunden.").font(.caption).foregroundStyle(.secondary)
                 }
-            }
-
-            Section("Sources") {
-                ForEach(sourceServices) { service in
-                    serviceRow(service)
-                        .tag(Optional(service.name))
+                Spacer(minLength: 0)
+            }.padding(20)
+            List(selection: $destination) {
+                Section("Arbeitsbereich") {
+                    Label("Übersicht", systemImage: "square.grid.2x2").tag(AppDestination.overview)
+                    Label("Verbindung", systemImage: "key.horizontal").tag(AppDestination.connection)
+                    Label("Freigaben", systemImage: "hand.raised").tag(AppDestination.permissions)
+                    Label("Aktivität", systemImage: "clock.arrow.circlepath").tag(AppDestination.activity)
                 }
-            }
-        }
-        .listStyle(.sidebar)
-        .navigationTitle("M3MCP")
-    }
-
-    private var accessServices: [ServiceHealth] {
-        services.filter { $0.name == "Permissions" }
-    }
-
-    private var sourceServices: [ServiceHealth] {
-        services.filter { $0.name != "Permissions" }
-    }
-
-    private func serviceRow(_ service: ServiceHealth) -> some View {
-        HStack(spacing: 10) {
-            Image(systemName: icon(for: service.name))
-                .foregroundStyle(.secondary)
-                .frame(width: 18)
-
-            VStack(alignment: .leading, spacing: 2) {
-                Text(service.name)
-                    .lineLimit(1)
-                Text(service.mode)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .lineLimit(1)
-            }
+                Section("Datenquellen") {
+                    ForEach(sources) { service in
+                        SourceNavigationRow(source: SourcePresentation.forName(service.name))
+                            .tag(AppDestination.source(service.name))
+                    }
+                }
+            }.listStyle(.sidebar)
+            VStack(alignment: .leading, spacing: 12) {
+                Divider()
+                Button(action: onSetup) { Label("Einrichtungsassistent", systemImage: "wand.and.stars") }
+                    .buttonStyle(.plain).foregroundStyle(.indigo)
+                Label("Lokal auf diesem Mac", systemImage: "desktopcomputer")
+                    .font(.caption).foregroundStyle(.secondary)
+            }.padding(18)
         }
     }
-
-    private func icon(for name: String) -> String {
-        switch name {
-        case "Permissions": return "key"
-        case "Mail": return "envelope"
-        case "Calendar": return "calendar"
-        case "Contacts / Address Book": return "person.crop.circle"
-        case "Reminders": return "checklist"
-        case "Notes": return "note.text"
-        case "Photos": return "photo"
-        case "Voice Memos": return "waveform"
-        case "Apple Intelligence": return "sparkles"
-        case "Foundation Models": return "brain"
-        default: return "circle"
-        }
-    }
+}
+private struct SourceNavigationRow: View {
+    let source: SourcePresentation
+    var body: some View { Label(source.title, systemImage: source.icon).padding(.vertical, 3) }
 }
