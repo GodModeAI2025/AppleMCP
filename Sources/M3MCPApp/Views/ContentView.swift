@@ -30,7 +30,7 @@ struct ContentView: View {
         }
         .task {
             model.startIfNeeded()
-            if !setupCompleted { model.showsSetup = true }
+            if !setupCompleted || !model.usageRiskAccepted { model.showsSetup = true }
             await model.refreshPermissions()
         }
         .onChange(of: scenePhase) { _, phase in

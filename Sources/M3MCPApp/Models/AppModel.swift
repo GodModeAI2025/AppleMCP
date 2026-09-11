@@ -14,6 +14,10 @@ final class AppModel: ObservableObject {
 
     @Published var destination: AppDestination = .overview
     @Published var showsSetup = false
+    @Published private(set) var usageRiskAccepted: Bool
+    private let preferences: UserDefaults
+    private static let usageRiskVersion = 1
+    private static let usageRiskKey = "m3mcp.setup.usageRisk.acceptedVersion"
     @Published private(set) var copyMessage: String?
     @Published private(set) var checkingConnection = false
     @Published private(set) var connectionVerified: Bool?
@@ -47,7 +51,9 @@ final class AppModel: ObservableObject {
     /// into `/health`, or into a log line.
     private var capabilityToken: String?
 
-    init(securityPolicy: M3MCPSecurityPolicy = .fromProcessEnvironment()) {
+    init(securityPolicy: M3MCPSecurityPolicy = .fromProcessEnvironment(), preferences: UserDefaults = .standard) {
+        self.preferences = preferences
+        usageRiskAccepted = preferences.integer(forKey: Self.usageRiskKey) == Self.usageRiskVersion
         let approvalCoordinator = NativeToolApprovalCoordinator()
         self.securityPolicy = securityPolicy
         self.approvalCoordinator = approvalCoordinator
@@ -63,7 +69,17 @@ final class AppModel: ObservableObject {
         AppLogger.log("AppModel init")
     }
 
+    /// Records an explicit native setup confirmation. This grants no macOS permissions or tool opt-ins.
+    func acceptUsageRisk() {
+        preferences.set(Self.usageRiskVersion, forKey: Self.usageRiskKey)
+        usageRiskAccepted = true
+    }
+
     func startIfNeeded() {
+        guard usageRiskAccepted else {
+            showsSetup = true
+            return
+        }
         guard server == nil else { return }
         serverState = "starting"
 

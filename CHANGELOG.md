@@ -4,6 +4,7 @@
 
 ## 0.3.1 — 2026-09-11 (local build)
 
+- Added an explicit German usage-risk dialog before server startup, with an unchecked confirmation, cancellation and a locally stored versioned acknowledgement; existing installs must also acknowledge it.
 - Redesigned German native interface with overview, connection, permission and activity pages.
 - Four-step setup assistant with resumable progress and a permanently visible token entry point.
 - Masked/revealable token, explicit copy feedback and JSON/Codex configuration copying.

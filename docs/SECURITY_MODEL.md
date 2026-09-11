@@ -316,6 +316,14 @@ decide whether to publish it.
 
 ## Native setup (0.3.1 local build)
 
+The native app requires explicit acknowledgement of the German usage-risk notice before starting
+its server. The initially unchecked acknowledgement covers data changes, deletion, disclosure,
+possible iCloud propagation and backups. Cancelling leaves the server stopped. The notice also
+appears for existing installations that have not acknowledged its current version. This local
+preferences flag is an onboarding safeguard, not a security boundary against software running as
+the same user; it grants no macOS permissions and does not enable optional tools or replace
+per-call approvals.
+
 Permission actions from explicit clicks in the native app use PermissionProvider directly. They do
 not alter the launch policy of remote MCP tools. The token is masked by default, absent from config
 previews, and only copied or revealed on a deliberate native action. Client files are not edited.

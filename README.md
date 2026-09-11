@@ -78,6 +78,13 @@ notarization, and stapling pipeline.
 ## Native setup assistant (0.3.1 local build)
 
 The app opens a four-step German setup assistant on first launch. Reopen it with **Einrichten**.
+Before setup, **Nutzung auf eigene Gefahr** explains possible data changes, deletion, disclosure,
+iCloud propagation and backup precautions. Its checkbox is initially unchecked. The server stays
+stopped until the user explicitly confirms; cancelling does not confirm. Existing installations also
+see this notice once after updating. The versioned confirmation is stored locally in preferences,
+independently of setup progress, macOS permissions and optional tool approvals. Reopen the notice
+with **Risikohinweis** in the assistant. This onboarding confirmation is not an authorization or
+security boundary against other software running as the same user.
 **Verbindung** exposes a masked token, **MCP-Token kopieren**, and complete Codex TOML or MCP JSON
 configuration. The configuration preview always uses a placeholder; the copy action includes the
 real token and current bundled bridge path. Paste only into the intended client. Copied credentials

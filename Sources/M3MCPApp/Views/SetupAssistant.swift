@@ -17,7 +17,23 @@ struct SetupAssistant: View {
     @ObservedObject var model: AppModel
     let completed: () -> Void
     @AppStorage("m3mcp.setup.v1.step") private var step: SetupStep = .welcome
+    @State private var showsRiskNotice = false
     var body: some View {
+        if !model.usageRiskAccepted || showsRiskNotice {
+            UsageRiskDialog {
+                model.acceptUsageRisk()
+                showsRiskNotice = false
+                model.startIfNeeded()
+            } cancel: {
+                model.showsSetup = false
+            }
+            .interactiveDismissDisabled()
+        } else {
+            assistant
+        }
+    }
+
+    private var assistant: some View {
         VStack(spacing: 0) {
             HStack {
                 VStack(alignment: .leading, spacing: 4) {
@@ -61,6 +77,7 @@ struct SetupAssistant: View {
             HStack {
                 Button("Zurück") { step = SetupStep(rawValue: step.rawValue - 1) ?? .welcome }
                     .disabled(step == .welcome)
+                Button("Risikohinweis") { showsRiskNotice = true }
                 Spacer()
                 if step == .finish {
                     Button("Einrichtung abschließen") {
@@ -77,6 +94,54 @@ struct SetupAssistant: View {
         }.frame(width: 760, height: 720).tint(.indigo)
     }
 }
+
+private struct UsageRiskDialog: View {
+    let accept: () -> Void
+    let cancel: () -> Void
+    @State private var understood = false
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            HStack(alignment: .top, spacing: 16) {
+                Image(systemName: "exclamationmark.triangle.fill")
+                    .font(.system(size: 34)).foregroundStyle(.orange)
+                    .accessibilityHidden(true)
+                VStack(alignment: .leading, spacing: 6) {
+                    Text("Nutzung auf eigene Gefahr").font(.title2.bold())
+                    Text("Bitte lies diesen Hinweis, bevor du M3MCP einrichtest.")
+                        .foregroundStyle(.secondary)
+                }
+            }.padding(28)
+            Divider()
+            ScrollView {
+                VStack(alignment: .leading, spacing: 18) {
+                    Text("M3MCP ermöglicht verbundenen KI- und MCP-Clients den Zugriff auf deine Daten. Je nach erteilten Freigaben, aktivierten Werkzeugen und ausgeführten Kurzbefehlen können Daten gelesen, weitergegeben, erstellt, verändert, überschrieben oder gelöscht werden.")
+                    Text("Fehlerhafte Anweisungen, Softwarefehler oder missbräuchliche Zugriffe können zum Verlust sämtlicher Daten führen, auf die die aktivierten Funktionen zugreifen können. Änderungen und Löschungen können über iCloud auch andere Geräte betreffen. Eine Wiederherstellung ist nicht garantiert.")
+                        .fontWeight(.semibold)
+                    Text("Erstelle vor der Nutzung ein aktuelles Backup. Erteile nur notwendige Freigaben, verbinde nur vertrauenswürdige Clients und prüfe jede angeforderte Änderung sorgfältig. Inhalte können durch den verbundenen Client an externe Dienste übertragen werden.")
+                    Text("Standardmäßig sind Kalenderänderungen und Kurzbefehle deaktiviert. Ihre Aktivierung und die erforderlichen Einzelfreigaben bleiben separate Entscheidungen. Diese Bestätigung erteilt keine zusätzlichen Zugriffsrechte.")
+                        .font(.callout).foregroundStyle(.secondary)
+                }.padding(28)
+            }
+            Divider()
+            VStack(alignment: .leading, spacing: 20) {
+                Toggle("Ich habe die Risiken einschließlich möglicher Datenänderungen und Datenverluste verstanden und möchte M3MCP auf eigene Gefahr nutzen.", isOn: $understood)
+                    .toggleStyle(.checkbox)
+                    .fixedSize(horizontal: false, vertical: true)
+                HStack {
+                    Button("Abbrechen", action: cancel).keyboardShortcut(.cancelAction)
+                    Spacer()
+                    Button("Bestätigen und fortfahren", action: accept)
+                        .buttonStyle(.borderedProminent)
+                        .disabled(!understood)
+                }
+            }.padding(28)
+        }
+        .frame(width: 720, height: 680)
+        .tint(.indigo)
+    }
+}
+
 private struct SetupWelcome: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 24) {
