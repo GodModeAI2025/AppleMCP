@@ -7,9 +7,9 @@
   <key>CFBundleName</key>
   <string>M3MCP</string>
   <key>CFBundleShortVersionString</key>
-  <string>0.3.0</string>
+  <string>0.3.1</string>
   <key>CFBundleVersion</key>
-  <string>3</string>
+  <string>4</string>
   <key>CFBundleExecutable</key>
   <string>M3MCPApp</string>
   <key>CFBundlePackageType</key>

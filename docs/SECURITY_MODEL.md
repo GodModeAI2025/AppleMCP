@@ -313,3 +313,12 @@ GitHub attestation binds it to the repository workflow, but a public production 
 a separately protected Developer ID identity, hardened runtime, trusted timestamp, notarization,
 and stapling. Until then the workflow creates a clearly titled draft candidate, and a human must
 decide whether to publish it.
+
+## Native setup (0.3.1 local build)
+
+Permission actions from explicit clicks in the native app use PermissionProvider directly. They do
+not alter the launch policy of remote MCP tools. The token is masked by default, absent from config
+previews, and only copied or revealed on a deliberate native action. Client files are not edited.
+The connection check forwards the existing token to the bundled bridge in its process environment
+and requests source_status; the bridge emits a fixed success/failure marker, not provider content.
+The local diagnostic is not evidence that an external client has saved the right configuration.

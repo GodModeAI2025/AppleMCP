@@ -75,6 +75,21 @@ final class PermissionProvider {
         )
     }
 
+    /// Explicit native button action only. This does not alter the MCP launch-time permission
+    /// policy and is not reachable through a default-profile remote tool call.
+    func requestFromNativeUI(id: String) async -> DataItem? {
+        guard !Task.isCancelled else { return nil }
+        switch id {
+        case "calendar": return await requestCalendar()
+        case "contacts": return await requestContacts()
+        case "reminders": return await requestReminders()
+        case "notes_automation": return await notesAutomationStatusItem(prompt: true)
+        case "photos": return await requestPhotos()
+        case "speech_recognition": return await requestSpeechRecognition()
+        default: return nil
+        }
+    }
+
     @MainActor
     func openSettings(input: [String: JSONValue]) -> ToolResponse {
         guard !Task.isCancelled else {
