@@ -84,8 +84,8 @@ jobs:
       - name: Validate bundle metadata
         run: |
           plutil -lint Sources/M3MCPApp/Resources/Info.plist
-          test "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' Sources/M3MCPApp/Resources/Info.plist)" = "0.3.0"
-          test "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleVersion' Sources/M3MCPApp/Resources/Info.plist)" = "3"
+          test "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' Sources/M3MCPApp/Resources/Info.plist)" = "0.3.1"
+          test "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleVersion' Sources/M3MCPApp/Resources/Info.plist)" = "5"
 
       - name: Validate shell scripts
         run: |

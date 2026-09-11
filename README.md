@@ -8,6 +8,10 @@ Version 0.3.1 starts in a **default-safe profile**. The bridge advertises 21 obs
 
 AppleMCP is local-first, but it is not an isolation boundary for every process running as you. Read [Security model](docs/SECURITY_MODEL.md) before granting Full Disk Access or enabling optional tools.
 
+[Product website](https://godmodeai2025.github.io/AppleMCP/) · [Original app screenshots](docs/SCREENSHOTS.md)
+
+![M3MCP native app overview](assets/screenshots/overview.jpg)
+
 ## Access methods and permissions
 
 | Source | Access method | macOS permission or requirement |

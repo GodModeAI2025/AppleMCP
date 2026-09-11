@@ -1,312 +1,115 @@
-<!DOCTYPE html>
-<html lang="en">
+<!doctype html>
+<html lang="de">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>AppleMCP — Bounded Local Apple Data for AI Assistants</title>
-    <meta name="description" content="Native macOS MCP server with safe defaults and bounded access to local Mail, Calendar, Contacts, Notes, Photos, Reminders, Voice Memos, and selected Apple Intelligence APIs.">
-    <style>
-        :root {
-            --bg: #0d1117;
-            --fg: #e6edf3;
-            --muted: #8b949e;
-            --accent: #58a6ff;
-            --card: #161b22;
-            --border: #30363d;
-        }
-        * { margin: 0; padding: 0; box-sizing: border-box; }
-        body {
-            font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Helvetica Neue', sans-serif;
-            background: var(--bg);
-            color: var(--fg);
-            line-height: 1.6;
-        }
-        .container { max-width: 860px; margin: 0 auto; padding: 0 24px; }
-        header {
-            padding: 80px 0 48px;
-            text-align: center;
-        }
-        header h1 {
-            font-size: 2.8rem;
-            font-weight: 700;
-            letter-spacing: -0.02em;
-            margin-bottom: 16px;
-        }
-        header p {
-            font-size: 1.2rem;
-            color: var(--muted);
-            max-width: 600px;
-            margin: 0 auto;
-        }
-        .badge-row {
-            display: flex;
-            gap: 8px;
-            justify-content: center;
-            margin-top: 24px;
-            flex-wrap: wrap;
-        }
-        .badge {
-            display: inline-block;
-            padding: 4px 12px;
-            border-radius: 20px;
-            font-size: 0.8rem;
-            font-weight: 500;
-            border: 1px solid var(--border);
-            color: var(--muted);
-        }
-        .badge.blue { border-color: var(--accent); color: var(--accent); }
-        section { padding: 48px 0; }
-        section h2 {
-            font-size: 1.5rem;
-            font-weight: 600;
-            margin-bottom: 24px;
-            padding-bottom: 8px;
-            border-bottom: 1px solid var(--border);
-        }
-        .grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
-            gap: 16px;
-        }
-        .card {
-            background: var(--card);
-            border: 1px solid var(--border);
-            border-radius: 12px;
-            padding: 20px;
-        }
-        .card h3 {
-            font-size: 1rem;
-            margin-bottom: 8px;
-        }
-        .card p {
-            font-size: 0.9rem;
-            color: var(--muted);
-        }
-        pre {
-            background: var(--card);
-            border: 1px solid var(--border);
-            border-radius: 8px;
-            padding: 16px 20px;
-            overflow-x: auto;
-            font-size: 0.85rem;
-            line-height: 1.5;
-            margin: 16px 0;
-        }
-        code { font-family: 'SF Mono', 'Menlo', monospace; }
-        .arch {
-            font-family: 'SF Mono', 'Menlo', monospace;
-            font-size: 0.85rem;
-            color: var(--muted);
-            text-align: center;
-            padding: 24px;
-            background: var(--card);
-            border: 1px solid var(--border);
-            border-radius: 8px;
-            white-space: pre;
-            overflow-x: auto;
-        }
-        .cta {
-            text-align: center;
-            padding: 48px 0 80px;
-        }
-        .cta a {
-            display: inline-block;
-            padding: 12px 32px;
-            background: var(--accent);
-            color: var(--bg);
-            text-decoration: none;
-            border-radius: 8px;
-            font-weight: 600;
-            font-size: 1rem;
-        }
-        .cta a:hover { opacity: 0.9; }
-        footer {
-            text-align: center;
-            padding: 24px 0;
-            color: var(--muted);
-            font-size: 0.8rem;
-            border-top: 1px solid var(--border);
-        }
-        @media (prefers-color-scheme: light) {
-            :root {
-                --bg: #ffffff;
-                --fg: #1f2328;
-                --muted: #656d76;
-                --accent: #0969da;
-                --card: #f6f8fa;
-                --border: #d0d7de;
-            }
-        }
-    </style>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#151828">
+  <title>AppleMCP · Dein Mac. Dein Assistent.</title>
+  <meta name="description" content="M3MCP verbindet deinen KI-Assistenten mit Apple-Daten auf deinem Mac. Native macOS-App, geführte Einrichtung und bewusste Freigaben. Mit echten Screenshots der App.">
+  <link rel="stylesheet" href="assets/landing.css">
 </head>
 <body>
-    <div class="container">
-        <header>
-            <h1>AppleMCP</h1>
-            <p>Native macOS MCP server with a default-safe tool set, bounded local data access, and native approval for optional Calendar mutations and user Shortcuts.</p>
-            <div class="badge-row">
-                <span class="badge blue">macOS 15+</span>
-                <span class="badge blue">Swift</span>
-                <span class="badge">MCP Protocol</span>
-                <span class="badge">Local-first</span>
-                <span class="badge">Safe defaults</span>
-            </div>
-        </header>
+  <a class="skip-link" href="#inhalt">Zum Inhalt</a>
+  <header class="site-header">
+    <div class="wrap nav">
+      <a class="brand" href="#" aria-label="AppleMCP Startseite">
+        <svg class="brand-mark" width="36" height="36" viewBox="0 0 36 36" fill="none" aria-hidden="true"><rect width="36" height="36" rx="10" fill="#6553ED"/><path d="M10 11h16M11 13l6 12m8-12-6 12" stroke="white" stroke-width="1.5" stroke-dasharray="1 3"/><circle cx="9" cy="10" r="3" stroke="white" stroke-width="1.8"/><circle cx="27" cy="10" r="3" stroke="white" stroke-width="1.8"/><circle cx="18" cy="27" r="3" stroke="white" stroke-width="1.8"/></svg>
+        <span>AppleMCP</span>
+      </a>
+      <nav aria-label="Hauptnavigation">
+        <a href="#app">Die App</a><a href="#einrichten">Einrichtung</a><a href="#zugriff">Zugriff &amp; Risiken</a>
+        <a class="nav-github" href="https://github.com/GodModeAI2025/AppleMCP">GitHub <span aria-hidden="true">↗</span></a>
+      </nav>
+    </div>
+  </header>
 
-        <section>
-            <h2>Data Sources</h2>
-            <div class="grid">
-                <div class="card">
-                    <h3>Mail</h3>
-                    <p>Search and read the local Mail index and <code>.emlx</code> files. No Mail Automation fallback; source and returned body sizes are bounded.</p>
-                </div>
-                <div class="card">
-                    <h3>Calendar</h3>
-                    <p>Search events via EventKit. Calendar mutations are a separate launch-time opt-in and require native approval for every call.</p>
-                </div>
-                <div class="card">
-                    <h3>Contacts</h3>
-                    <p>Search your address book via Contacts.framework. Names, emails, phone numbers, addresses.</p>
-                </div>
-                <div class="card">
-                    <h3>Notes</h3>
-                    <p>Search and read Apple Notes via Automation. Direct reads are capped at 65,536 characters and report truncation.</p>
-                </div>
-                <div class="card">
-                    <h3>Reminders</h3>
-                    <p>Search reminder titles, notes, and list names via EventKit; filter by completion status. Due date and priority are returned as metadata, not filter arguments.</p>
-                </div>
-                <div class="card">
-                    <h3>Photos</h3>
-                    <p>Search Photos library metadata via Photos.framework. PhotoKit calls the required TCC level read/write; these tools do not mutate the library.</p>
-                </div>
-                <div class="card">
-                    <h3>Voice Memos</h3>
-                    <p>Search the local CloudRecordings store, read in-file transcripts, or transcribe only when an on-device speech model is available. Fresh non-empty transcripts are cached owner-only in Application Support without automatic expiry.</p>
-                </div>
-            </div>
-        </section>
+  <main id="inhalt">
+    <section class="hero">
+      <div class="wrap">
+        <div class="hero-intro">
+          <div>
+            <p class="eyebrow">M3MCP · Native App für macOS</p>
+            <h1>Dein Mac.<br>Dein Assistent.<br><span>Eine Verbindung.</span></h1>
+          </div>
+          <div class="hero-copy">
+            <p>Finde Mails, Termine und Sprachmemos mit deinem KI-Assistenten. M3MCP verbindet deinen MCP-Client mit den Apple-Daten auf deinem Mac.</p>
+            <div class="actions"><a class="button primary" href="https://github.com/GodModeAI2025/AppleMCP">Projekt auf GitHub <span aria-hidden="true">↗</span></a><a class="text-link" href="#einrichten">So richtest du es ein <span aria-hidden="true">↓</span></a></div>
+            <p class="hero-meta">macOS 15+ <span>·</span> Open Source <span>·</span> Swift &amp; SwiftUI</p>
+          </div>
+        </div>
+        <figure class="hero-figure">
+          <a class="screenshot-link" href="assets/screenshots/overview.jpg" target="_blank" rel="noopener" aria-label="Original-Screenshot der M3MCP-Übersicht in voller Größe öffnen">
+            <img src="assets/screenshots/overview.jpg" width="1000" height="752" alt="M3MCP-Übersicht mit laufendem Server, 21 Werkzeugen, sechs erteilten Freigaben und dem direkten Zugang zum MCP-Token." fetchpriority="high">
+          </a>
+          <figcaption><span>Echte App. Echte Oberfläche.</span><span>M3MCP 0.3.1 · Entwicklungsstand vom 11. September 2026</span></figcaption>
+        </figure>
+      </div>
+    </section>
 
-        <section>
-            <h2>Apple Intelligence</h2>
-            <div class="grid">
-                <div class="card">
-                    <h3>Writing Tools</h3>
-                    <p>Optional user-created <code>Writing Tools</code> Shortcut. Disabled by default, open-world, and approved one call at a time.</p>
-                </div>
-                <div class="card">
-                    <h3>Translation</h3>
-                    <p>Optional user-created <code>Translate</code> Shortcut with a versioned JSON contract and one-call native approval.</p>
-                </div>
-                <div class="card">
-                    <h3>Image Playground</h3>
-                    <p>Generate an owner-only temporary PNG through the native ImagePlayground API. The caller can consume it before exact-name stale cleanup after 24 hours.</p>
-                </div>
-                <div class="card">
-                    <h3>On-Device Summaries</h3>
-                    <p>Summarize text and extract action items with the on-device Foundation Models API. No user Shortcut; macOS 26.</p>
-                </div>
-            </div>
-        </section>
+    <section class="sources wrap" aria-labelledby="quellen-titel">
+      <div class="section-heading"><p class="eyebrow">Deine vertrauten Apple-Apps</p><h2 id="quellen-titel">Was du suchst, ist schon auf deinem Mac.</h2><p>Stelle die Frage in deinem verbundenen Client. M3MCP führt die unterstützte Abfrage lokal aus – mit den Freigaben, die du erteilt hast.</p></div>
+      <div class="source-grid">
+        <article><span class="source-number">01</span><h3>Mail</h3><p>Lokale Mails suchen und lesen.</p></article>
+        <article><span class="source-number">02</span><h3>Kalender</h3><p>Termine finden und Ereignisse lesen.</p></article>
+        <article><span class="source-number">03</span><h3>Kontakte</h3><p>Das lokale Adressbuch durchsuchen.</p></article>
+        <article><span class="source-number">04</span><h3>Erinnerungen</h3><p>Titel, Notizen und Listen durchsuchen; nach Erledigungsstatus filtern.</p></article>
+        <article><span class="source-number">05</span><h3>Notizen</h3><p>Apple Notes über Automation suchen und lesen.</p></article>
+        <article><span class="source-number">06</span><h3>Fotos</h3><p>Metadaten der Mediathek durchsuchen.</p></article>
+        <article><span class="source-number">07</span><h3>Sprachmemos</h3><p>Aufnahmen finden und Transkripte lesen oder auf dem Gerät erzeugen.</p></article>
+        <article class="source-example"><p class="eyebrow">Eine erste Frage</p><blockquote>„Zeige mir meine fünf neuesten Mails.“</blockquote></article>
+      </div>
+      <p class="source-note">Zusätzlich: lokale Zusammenfassungen und Image Playground auf unterstützten Systemen. Verfügbarkeit und Modelle hängen von macOS und Hardware ab. Eigene Kurzbefehle sind separat aktivierbar.</p>
+    </section>
 
-        <section>
-            <h2>Safe by Default</h2>
-            <div class="grid">
-                <div class="card">
-                    <h3>21 default tools</h3>
-                    <p>Observation and bounded local processing are available. Calendar mutation, permission UI, and user Shortcuts are absent.</p>
-                </div>
-                <div class="card">
-                    <h3>Three separate opt-ins</h3>
-                    <p><code>M3MCP_ENABLE_CALENDAR_MUTATIONS</code>, <code>M3MCP_ENABLE_PERMISSION_UI</code>, and <code>M3MCP_ENABLE_USER_SHORTCUTS</code> are resolved only at launch.</p>
-                </div>
-                <div class="card">
-                    <h3>One-call approval</h3>
-                    <p>Every enabled Calendar mutation and Shortcut call gets its own default-deny native sheet. Approval is never reused.</p>
-                </div>
-                <div class="card">
-                    <h3>Honest local boundary</h3>
-                    <p>The socket is owner-only, every route but <code>/health</code> needs the capability token from the login keychain, and the connecting binary is pinned to the <code>M3MCPBridge</code> installed next to the app. The pin identifies a binary, not a caller, so treat every configured client as trusted.</p>
-                </div>
-            </div>
-        </section>
+    <section class="product-section" id="app">
+      <div class="wrap">
+        <div class="section-heading"><p class="eyebrow">Die App im Detail</p><h2>Weniger suchen.<br>Mehr Überblick.</h2><p>Originalaufnahmen der installierten App. Die Bilder lassen sich in voller Größe öffnen.</p></div>
+        <div class="feature-row">
+          <div class="feature-copy"><span class="feature-index">01 / Verbindung</span><h3>Dein Token.<br>Direkt griffbereit.</h3><p>Auf der Verbindungsseite findest du deinen MCP-Token und die passende Konfiguration für Codex oder andere MCP-Clients.</p><p>Der Token bleibt zunächst verborgen. Kopieren erfolgt bewusst per Klick; die Konfigurationsvorschau enthält nur einen Platzhalter.</p><a class="text-link" href="#einrichten">Zur Einrichtung <span aria-hidden="true">↓</span></a></div>
+          <figure class="product-shot"><a class="screenshot-link" href="assets/screenshots/connection.jpg" target="_blank" rel="noopener" aria-label="Original-Screenshot der Verbindungsseite in voller Größe öffnen"><img src="assets/screenshots/connection.jpg" width="1000" height="752" alt="Verbindungsseite mit maskiertem Token, dem Knopf MCP-Token kopieren und Auswahl zwischen Codex-TOML und MCP-JSON." loading="lazy" decoding="async"></a><figcaption>Verbindung · Der Token ist bereits in der App maskiert.</figcaption></figure>
+        </div>
+        <div class="feature-row reverse">
+          <div class="feature-copy"><span class="feature-index">02 / Freigaben</span><h3>Du entscheidest,<br>was zugänglich ist.</h3><p>Kalender, Kontakte und Erinnerungen: Der aktuelle Freigabestatus steht direkt an der jeweiligen Quelle. macOS fragt dich nach den nötigen Berechtigungen.</p><p>Für Mail und Sprachmemos führt die App zum Festplattenvollzugriff. Auf einem weiteren Mac richtest du Freigaben und Verbindung erneut ein.</p></div>
+          <figure class="product-shot"><a class="screenshot-link" href="assets/screenshots/permissions.jpg" target="_blank" rel="noopener" aria-label="Original-Screenshot der Freigabenseite in voller Größe öffnen"><img src="assets/screenshots/permissions.jpg" width="1000" height="752" alt="Freigabenseite mit dem Hinweis zum Festplattenvollzugriff und bestätigten Freigaben für Kalender, Kontakte, Erinnerungen und Mail." loading="lazy" decoding="async"></a><figcaption>Freigaben · Beispielstatus des Macs bei der Aufnahme.</figcaption></figure>
+        </div>
+      </div>
+    </section>
 
-        <section>
-            <h2>Architecture</h2>
-            <div class="arch">Claude / AI Assistant
-        |
-   stdio (MCP protocol)
-        |
-   M3MCPBridge (lightweight CLI)
-        |
-   bounded HTTP over Unix socket (0600)
-        |
-   M3MCPApp (SwiftUI, holds TCC permissions)
-        |
-   EventKit / Contacts / Photos / Mail Index / Voice Memos Store
-   Speech / FoundationModels / ImagePlayground / Apple Events</div>
-        </section>
+    <section class="setup wrap" id="einrichten">
+      <div class="section-heading"><p class="eyebrow">Von der App zur ersten Frage</p><h2>Einrichten. Verbinden. Losfragen.</h2><p>Vor dem Start liest und bestätigst du „Nutzung auf eigene Gefahr“. Danach begleitet dich der Assistent durch vier Schritte.</p></div>
+      <ol class="steps">
+        <li><span class="step-number">1</span><h3>Willkommen</h3><p>Lerne den Ablauf kennen. Einen zusätzlichen Apple-Login braucht M3MCP nicht.</p></li>
+        <li><span class="step-number">2</span><h3>Freigaben</h3><p>Wähle deine Datenquellen und erteile die nötigen Rechte in macOS.</p></li>
+        <li><span class="step-number">3</span><h3>Verbindung</h3><p>Kopiere die Konfiguration inklusive Token in deinen Client und lade dessen MCP-Verbindung neu.</p></li>
+        <li><span class="step-number">4</span><h3>Prüfen</h3><p>Klicke auf „Lokale Verbindung testen“. Erst nach erfolgreichem Test wird „Einrichtung abschließen“ aktiv.</p></li>
+      </ol>
+      <div class="setup-note"><strong>Der lokale Test prüft App und Bridge.</strong><span>Ob dein Client eingerichtet ist, prüfst du dort mit einer ersten Anfrage. Nach einem Neustart der App ist für den Abschluss erneut ein lokaler Test nötig.</span></div>
+    </section>
 
-        <section>
-            <h2>Download</h2>
-            <p>After maintainer review and publication, a GitHub release may provide <code>M3MCP.app.zip</code> and <code>M3MCP.app.zip.sha256</code>. The ZIP contains the app, MCP bridge, Apache-2.0 license, and retained third-party notices.</p>
-<pre><code>curl -LO https://github.com/GodModeAI2025/AppleMCP/releases/latest/download/M3MCP.app.zip
-curl -LO https://github.com/GodModeAI2025/AppleMCP/releases/latest/download/M3MCP.app.zip.sha256
-shasum -a 256 -c M3MCP.app.zip.sha256
+    <section class="risk-section" id="zugriff">
+      <div class="wrap risk-layout">
+        <div class="risk-copy"><p class="eyebrow">Bewusst verbinden</p><h2>Deine Daten verdienen<br>eine klare Entscheidung.</h2><p class="risk-lead">„Nutzung auf eigene Gefahr“ steht vor dem ersten Serverstart. Ohne ausdrückliche Bestätigung bleibt der Server gestoppt.</p><p>Aktivierte Funktionen und Kurzbefehle können Daten verändern oder löschen. Änderungen können sich über iCloud auf weitere Geräte übertragen. Lege ein Backup an und verbinde nur Clients, denen du vertraust.</p><p>Die Abfragen laufen lokal. Ein verbundener KI-Client kann Inhalte jedoch an externe Dienste weitergeben.</p><a class="text-link" href="https://github.com/GodModeAI2025/AppleMCP/blob/main/docs/SECURITY_MODEL.md">Zugriffsmodell im Detail <span aria-hidden="true">↗</span></a></div>
+        <figure class="risk-shot"><a class="screenshot-link" href="assets/screenshots/risk-notice.jpg" target="_blank" rel="noopener" aria-label="Original-Screenshot des Risikodialogs in voller Größe öffnen"><img src="assets/screenshots/risk-notice.jpg" width="720" height="680" alt="Dialog Nutzung auf eigene Gefahr mit Hinweis auf mögliche Datenverluste, zunächst leerem Bestätigungskästchen und deaktiviertem Fortfahren-Knopf." loading="lazy" decoding="async"></a><figcaption>Risikohinweis · Bestätigung und Datenfreigaben sind getrennt.</figcaption></figure>
+      </div>
+    </section>
+
+    <section class="download wrap" id="download">
+      <div class="section-heading"><p class="eyebrow">Open Source · Apache 2.0</p><h2>Mach deinen Mac<br>zum Teil deines Workflows.</h2><p>Quellcode, Installationsanleitung und veröffentlichte Versionen findest du auf GitHub.</p></div>
+      <div class="actions"><a class="button primary" href="https://github.com/GodModeAI2025/AppleMCP/releases">Releases ansehen <span aria-hidden="true">↗</span></a><a class="button secondary" href="https://github.com/GodModeAI2025/AppleMCP#quick-start">Aus Quellcode installieren</a></div>
+      <p class="release-note">Die Screenshots zeigen den Entwicklungsstand 0.3.1. Eine veröffentlichte Version kann davon abweichen. Automatische Release-Kandidaten sind für Apple Silicon gebaut, ad-hoc signiert und nicht notarisiert.</p>
+      <div class="technical-details">
+        <details><summary>Welche Werkzeuge sind standardmäßig aktiv?</summary><div class="details-body"><h3>21 Standardwerkzeuge</h3><p>Lesen, begrenzte lokale Verarbeitung und lokale Erzeugung. Kalenderänderungen und eigene Kurzbefehle sind standardmäßig deaktiviert. Nach gesonderter Aktivierung brauchen sie für jeden Aufruf eine native Bestätigung.</p><p>Für fortgeschrittene Konfiguration gelten drei getrennte Startoptionen:</p><ul><li><code>M3MCP_ENABLE_CALENDAR_MUTATIONS</code> – Kalenderänderungen</li><li><code>M3MCP_ENABLE_PERMISSION_UI</code> – entfernte MCP-Freigabeaktionen</li><li><code>M3MCP_ENABLE_USER_SHORTCUTS</code> – eigene Kurzbefehle</li></ul><p>Native Freigabeknöpfe funktionieren auch ohne die entfernten Freigabewerkzeuge. Kurzbefehle können Netzwerkzugriffe und weitere Nebenwirkungen auslösen. Lokale Transkripte können in Application Support gespeichert bleiben.</p></div></details>
+        <details><summary>Wie funktioniert die Verbindung?</summary><div class="details-body"><ol class="architecture"><li>Dein MCP-Client</li><li>Die mitgelieferte M3MCPBridge über stdio</li><li>Die native M3MCP-App über einen lokalen Unix-Socket</li><li>Die freigegebene Apple-Datenquelle</li></ol><p>Der Token liegt im Anmeldeschlüsselbund. Die App prüft außerdem die mitgelieferte Bridge. Diese Prüfung identifiziert das Programm, nicht den aufrufenden Client. Behandle deshalb jeden verbundenen Client als vertrauenswürdig.</p><p>macOS 15 oder neuer ist erforderlich. Zum Bauen aus Quellcode wird das macOS-26-SDK benötigt. Apple-Intelligence-Funktionen haben zusätzliche System- und Hardwarevoraussetzungen.</p><pre><code>swift build
+swift test
+./script/build_and_run.sh</code></pre><p>Der Entwicklungsbuild erzeugt <code>.build/debug/M3MCPBridge</code>. Für die Verbindung mit der gebündelten App verwende die Bridge aus genau dieser Installation: <code>M3MCP.app/Contents/MacOS/M3MCPBridge</code>. Die App erstellt die passende Client-Konfiguration.</p></div></details>
+        <details><summary>Was muss ich bei einem Download beachten?</summary><div class="details-body"><p>Ein Release kann <code>M3MCP.app.zip</code> und <code>M3MCP.app.zip.sha256</code> bereitstellen. Enthalten sind die App, Bridge, Apache-2.0-Lizenz und Hinweise zu Drittkomponenten.</p><p>Automatische Kandidaten sind ad-hoc signiert und nicht notarisiert. Eine Prüfsumme bestätigt die Übereinstimmung mit dem veröffentlichten Paket, aber nicht allein die Identität des Herausgebers. GitHub-Herkunftsnachweise ersetzen keine Developer-ID-Signatur oder Notarisierung.</p><pre><code>shasum -a 256 -c M3MCP.app.zip.sha256
+# Optional: GitHub-Herkunftsnachweis prüfen, sofern vorhanden
 gh attestation verify M3MCP.app.zip \
   --repo GodModeAI2025/AppleMCP \
-  --signer-workflow GodModeAI2025/AppleMCP/.github/workflows/release.yml  # optional
-unzip M3MCP.app.zip
-
-# Point the MCP client at the bridge inside the bundle. The app accepts only the
-# M3MCPBridge next to its own executable, and the token comes from Server &gt; Copy MCP Client Token.
-claude mcp add applemcp -e M3MCP_TOKEN=&lt;token&gt; -- /absolute/path/M3MCP.app/Contents/MacOS/M3MCPBridge</code></pre>
-            <p style="margin-top: 16px;"><strong>Candidate status.</strong> The automated build is Apple Silicon only (<code>arm64</code>), ad-hoc signed, and unnotarized. It is not a production-grade macOS distribution.</p>
-            <p style="margin-top: 12px;"><strong>Verification has limits.</strong> The checksum detects a mismatch against the asset recorded in the same GitHub release; alone it does not establish independent publisher authenticity. GitHub provenance binds the ZIP to this repository's workflow, but does not replace Apple Developer ID signing and notarization.</p>
-            <p style="margin-top: 12px;"><strong>Respect Gatekeeper.</strong> If macOS blocks the app, verify its origin first and use System Settings, Privacy &amp; Security → <strong>Open Anyway</strong> only when you trust the candidate. Do not remove quarantine metadata merely to bypass the warning.</p>
-            <p style="margin-top: 12px;"><strong>Privacy grants may need renewal after an update.</strong> The source installer below uses a stable local certificate to preserve a consistent development identity. Public production distribution still needs a protected Developer ID, hardened runtime, trusted timestamp, notarization, and stapling pipeline.</p>
-        </section>
-
-        <section>
-            <h2>Setup</h2>
-<pre><code># Build (requires the macOS 26 SDK; deployment target remains macOS 15)
-swift build
-swift test
-
-# Run the app
-./script/build_and_run.sh
-
-# Add to Claude Desktop (~/Library/Application Support/Claude/claude_desktop_config.json)
-{
-  "mcpServers": {
-    "applemcp": {
-      "command": "/path/to/AppleMCP/.build/debug/M3MCPBridge",
-      "env": { "M3MCP_TOKEN": "&lt;token from the app: Server &gt; Copy MCP Client Token&gt;" }
-    }
-  }
-}
-
-# Or add to Claude Code
-claude mcp add applemcp -e M3MCP_TOKEN=&lt;token&gt; -- /path/to/AppleMCP/.build/debug/M3MCPBridge
-
-# Use the bridge next to the app you actually run: dist/M3MCP.app/Contents/MacOS/M3MCPBridge
-# after build_and_run.sh, ~/Applications/M3MCP.app/Contents/MacOS/M3MCPBridge after install_local.sh.
-# A copy from anywhere else has a different code directory hash and is refused with 403.
-
-# Check the endpoint
-curl --unix-socket ~/Library/Application\ Support/M3MCP/mcp.sock \
-  http://localhost/health</code></pre>
-        </section>
-
-        <div class="cta">
-            <a href="https://github.com/GodModeAI2025/AppleMCP">View on GitHub</a>
-        </div>
-
-        <footer>
-            <p>AppleMCP is open source under Apache 2.0 and local-first. Optional user Shortcuts can network or cause side effects.</p>
-            <p style="margin-top: 8px;"><a href="SECURITY.md" style="color: var(--muted);">Security policy</a> · <a href="docs/SECURITY_MODEL.md" style="color: var(--muted);">Detailed security model</a></p>
-            <p style="margin-top: 8px;"><a href="https://godmodeai2025.github.io/MarkZimmermann/" style="color: var(--muted); text-decoration: none;">Impressum</a></p>
-        </footer>
-    </div>
+  --signer-workflow GodModeAI2025/AppleMCP/.github/workflows/release.yml</code></pre><p>Wenn Gatekeeper die App blockiert, prüfe zuerst ihre Herkunft. Nutze eine Freigabe in den Systemeinstellungen nur, wenn du dem Paket vertraust. Entferne keine Quarantänemarkierungen, um die Prüfung zu umgehen. Nach einem Update können Datenschutzfreigaben erneut nötig sein.</p></div></details>
+      </div>
+    </section>
+  </main>
+  <footer class="wrap footer"><div><a class="brand" href="#">AppleMCP</a><p>Eine native Verbindung zu deinem Mac.</p></div><nav aria-label="Weitere Informationen"><a href="https://github.com/GodModeAI2025/AppleMCP/blob/main/SECURITY.md">Sicherheit</a><a href="https://github.com/GodModeAI2025/AppleMCP/blob/main/LICENSE">Apache 2.0</a><a href="https://github.com/GodModeAI2025/AppleMCP/blob/main/docs/SCREENSHOTS.md">Bildnachweise</a><a href="https://godmodeai2025.github.io/MarkZimmermann/">Impressum</a></nav></footer>
 </body>
 </html>
