@@ -85,7 +85,7 @@ jobs:
         run: |
           plutil -lint Sources/M3MCPApp/Resources/Info.plist
           test "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' Sources/M3MCPApp/Resources/Info.plist)" = "0.3.1"
-          test "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleVersion' Sources/M3MCPApp/Resources/Info.plist)" = "6"
+          test "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleVersion' Sources/M3MCPApp/Resources/Info.plist)" = "7"
 
       - name: Validate shell scripts
         run: |

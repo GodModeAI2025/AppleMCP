@@ -42,6 +42,7 @@ $BUNDLE/Contents/MacOS/M3MCPApp
 $BUNDLE/Contents/MacOS/M3MCPBridge
 $BUNDLE/Contents/PkgInfo
 $BUNDLE/Contents/Resources/
+$BUNDLE/Contents/Resources/AppIcon.icns
 $BUNDLE/Contents/Resources/LICENSE
 $BUNDLE/Contents/Resources/THIRD_PARTY.md
 $BUNDLE/Contents/_CodeSignature/
@@ -291,6 +292,11 @@ if [[ "$(< "$APP/Contents/PkgInfo")" == "APPL????" ]]; then
   pass "PkgInfo has the expected application signature"
 else
   fail "PkgInfo content differs from APPL????"
+fi
+if [[ "$(plist_value CFBundleIconFile)" == "AppIcon" ]] && cmp -s "$ROOT_DIR/Sources/M3MCPApp/Resources/AppIcon.icns" "$APP/Contents/Resources/AppIcon.icns"; then
+  pass "custom app icon matches source and bundle metadata"
+else
+  fail "custom app icon missing or mismatched"
 fi
 if cmp -s "$ROOT_DIR/LICENSE" "$APP/Contents/Resources/LICENSE"; then
   pass "Apache-2.0 license is retained byte-for-byte"

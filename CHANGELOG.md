@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Add a custom LocalMCP macOS icon, including all standard ICNS sizes and installation/release validation.
+
 ## 0.3.1 — 2026-09-11 (local build)
 
 - Renamed the visible app and product to LocalMCP, including native UI, bundle, documentation, landing page and release assets; existing security and configuration identifiers remain compatible.

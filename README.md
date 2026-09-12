@@ -1,5 +1,7 @@
 # LocalMCP
 
+<img src="assets/branding/localmcp-icon.png" width="128" height="128" alt="LocalMCP app icon">
+
 [![CI](https://github.com/GodModeAI2025/AppleMCP/actions/workflows/ci.yml/badge.svg)](https://github.com/GodModeAI2025/AppleMCP/actions/workflows/ci.yml)
 
 LocalMCP is a native macOS 15+ MCP server for bounded access to local Apple data and selected Apple Intelligence APIs. It consists of a SwiftUI app that holds macOS privacy permissions and a `stdio` bridge used by MCP clients.

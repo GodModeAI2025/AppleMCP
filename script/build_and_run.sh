@@ -50,6 +50,8 @@ chmod +x "$APP_BINARY"
 # copy every run of this script would be token-only, and the app window would say so.
 cp "$BUILD_BRIDGE" "$BRIDGE_BINARY"
 chmod +x "$BRIDGE_BINARY"
+mkdir -p "$APP_CONTENTS/Resources"
+cp "$ROOT_DIR/Sources/M3MCPApp/Resources/AppIcon.icns" "$APP_CONTENTS/Resources/AppIcon.icns"
 cp "$SOURCE_INFO_PLIST" "$INFO_PLIST"
 /usr/bin/xattr -cr "$APP_BUNDLE" >/dev/null 2>&1 || true
 

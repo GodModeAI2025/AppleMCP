@@ -19,7 +19,7 @@ let package = Package(
             name: "M3MCPApp",
             dependencies: ["M3MCPCore"],
             path: "Sources/M3MCPApp",
-            exclude: ["Resources/Info.plist"],
+            exclude: ["Resources"],
             linkerSettings: [
                 .unsafeFlags([
                     "-Xlinker", "-sectcreate",
