@@ -62,7 +62,7 @@ final class CalendarDryRunDispatchTests: XCTestCase {
         for (tool, input) in writeCalls() {
             let response = await service.handle(tool: tool, input: input)
             XCTAssertFalse(response.ok, tool)
-            XCTAssertEqual(response.source, "M3MCP Interactive Approval", tool)
+            XCTAssertEqual(response.source, "LocalMCP Interactive Approval", tool)
             XCTAssertTrue(
                 response.message?.contains(Self.approvalDenial) == true,
                 "\(tool) must not run without a decision: \(response.message ?? "")"
@@ -81,7 +81,7 @@ final class CalendarDryRunDispatchTests: XCTestCase {
 
             // It gets past approval and into the provider, where this machine's Calendar
             // authorization decides what happens next. What it must never be is the approval denial.
-            XCTAssertNotEqual(response.source, "M3MCP Interactive Approval", tool)
+            XCTAssertNotEqual(response.source, "LocalMCP Interactive Approval", tool)
             XCTAssertFalse(
                 response.message?.contains(Self.approvalDenial) == true,
                 "\(tool) preview was stopped by the approval gate: \(response.message ?? "")"
@@ -99,7 +99,7 @@ final class CalendarDryRunDispatchTests: XCTestCase {
         )
 
         XCTAssertFalse(response.ok)
-        XCTAssertEqual(response.source, "M3MCP Security Policy")
+        XCTAssertEqual(response.source, "LocalMCP Security Policy")
         XCTAssertTrue(
             response.message?.contains("M3MCP_ENABLE_CALENDAR_MUTATIONS") == true,
             response.message ?? ""
@@ -115,7 +115,7 @@ final class CalendarDryRunDispatchTests: XCTestCase {
         )
 
         XCTAssertFalse(response.ok)
-        XCTAssertEqual(response.source, "M3MCP Argument Validation")
+        XCTAssertEqual(response.source, "LocalMCP Argument Validation")
         XCTAssertTrue(response.message?.contains("must be a boolean") == true, response.message ?? "")
     }
 

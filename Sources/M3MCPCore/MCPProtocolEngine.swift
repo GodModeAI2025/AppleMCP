@@ -259,6 +259,7 @@ public struct M3MCPProtocolEngine: Sendable {
             ]),
             "serverInfo": .object([
                 "name": .string("m3mcp"),
+                "title": .string("LocalMCP"),
                 "version": .string(m3mcpVersion)
             ])
         ])

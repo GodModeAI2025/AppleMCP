@@ -42,7 +42,7 @@ private struct WelcomePanel: View {
     var body: some View {
         HStack(spacing: 24) {
             VStack(alignment: .leading, spacing: 12) {
-                Label("M3MCP FÜR MAC", systemImage: "desktopcomputer").font(.caption.weight(.semibold)).opacity(0.8)
+                Label("LocalMCP FÜR MAC", systemImage: "desktopcomputer").font(.caption.weight(.semibold)).opacity(0.8)
                 Text("Ein guter Start.\nIn wenigen Schritten.").font(.largeTitle.weight(.bold))
                 Text("Der Assistent hilft dir bei Freigaben, Token und Verbindung.")
                     .font(.body).opacity(0.85).fixedSize(horizontal: false, vertical: true)

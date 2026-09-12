@@ -507,7 +507,7 @@ def check_ci_pinning(workflow_texts: dict[Path, str]) -> None:
     ):
         if required not in draft_job and required not in attest_job:
             fail("release", f"release.yml omits protected candidate control {required}")
-    if "subject-path: ${{ runner.temp }}/release-payload/M3MCP.app.zip" not in attest_job:
+    if "subject-path: ${{ runner.temp }}/release-payload/LocalMCP.app.zip" not in attest_job:
         fail("release", "attestation does not target the checked ZIP")
 
 
@@ -526,7 +526,7 @@ def check_release_contracts(
         fail("release", "packaging still attempts to add and overwrite source version fields")
     for document_name, text in (("README.md", readme_text), ("index.html", page_text)):
         for alternatives in (
-            ("M3MCP.app.zip.sha256",),
+            ("LocalMCP.app.zip.sha256",),
             ("ad-hoc",),
             ("unnotarized", "nicht notarisiert"),
             ("publisher authenticity", "nicht allein die Identität des Herausgebers"),

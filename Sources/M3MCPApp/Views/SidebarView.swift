@@ -17,7 +17,7 @@ struct SidebarView: View {
                     .font(.title).foregroundStyle(.white).frame(width: 42, height: 42)
                     .background(.indigo.gradient, in: RoundedRectangle(cornerRadius: 12))
                 VStack(alignment: .leading, spacing: 3) {
-                    Text("M3MCP").font(.title3.weight(.bold))
+                    Text("LocalMCP").font(.title3.weight(.bold))
                     Text("Dein Mac. Verbunden.").font(.caption).foregroundStyle(.secondary)
                 }
                 Spacer(minLength: 0)

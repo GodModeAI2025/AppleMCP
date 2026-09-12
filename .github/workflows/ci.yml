@@ -85,7 +85,7 @@ jobs:
         run: |
           plutil -lint Sources/M3MCPApp/Resources/Info.plist
           test "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' Sources/M3MCPApp/Resources/Info.plist)" = "0.3.1"
-          test "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleVersion' Sources/M3MCPApp/Resources/Info.plist)" = "5"
+          test "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleVersion' Sources/M3MCPApp/Resources/Info.plist)" = "6"
 
       - name: Validate shell scripts
         run: |
@@ -125,8 +125,8 @@ jobs:
         with:
           name: m3mcp-release-${{ github.sha }}
           path: |
-            ${{ runner.temp }}/release-dist/M3MCP.app.zip
-            ${{ runner.temp }}/release-dist/M3MCP.app.zip.sha256
+            ${{ runner.temp }}/release-dist/LocalMCP.app.zip
+            ${{ runner.temp }}/release-dist/LocalMCP.app.zip.sha256
             ${{ runner.temp }}/release-dist/release-notes.md
           if-no-files-found: error
           retention-days: 7

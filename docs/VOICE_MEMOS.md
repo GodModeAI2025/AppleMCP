@@ -1,12 +1,12 @@
 # Voice Memos Access
 
-AppleMCP reads the local Voice Memos library directly. Voice Memos.app is never driven through
+LocalMCP reads the local Voice Memos library directly. Voice Memos.app is never driven through
 AppleEvents, which keeps behaviour predictable and avoids the enumeration hangs described in
 [BEST_PRACTICES.md](BEST_PRACTICES.md).
 
 ## Store Layout
 
-Voice Memos keeps a Core Data SQLite store next to the recordings. AppleMCP probes these locations
+Voice Memos keeps a Core Data SQLite store next to the recordings. LocalMCP probes these locations
 in order and uses the first one that contains `CloudRecordings.db`:
 
 1. `~/Library/Group Containers/group.com.apple.VoiceMemos.shared/Recordings` (macOS Sonoma and later)
@@ -27,7 +27,7 @@ The relevant table is `ZCLOUDRECORDING`:
 Column names are resolved through `PRAGMA table_info`, so a schema change in a future macOS release
 degrades instead of breaking.
 
-Values in `ZPATH` are not trusted as arbitrary paths. AppleMCP uses only the final filename component
+Values in `ZPATH` are not trusted as arbitrary paths. LocalMCP uses only the final filename component
 and resolves it directly under the selected recordings directory. Resolution opens the directory
 and recording with no-follow descriptor operations and records both inode identities. Every later
 transcript, base64, or transcription read reopens the same filename relative to a verified directory
@@ -138,7 +138,7 @@ first:
    `AVAssetReader` as a pull-driven, in-memory `AnalyzerInput` sequence. No decoded scratch file
    is created.
 4. **`SFSpeechRecognizer`** when the newer analyzer cannot service the call, including macOS 15 to
-   25. AppleMCP checks `supportsOnDeviceRecognition` before starting a task and sets
+   25. LocalMCP checks `supportsOnDeviceRecognition` before starting a task and sets
    `requiresOnDeviceRecognition = true`. If the locale cannot run on device, the call fails; there is
    no cloud-recognition fallback. Work is bounded by `timeout_seconds` (default 300; accepted range
    10...1800), and the task is cancelled when it expires. The bridge waits up to 1830 seconds for the
@@ -164,7 +164,7 @@ a final result or stage error, because a dispatch timeout callback can itself be
 
 Everything runs inside M3MCPApp, so macOS attributes the legacy fallback's Speech Recognition
 permission to the signed app bundle rather than to the MCP bridge process. The framework can use the
-network to download an on-device model asset; AppleMCP does not send the recording to a cloud
+network to download an on-device model asset; LocalMCP does not send the recording to a cloud
 recognizer.
 
 - The locale defaults to the system locale. Pass `language` (for example `de-DE`) to override it.
@@ -189,7 +189,7 @@ metadata, be no longer than 7,200 seconds, and estimate no more than 400,000,000
 pull-driven decoder normalizes to mono 16 kHz Float32 PCM and stops before exceeding 115,200,000
 decoded frames, 512 MiB of cumulative decoded PCM, or 500,000 sample buffers. Each frame/byte budget
 is charged before allocating the next PCM buffer, the sequence holds at most the buffer currently
-requested by the consumer, and cancellation is checked between buffers. Older AppleMCP versions
+requested by the consumer, and cancellation is checked between buffers. Older LocalMCP versions
 did create scratch CAF files; exact-name, same-owner leftovers older than 24 hours are still removed
 at native app startup without following symlinks or sweeping unrelated temporary files.
 
@@ -219,7 +219,7 @@ permission-UI group before using `permissions_request` or `permissions_open_sett
 ## Troubleshooting
 
 **"The Voice Memos store was not found"** — open Voice Memos once, then grant Full Disk Access to
-M3MCP and restart the app.
+LocalMCP and restart the app.
 
 **"This recording carries no stored transcript"** — open the memo in Voice Memos on macOS Sequoia or
 later to let macOS transcribe it, or call `voicememos_transcribe`.
@@ -237,7 +237,7 @@ The Swift parser was checked against the TypeScript implementation of
 recordings. Ordinary recordings produce identical text, locale, and segments. Four cases differ on
 purpose:
 
-| Case | Upstream | AppleMCP |
+| Case | Upstream | LocalMCP |
 |---|---|---|
 | Transcript in a track other than the first | No transcript found | All tracks are searched |
 | 64 bit atom sizes (`size == 1`) | Parsing stops | Atom is read via its 64 bit largesize |

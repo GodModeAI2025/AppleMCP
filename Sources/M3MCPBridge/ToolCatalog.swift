@@ -139,7 +139,7 @@ enum ToolCatalog {
         // MARK: - Core
         MCPTool(
             name: .sourceStatus,
-            description: "List local M3MCP providers, endpoints, and runtime states.",
+            description: "List local LocalMCP providers, endpoints, and runtime states.",
             schema: objectSchema(properties: [:])
         ),
         MCPTool(
@@ -149,12 +149,12 @@ enum ToolCatalog {
         ),
         MCPTool(
             name: .permissionsRequest,
-            description: "Ask macOS for required M3MCP permissions before using Calendar, Contacts, Reminders, Notes, Photos, and Voice Memos transcription tools; reports manual Full Disk Access need for Mail and Voice Memos.",
+            description: "Ask macOS for required LocalMCP permissions before using Calendar, Contacts, Reminders, Notes, Photos, and Voice Memos transcription tools; reports manual Full Disk Access need for Mail and Voice Memos.",
             schema: objectSchema(properties: [:])
         ),
         MCPTool(
             name: .permissionsOpenSettings,
-            description: "Open macOS System Settings for M3MCP permission remediation.",
+            description: "Open macOS System Settings for LocalMCP permission remediation.",
             schema: objectSchema(properties: [
                 "pane": [
                     "type": "string",
@@ -269,7 +269,7 @@ enum ToolCatalog {
         ),
         MCPTool(
             name: .calendarUndoWrite,
-            description: "Reverse one committed calendar_create_event, calendar_update_event, or calendar_delete_event, using the undo_token that write returned. A create is reversed by deleting the event, an update by writing the previous values of the changed fields back, a delete by rebuilding the event from the snapshot taken before it. Tokens are single-use, expire after 30 minutes, and are held in memory only, so they do not survive a restart of the AppleMCP app. Rebuilding a deleted event gives it a new id, and restores only the fields these tools can write.",
+            description: "Reverse one committed calendar_create_event, calendar_update_event, or calendar_delete_event, using the undo_token that write returned. A create is reversed by deleting the event, an update by writing the previous values of the changed fields back, a delete by rebuilding the event from the snapshot taken before it. Tokens are single-use, expire after 30 minutes, and are held in memory only, so they do not survive a restart of the LocalMCP app. Rebuilding a deleted event gives it a new id, and restores only the fields these tools can write.",
             schema: objectSchema(properties: [
                 "undo_token": ["type": "string", "description": "The token from meta.undo_token of the write to reverse."],
                 "dry_run": ["type": "boolean", "description": "When true, report what the undo would do and leave the token unspent. Default false."]

@@ -6,8 +6,8 @@
 # checksum, signature, metadata, and license gates pass.
 set -euo pipefail
 
-ZIP_NAME="M3MCP.app.zip"
-BUNDLE="M3MCP.app"
+ZIP_NAME="LocalMCP.app.zip"
+BUNDLE="LocalMCP.app"
 MAXIMUM_ZIP_BYTES=268435456
 MAXIMUM_UNPACKED_BYTES=536870912
 MAXIMUM_BRIDGE_OUTPUT_BYTES=20971520
@@ -151,7 +151,7 @@ else
   sed 's/^/        /' "$ENTRY_DIFF" >&2
 fi
 
-if ZIP_TYPES="$(zipinfo -l "$ZIP" 2>/dev/null | awk '$NF ~ /^M3MCP\.app\// { print substr($1, 1, 1) " " $NF }')"; then
+if ZIP_TYPES="$(zipinfo -l "$ZIP" 2>/dev/null | awk '$NF ~ /^LocalMCP\.app\// { print substr($1, 1, 1) " " $NF }')"; then
   while IFS=' ' read -r entry_type entry; do
     [[ -z "$entry" ]] && continue
     if [[ "$entry" == */ ]]; then

@@ -9,7 +9,7 @@ final class PeerIdentityPinTests: XCTestCase {
         SocketAuthorizer(
             token: "expected",
             trustedCodeDirectoryHashes: [bundledBridge],
-            trustDescription: "pinned to /Applications/M3MCP.app/Contents/MacOS/M3MCPBridge"
+            trustDescription: "pinned to /Applications/LocalMCP.app/Contents/MacOS/M3MCPBridge"
         )
     }
 
@@ -68,7 +68,7 @@ final class PeerIdentityPinTests: XCTestCase {
         // second says "that token is not yours to use from there".
         XCTAssertEqual(status, 403)
         XCTAssertTrue(reason.contains("M3MCPBridge that ships with this app"), reason)
-        XCTAssertTrue(reason.contains("/Applications/M3MCP.app"), reason)
+        XCTAssertTrue(reason.contains("/Applications/LocalMCP.app"), reason)
     }
 
     func testAPeerWithoutAVerifiableSignatureIsRefusedWhilePinningIsOn() {

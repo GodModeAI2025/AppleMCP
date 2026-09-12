@@ -105,7 +105,7 @@ final class SocketAuthenticationTests: XCTestCase {
         )
         let decoded = try M3JSON.makeDecoder().decode(ToolResponse.self, from: Data(reply.body.utf8))
         XCTAssertFalse(decoded.ok)
-        XCTAssertEqual(decoded.source, "M3MCP Server")
+        XCTAssertEqual(decoded.source, "LocalMCP Server")
         XCTAssertTrue(decoded.message?.contains("capability token") == true, decoded.message ?? "")
     }
 

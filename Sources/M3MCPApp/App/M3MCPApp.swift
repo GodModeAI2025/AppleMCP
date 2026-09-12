@@ -11,7 +11,7 @@ struct M3MCPApp: App {
     }
 
     var body: some Scene {
-        WindowGroup("M3MCP") {
+        WindowGroup("LocalMCP") {
             ContentView(model: model)
                 .frame(minWidth: 1000, minHeight: 700)
                 .task {

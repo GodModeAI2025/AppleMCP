@@ -6,7 +6,7 @@ final class ClientConfigurationTests: XCTestCase {
     private let safe = M3MCPSecurityPolicy(configuration: .defaultSafe)
 
     func testJSONRoundTripsPathsAndTokensWithoutEnablingOptionalTools() throws {
-        let path = "/Users/März/quoted \"name\"/M3MCP.app/Contents/MacOS/M3MCPBridge"
+        let path = "/Users/März/quoted \"name\"/LocalMCP.app/Contents/MacOS/M3MCPBridge"
         let token = "example-only-credential"
         let text = try ClientConfiguration.render(format: .json, bridgePath: path, token: token, policy: safe)
         let object = try XCTUnwrap(JSONSerialization.jsonObject(with: Data(text.utf8)) as? [String: Any])
@@ -26,7 +26,7 @@ final class ClientConfigurationTests: XCTestCase {
 
     func testPreviewUsesOnlyCallerSuppliedPlaceholder() throws {
         for format in ClientConfiguration.Format.allCases {
-            let text = try ClientConfiguration.render(format: format, bridgePath: "/Applications/M3MCP.app/Contents/MacOS/M3MCPBridge", token: "<MCP_TOKEN>", policy: safe)
+            let text = try ClientConfiguration.render(format: format, bridgePath: "/Applications/LocalMCP.app/Contents/MacOS/M3MCPBridge", token: "<MCP_TOKEN>", policy: safe)
             XCTAssertTrue(text.contains("<MCP_TOKEN>"))
         }
     }

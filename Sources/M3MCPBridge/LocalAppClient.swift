@@ -94,7 +94,7 @@ final class LocalAppClient: @unchecked Sendable {
             source: "M3MCPBridge",
             message: "No capability token, so M3MCPApp will refuse this call: "
                 + (reason ?? "none is configured.")
-                + " Open the M3MCP app, choose Server › Copy MCP Client Token, and add it to this "
+                + " Open the LocalMCP app, choose MCP-Token & Verbindung › MCP-Token kopieren, and add it to this "
                 + "client's configuration as \"env\": {\"\(CapabilityToken.environmentKey)\": "
                 + "\"<token>\"}. That path needs no keychain access at all."
         )

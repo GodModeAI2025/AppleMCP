@@ -98,7 +98,7 @@ final class AppModel: ObservableObject {
             AppLogger.log(message)
             record(
                 tool: "server_start",
-                response: ToolResponse(ok: false, source: "M3MCP Server", message: message),
+                response: ToolResponse(ok: false, source: "LocalMCP Server", message: message),
                 durationMilliseconds: 0
             )
             return
@@ -152,7 +152,7 @@ final class AppModel: ObservableObject {
                         tool: "access_refused",
                         response: ToolResponse(
                             ok: false,
-                            source: "M3MCP Server",
+                            source: "LocalMCP Server",
                             message: attempt.reason ?? "Refused",
                             meta: [
                                 "path": attempt.path,
@@ -177,7 +177,7 @@ final class AppModel: ObservableObject {
             services = service.services + [authenticationService(authorizer)]
             record(
                 tool: "server_start",
-                response: ToolResponse(ok: true, source: "M3MCP Server", message: "Listening on \(M3MCPEndpoint.displayPath)"),
+                response: ToolResponse(ok: true, source: "LocalMCP Server", message: "Listening on \(M3MCPEndpoint.displayPath)"),
                 durationMilliseconds: 0
             )
         } catch {
@@ -185,7 +185,7 @@ final class AppModel: ObservableObject {
             AppLogger.log("Local server failed: \(error.localizedDescription)")
             record(
                 tool: "server_start",
-                response: ToolResponse(ok: false, source: "M3MCP Server", message: error.localizedDescription),
+                response: ToolResponse(ok: false, source: "LocalMCP Server", message: error.localizedDescription),
                 durationMilliseconds: 0
             )
         }
@@ -297,7 +297,7 @@ final class AppModel: ObservableObject {
         services = service.services
         record(
             tool: "server_stop",
-            response: ToolResponse(ok: true, source: "M3MCP Server", message: "Stopped"),
+            response: ToolResponse(ok: true, source: "LocalMCP Server", message: "Stopped"),
             durationMilliseconds: 0
         )
     }
@@ -349,7 +349,7 @@ final class AppModel: ObservableObject {
         NSWorkspace.shared.openApplication(at: Bundle.main.bundleURL, configuration: configuration) { _, error in
             Task { @MainActor in
                 if error != nil {
-                    self.permissionMessage = "Die App konnte nicht neu geöffnet werden. Bitte M3MCP mit ⌘Q beenden und erneut öffnen."
+                    self.permissionMessage = "Die App konnte nicht neu geöffnet werden. Bitte LocalMCP mit ⌘Q beenden und erneut öffnen."
                     self.startIfNeeded()
                 } else {
                     NSApplication.shared.terminate(nil)

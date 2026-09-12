@@ -25,14 +25,14 @@ setup_case() {
 
   mkdir -p \
     "$CASE_HOME/Library/LaunchAgents" \
-    "$CASE_INSTALL_DIR/M3MCP.app/Contents/MacOS" \
+    "$CASE_INSTALL_DIR/LocalMCP.app/Contents/MacOS" \
     "$CASE_BUILD_DIR" \
     "$CASE_MOCK_BIN"
 
-  printf 'old-app\n' > "$CASE_INSTALL_DIR/M3MCP.app/Contents/MacOS/M3MCPApp"
-  chmod +x "$CASE_INSTALL_DIR/M3MCP.app/Contents/MacOS/M3MCPApp"
-  printf 'old-bridge\n' > "$CASE_INSTALL_DIR/M3MCP.app/Contents/MacOS/M3MCPBridge"
-  chmod +x "$CASE_INSTALL_DIR/M3MCP.app/Contents/MacOS/M3MCPBridge"
+  printf 'old-app\n' > "$CASE_INSTALL_DIR/LocalMCP.app/Contents/MacOS/M3MCPApp"
+  chmod +x "$CASE_INSTALL_DIR/LocalMCP.app/Contents/MacOS/M3MCPApp"
+  printf 'old-bridge\n' > "$CASE_INSTALL_DIR/LocalMCP.app/Contents/MacOS/M3MCPBridge"
+  chmod +x "$CASE_INSTALL_DIR/LocalMCP.app/Contents/MacOS/M3MCPBridge"
   printf 'old-agent\n' > "$CASE_HOME/Library/LaunchAgents/de.markzimmermann.m3mcp.plist"
   printf '#!/bin/sh\nexit 0\n# new-app\n' > "$CASE_BUILD_DIR/M3MCPApp"
   chmod +x "$CASE_BUILD_DIR/M3MCPApp"
@@ -127,12 +127,12 @@ run_installer() {
 
 test_live_path_verification_failure_stops_replacement_before_rollback() {
   setup_case live_path_failure
-  run_installer healthy_after_two "$CASE_INSTALL_DIR/M3MCP.app"
+  run_installer healthy_after_two "$CASE_INSTALL_DIR/LocalMCP.app"
 
   [[ "$CASE_STATUS" -ne 0 ]] || fail "live replacement verification failure committed"
-  [[ "$(<"$CASE_INSTALL_DIR/M3MCP.app/Contents/MacOS/M3MCPApp")" == "old-app" ]] \
+  [[ "$(<"$CASE_INSTALL_DIR/LocalMCP.app/Contents/MacOS/M3MCPApp")" == "old-app" ]] \
     || fail "previous app was not restored after live-path failure"
-  [[ "$(<"$CASE_INSTALL_DIR/M3MCP.app/Contents/MacOS/M3MCPBridge")" == "old-bridge" ]] \
+  [[ "$(<"$CASE_INSTALL_DIR/LocalMCP.app/Contents/MacOS/M3MCPBridge")" == "old-bridge" ]] \
     || fail "previous bridge was not restored after live-path failure"
   [[ "$(<"$CASE_HOME/Library/LaunchAgents/de.markzimmermann.m3mcp.plist")" == "old-agent" ]] \
     || fail "previous agent changed during live-path failure"
@@ -150,7 +150,7 @@ test_live_path_verification_failure_stops_replacement_before_rollback() {
 assert_no_transaction_leftovers() {
   local install_leftovers
   local agent_leftovers
-  install_leftovers="$(find "$CASE_INSTALL_DIR" -maxdepth 1 -name '.M3MCP.*' -print)"
+  install_leftovers="$(find "$CASE_INSTALL_DIR" -maxdepth 1 -name '.LocalMCP.*' -print)"
   agent_leftovers="$(find "$CASE_HOME/Library/LaunchAgents" -maxdepth 1 -name '.de.markzimmermann.m3mcp.*' -print)"
   [[ -z "$install_leftovers" ]] || fail "application transaction leftovers remain: $install_leftovers"
   [[ -z "$agent_leftovers" ]] || fail "LaunchAgent transaction leftovers remain: $agent_leftovers"
@@ -161,9 +161,9 @@ test_unhealthy_response_rolls_back() {
   run_installer unhealthy
 
   [[ "$CASE_STATUS" -ne 0 ]] || fail "an unhealthy /health response committed the installation"
-  [[ "$(<"$CASE_INSTALL_DIR/M3MCP.app/Contents/MacOS/M3MCPApp")" == "old-app" ]] \
+  [[ "$(<"$CASE_INSTALL_DIR/LocalMCP.app/Contents/MacOS/M3MCPApp")" == "old-app" ]] \
     || fail "previous application was not restored"
-  [[ "$(<"$CASE_INSTALL_DIR/M3MCP.app/Contents/MacOS/M3MCPBridge")" == "old-bridge" ]] \
+  [[ "$(<"$CASE_INSTALL_DIR/LocalMCP.app/Contents/MacOS/M3MCPBridge")" == "old-bridge" ]] \
     || fail "previous bridge was not restored"
   [[ "$(<"$CASE_HOME/Library/LaunchAgents/de.markzimmermann.m3mcp.plist")" == "old-agent" ]] \
     || fail "previous LaunchAgent was not restored"
@@ -186,9 +186,9 @@ test_health_success_commits_after_retry() {
   run_installer healthy_after_two
 
   [[ "$CASE_STATUS" -eq 0 ]] || fail "healthy replacement did not commit"
-  grep -Fq '# new-app' "$CASE_INSTALL_DIR/M3MCP.app/Contents/MacOS/M3MCPApp" \
+  grep -Fq '# new-app' "$CASE_INSTALL_DIR/LocalMCP.app/Contents/MacOS/M3MCPApp" \
     || fail "replacement application was not retained"
-  grep -Fq '# new-bridge' "$CASE_INSTALL_DIR/M3MCP.app/Contents/MacOS/M3MCPBridge" \
+  grep -Fq '# new-bridge' "$CASE_INSTALL_DIR/LocalMCP.app/Contents/MacOS/M3MCPBridge" \
     || fail "replacement bridge was not installed next to the app, so the client pin would be off"
   grep -Fq 'codesign --force --sign' "$CASE_COMMAND_LOG" \
     || fail "nothing was signed"
