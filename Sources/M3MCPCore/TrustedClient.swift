@@ -5,7 +5,7 @@ import Foundation
 /// There is no pairing dialog, so the answer has to come from something the installation already
 /// knows for certain: the `M3MCPBridge` that sits next to the app's own executable. That holds in
 /// both places the app ever runs from — `.build/<config>/` for a source build and
-/// `M3MCP.app/Contents/MacOS/` for the installed and the packaged bundle — and it is exactly the
+/// `LocalMCP.app/Contents/MacOS/` for the installed and the packaged bundle — and it is exactly the
 /// binary the README tells an MCP client to launch.
 ///
 /// Reading it at every start is what keeps a hash pin from going stale: `script/install_local.sh`

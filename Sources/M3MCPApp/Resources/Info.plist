@@ -5,11 +5,13 @@
   <key>CFBundleIdentifier</key>
   <string>de.markzimmermann.m3mcp</string>
   <key>CFBundleName</key>
-  <string>M3MCP</string>
+  <string>LocalMCP</string>
+  <key>CFBundleDisplayName</key>
+  <string>LocalMCP</string>
   <key>CFBundleShortVersionString</key>
   <string>0.3.1</string>
   <key>CFBundleVersion</key>
-  <string>5</string>
+  <string>6</string>
   <key>CFBundleExecutable</key>
   <string>M3MCPApp</string>
   <key>CFBundlePackageType</key>
@@ -19,22 +21,22 @@
   <key>NSPrincipalClass</key>
   <string>NSApplication</string>
   <key>NSAppleEventsUsageDescription</key>
-  <string>M3MCP verwendet Apple Events, um mit deiner Freigabe Notizen aus Notes.app lokal zu suchen und zu lesen.</string>
+  <string>LocalMCP verwendet Apple Events, um mit deiner Freigabe Notizen aus Notes.app lokal zu suchen und zu lesen.</string>
   <key>NSAppDataUsageDescription</key>
-  <string>M3MCP liest mit deiner Freigabe den lokalen Mail-Index und lokale Voice-Memos-Dateien für MCP-Abfragen; die Originaldaten werden nicht verändert.</string>
+  <string>LocalMCP liest mit deiner Freigabe den lokalen Mail-Index und lokale Voice-Memos-Dateien für MCP-Abfragen; die Originaldaten werden nicht verändert.</string>
   <key>NSCalendarsUsageDescription</key>
-  <string>M3MCP liest lokale Kalenderdaten. Separat aktivierte Kalenderwerkzeuge können nach deiner Einzelfreigabe Termine und Kalender erstellen, ändern oder löschen.</string>
+  <string>LocalMCP liest lokale Kalenderdaten. Separat aktivierte Kalenderwerkzeuge können nach deiner Einzelfreigabe Termine und Kalender erstellen, ändern oder löschen.</string>
   <key>NSCalendarsFullAccessUsageDescription</key>
-  <string>M3MCP liest lokale Kalenderdaten. Separat aktivierte Kalenderwerkzeuge können nach deiner Einzelfreigabe Termine und Kalender erstellen, ändern oder löschen.</string>
+  <string>LocalMCP liest lokale Kalenderdaten. Separat aktivierte Kalenderwerkzeuge können nach deiner Einzelfreigabe Termine und Kalender erstellen, ändern oder löschen.</string>
   <key>NSContactsUsageDescription</key>
-  <string>M3MCP liest mit deiner Freigabe lokale Kontakte für MCP-Abfragen.</string>
+  <string>LocalMCP liest mit deiner Freigabe lokale Kontakte für MCP-Abfragen.</string>
   <key>NSRemindersUsageDescription</key>
-  <string>M3MCP liest mit deiner Freigabe lokale Erinnerungen für MCP-Abfragen.</string>
+  <string>LocalMCP liest mit deiner Freigabe lokale Erinnerungen für MCP-Abfragen.</string>
   <key>NSRemindersFullAccessUsageDescription</key>
-  <string>M3MCP liest mit deiner Freigabe lokale Erinnerungen für MCP-Abfragen.</string>
+  <string>LocalMCP liest mit deiner Freigabe lokale Erinnerungen für MCP-Abfragen.</string>
   <key>NSSpeechRecognitionUsageDescription</key>
-  <string>M3MCP transkribiert ausgewählte lokale Sprachmemos ausschließlich mit einem verfügbaren On-Device-Sprachmodell; ohne lokales Modell schlägt der Vorgang fehl.</string>
+  <string>LocalMCP transkribiert ausgewählte lokale Sprachmemos ausschließlich mit einem verfügbaren On-Device-Sprachmodell; ohne lokales Modell schlägt der Vorgang fehl.</string>
   <key>NSPhotoLibraryUsageDescription</key>
-  <string>M3MCP liest mit deiner Freigabe Metadaten vorhandener Fotos. PhotoKit bezeichnet diesen Zugriff als Lesen und Schreiben; die bereitgestellten Foto-Werkzeuge verändern die Mediathek nicht.</string>
+  <string>LocalMCP liest mit deiner Freigabe Metadaten vorhandener Fotos. PhotoKit bezeichnet diesen Zugriff als Lesen und Schreiben; die bereitgestellten Foto-Werkzeuge verändern die Mediathek nicht.</string>
 </dict>
 </plist>

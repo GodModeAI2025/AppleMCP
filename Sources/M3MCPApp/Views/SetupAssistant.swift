@@ -37,7 +37,7 @@ struct SetupAssistant: View {
         VStack(spacing: 0) {
             HStack {
                 VStack(alignment: .leading, spacing: 4) {
-                    Text("M3MCP einrichten").font(.title2.weight(.bold))
+                    Text("LocalMCP einrichten").font(.title2.weight(.bold))
                     Text("Schritt \(step.rawValue + 1) von 4").font(.callout).foregroundStyle(.secondary)
                 }
                 Spacer()
@@ -61,7 +61,7 @@ struct SetupAssistant: View {
                     case .permissions: PermissionsView(model: model, compact: true)
                     case .connection: ConnectionView(model: model, compact: true)
                     case .finish:
-                        PageHeading(title: "Bereit für die erste Anfrage?", subtitle: "Prüfe die lokale Verbindung und lade danach M3MCP in deinem Client neu.")
+                        PageHeading(title: "Bereit für die erste Anfrage?", subtitle: "Prüfe die lokale Verbindung und lade danach LocalMCP in deinem Client neu.")
                         ConnectionCheckPanel(model: model)
                         Panel {
                             Text("Probiere es in deinem Client").font(.headline)
@@ -108,14 +108,14 @@ private struct UsageRiskDialog: View {
                     .accessibilityHidden(true)
                 VStack(alignment: .leading, spacing: 6) {
                     Text("Nutzung auf eigene Gefahr").font(.title2.bold())
-                    Text("Bitte lies diesen Hinweis, bevor du M3MCP einrichtest.")
+                    Text("Bitte lies diesen Hinweis, bevor du LocalMCP einrichtest.")
                         .foregroundStyle(.secondary)
                 }
             }.padding(28)
             Divider()
             ScrollView {
                 VStack(alignment: .leading, spacing: 18) {
-                    Text("M3MCP ermöglicht verbundenen KI- und MCP-Clients den Zugriff auf deine Daten. Je nach erteilten Freigaben, aktivierten Werkzeugen und ausgeführten Kurzbefehlen können Daten gelesen, weitergegeben, erstellt, verändert, überschrieben oder gelöscht werden.")
+                    Text("LocalMCP ermöglicht verbundenen KI- und MCP-Clients den Zugriff auf deine Daten. Je nach erteilten Freigaben, aktivierten Werkzeugen und ausgeführten Kurzbefehlen können Daten gelesen, weitergegeben, erstellt, verändert, überschrieben oder gelöscht werden.")
                     Text("Fehlerhafte Anweisungen, Softwarefehler oder missbräuchliche Zugriffe können zum Verlust sämtlicher Daten führen, auf die die aktivierten Funktionen zugreifen können. Änderungen und Löschungen können über iCloud auch andere Geräte betreffen. Eine Wiederherstellung ist nicht garantiert.")
                         .fontWeight(.semibold)
                     Text("Erstelle vor der Nutzung ein aktuelles Backup. Erteile nur notwendige Freigaben, verbinde nur vertrauenswürdige Clients und prüfe jede angeforderte Änderung sorgfältig. Inhalte können durch den verbundenen Client an externe Dienste übertragen werden.")
@@ -125,7 +125,7 @@ private struct UsageRiskDialog: View {
             }
             Divider()
             VStack(alignment: .leading, spacing: 20) {
-                Toggle("Ich habe die Risiken einschließlich möglicher Datenänderungen und Datenverluste verstanden und möchte M3MCP auf eigene Gefahr nutzen.", isOn: $understood)
+                Toggle("Ich habe die Risiken einschließlich möglicher Datenänderungen und Datenverluste verstanden und möchte LocalMCP auf eigene Gefahr nutzen.", isOn: $understood)
                     .toggleStyle(.checkbox)
                     .fixedSize(horizontal: false, vertical: true)
                 HStack {
@@ -146,7 +146,7 @@ private struct SetupWelcome: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 24) {
             FeatureIcon(symbol: "wand.and.stars")
-            PageHeading(title: "Dein Mac kann mehr.", subtitle: "M3MCP verbindet Apple-Daten mit deinem MCP-Client. Dieser Assistent führt dich durch die Einrichtung.")
+            PageHeading(title: "Dein Mac kann mehr.", subtitle: "LocalMCP verbindet Apple-Daten mit deinem MCP-Client. Dieser Assistent führt dich durch die Einrichtung.")
             Panel {
                 SetupBenefit(icon: "hand.raised", title: "1. Daten auswählen", detail: "Du entscheidest, welche macOS-Freigaben du erteilst.")
                 Divider()
@@ -154,7 +154,7 @@ private struct SetupWelcome: View {
                 Divider()
                 SetupBenefit(icon: "checkmark.shield", title: "3. Verbindung testen", detail: "Die App prüft, ob Bridge und Anmeldung funktionieren.")
             }
-            Text("Kein zusätzlicher Apple-Login. M3MCP nutzt die auf diesem Mac verfügbaren Daten. Auf einem weiteren Mac richtest du Freigaben und Verbindung erneut ein.")
+            Text("Kein zusätzlicher Apple-Login. LocalMCP nutzt die auf diesem Mac verfügbaren Daten. Auf einem weiteren Mac richtest du Freigaben und Verbindung erneut ein.")
                 .font(.callout).foregroundStyle(.secondary)
         }
     }

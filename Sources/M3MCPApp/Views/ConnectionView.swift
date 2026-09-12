@@ -111,7 +111,7 @@ private struct ConfigurationInstructions: View {
         VStack(alignment: .leading, spacing: 10) {
             if format == .codex {
                 Text("1. Konfiguration mit dem Knopf unten kopieren.")
-                Text("2. In ~/.codex/config.toml den M3MCP-Abschnitt ergänzen oder den vorhandenen M3MCP-Eintrag ersetzen. Andere Server beibehalten.")
+                Text("2. In ~/.codex/config.toml den LocalMCP-Abschnitt ergänzen oder den vorhandenen LocalMCP-Eintrag ersetzen. Andere Server beibehalten.")
                 Text("3. Die MCP-Verbindung im Client neu laden; falls nötig, den Client neu starten.")
                 Link("Offizielle Codex-Anleitung", destination: URL(string: "https://developers.openai.com/codex/mcp")!)
                     .font(.caption)

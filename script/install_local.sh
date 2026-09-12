@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Installs M3MCP as a login-time background service.
+# Installs LocalMCP as a login-time background service.
 #
 # Differences from build_and_run.sh, which is meant for one-off runs:
 #
@@ -19,7 +19,7 @@ set -euo pipefail
 
 APP_NAME="M3MCPApp"
 BRIDGE_NAME="M3MCPBridge"
-BUNDLE_NAME="M3MCP"
+BUNDLE_NAME="LocalMCP"
 BUNDLE_ID="de.markzimmermann.m3mcp"
 CONFIGURATION="${M3MCP_CONFIGURATION:-release}"
 INSTALL_DIR="${M3MCP_INSTALL_DIR:-$HOME/Applications}"

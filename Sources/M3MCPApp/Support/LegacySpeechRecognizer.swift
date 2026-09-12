@@ -118,7 +118,7 @@ enum LegacySpeechRecognizer {
         guard permission == "authorized" else {
             throw Failure(
                 state: permission,
-                message: "Speech Recognition is not authorized for M3MCP. Run permissions_request, or grant access in System Settings > Privacy & Security > Speech Recognition."
+                message: "Speech Recognition is not authorized for LocalMCP. Run permissions_request, or grant access in System Settings > Privacy & Security > Speech Recognition."
             )
         }
 

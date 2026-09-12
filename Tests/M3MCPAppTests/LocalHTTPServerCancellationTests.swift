@@ -288,7 +288,7 @@ final class LocalHTTPServerCancellationTests: XCTestCase {
         let response = await task.value
 
         XCTAssertFalse(response.ok)
-        XCTAssertEqual(response.source, "M3MCP Cancellation")
+        XCTAssertEqual(response.source, "LocalMCP Cancellation")
         XCTAssertTrue(response.message?.contains("client disconnected") == true)
     }
 
@@ -319,7 +319,7 @@ final class LocalHTTPServerCancellationTests: XCTestCase {
 
         let response = await task.value
         XCTAssertFalse(response.ok)
-        XCTAssertEqual(response.source, "M3MCP Cancellation")
+        XCTAssertEqual(response.source, "LocalMCP Cancellation")
     }
 
     func testOversizedProviderResponseBecomesBoundedParseable413() async throws {

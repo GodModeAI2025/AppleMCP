@@ -30,7 +30,7 @@ struct SourcePage: View {
                         Text("Abhängig von macOS & Hardware").font(.caption).foregroundStyle(.secondary)
                     }
                 }
-                Text("Stelle deine Frage im verbundenen MCP-Client. M3MCP führt die unterstützte Abfrage auf diesem Mac aus.")
+                Text("Stelle deine Frage im verbundenen MCP-Client. LocalMCP führt die unterstützte Abfrage auf diesem Mac aus.")
                     .foregroundStyle(.secondary)
                 HStack {
                     Button("Verbindung einrichten") { model.destination = .connection }

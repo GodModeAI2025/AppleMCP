@@ -880,7 +880,7 @@ final class CalendarProvider {
             return .denied(failure("Calendar access is write-only. Reading events needs full access: System Settings › Privacy & Security › Calendars."))
 
         case .denied:
-            return .denied(failure("Calendar access is denied. Grant it in System Settings › Privacy & Security › Calendars, then restart M3MCP."))
+            return .denied(failure("Calendar access is denied. Grant it in System Settings › Privacy & Security › Calendars, then restart LocalMCP."))
 
         case .restricted:
             return .denied(failure("Calendar access is restricted by a device policy."))

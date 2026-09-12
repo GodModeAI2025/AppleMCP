@@ -14,7 +14,7 @@ struct PermissionsView: View {
                     FeatureIcon(symbol: "externaldrive.badge.person.crop")
                     VStack(alignment: .leading, spacing: 10) {
                         Text("Mail & Sprachmemos").font(.title3.weight(.semibold))
-                        Text("Für diese Quellen benötigt M3MCP Festplattenvollzugriff. Öffne die Systemeinstellungen, füge diese App über + hinzu und aktiviere den Schalter. Danach M3MCP mit ⌘Q beenden und erneut öffnen.")
+                        Text("Für diese Quellen benötigt LocalMCP Festplattenvollzugriff. Öffne die Systemeinstellungen, füge diese App über + hinzu und aktiviere den Schalter. Danach LocalMCP mit ⌘Q beenden und erneut öffnen.")
                             .foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
                         HStack {
                             Button("Festplattenvollzugriff öffnen") { model.openPermissionSettings(pane: "full_disk_access") }
@@ -55,7 +55,7 @@ struct PermissionsView: View {
             if let message = model.permissionMessage, !message.isEmpty {
                 Text(message).font(.caption).foregroundStyle(.secondary)
             }
-            Text("Die App verwendet die auf diesem Mac eingerichteten Apple-Accounts. Eine zusätzliche iCloud-Anmeldung in M3MCP ist nicht nötig. Die Freigaben gelten für diesen Mac.")
+            Text("Die App verwendet die auf diesem Mac eingerichteten Apple-Accounts. Eine zusätzliche iCloud-Anmeldung in LocalMCP ist nicht nötig. Die Freigaben gelten für diesen Mac.")
                 .font(.callout).foregroundStyle(.secondary)
         }
     }

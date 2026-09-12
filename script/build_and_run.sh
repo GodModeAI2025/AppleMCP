@@ -4,7 +4,7 @@ set -euo pipefail
 MODE="${1:-run}"
 APP_NAME="M3MCPApp"
 BRIDGE_NAME="M3MCPBridge"
-BUNDLE_NAME="M3MCP"
+BUNDLE_NAME="LocalMCP"
 BUNDLE_ID="de.markzimmermann.m3mcp"
 MIN_SYSTEM_VERSION="15.0"
 SIGN_IDENTITY=""

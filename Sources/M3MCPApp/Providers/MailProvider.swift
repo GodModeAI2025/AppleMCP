@@ -1732,7 +1732,7 @@ final class MailProvider {
                 options: [.skipsHiddenFiles]
             )
         } catch {
-            throw MailStoreFailure("Cannot inspect the local Mail store at \(mailRoot.path). Grant Full Disk Access to M3MCP, then restart the app. Detail: \(error.localizedDescription)")
+            throw MailStoreFailure("Cannot inspect the local Mail store at \(mailRoot.path). Grant Full Disk Access to LocalMCP, then restart the app. Detail: \(error.localizedDescription)")
         }
         try checkCancellation(.requestBoundary)
 
@@ -2203,7 +2203,7 @@ final class MailProvider {
             if let database {
                 sqlite3_close(database)
             }
-            throw MailStoreFailure("Cannot read the local Mail index. Grant Full Disk Access to M3MCP, then restart the app. Detail: \(message)")
+            throw MailStoreFailure("Cannot read the local Mail index. Grant Full Disk Access to LocalMCP, then restart the app. Detail: \(message)")
         }
 
         defer { sqlite3_close(database) }
