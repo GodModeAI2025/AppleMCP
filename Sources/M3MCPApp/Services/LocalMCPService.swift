@@ -44,7 +44,7 @@ final class LocalMCPService {
                 // reason is the useful part, and source_status is where a caller looks for it.
                 state: SpeechTranscription.statusDescription
             ),
-            ServiceHealth(name: "Apple Intelligence", endpoint: "macos://intelligence", mode: "ImageCreator + explicitly enabled user Shortcuts", state: "on-demand"),
+            ServiceHealth(name: "Apple Intelligence", endpoint: "macos://intelligence", mode: "ImageCreator + explicitly enabled user Shortcuts", state: AppleIntelligenceProvider.imageCreationStatusDescription),
             ServiceHealth(
                 name: "Foundation Models",
                 endpoint: "macos://foundationmodels",

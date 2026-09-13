@@ -59,7 +59,7 @@ final class PermissionProvider {
                 ok: false,
                 source: "Permissions",
                 items: run.items,
-                message: "Permission request was cancelled. No further permission prompt or settings action was started."
+                message: String(localized: "Permission request was cancelled. No further permission prompt or settings action was started.")
             )
         }
 
@@ -71,7 +71,7 @@ final class PermissionProvider {
             ok: ok,
             source: "Permissions",
             items: items,
-            message: ok ? "Required permissions are available." : "Some required permissions are still missing."
+            message: ok ? String(localized: "Required permissions are available.") : String(localized: "Some required permissions are still missing.")
         )
     }
 
@@ -96,7 +96,7 @@ final class PermissionProvider {
             return ToolResponse(
                 ok: false,
                 source: "Permissions",
-                message: "Opening System Settings was cancelled."
+                message: String(localized: "Opening System Settings was cancelled.")
             )
         }
         let pane = input.string("pane", default: "privacy")
@@ -124,7 +124,7 @@ final class PermissionProvider {
         }
 
         guard let url = URL(string: urlString) else {
-            return ToolResponse(ok: false, source: "Permissions", message: "Invalid System Settings URL.")
+            return ToolResponse(ok: false, source: "Permissions", message: String(localized: "Invalid System Settings URL."))
         }
 
         // Re-check after the actor hop and immediately next to the UI side effect. Cancellation
@@ -133,14 +133,14 @@ final class PermissionProvider {
             return ToolResponse(
                 ok: false,
                 source: "Permissions",
-                message: "Opening System Settings was cancelled."
+                message: String(localized: "Opening System Settings was cancelled.")
             )
         }
         let opened = settingsOpener(url)
         return ToolResponse(
             ok: opened,
             source: "Permissions",
-            message: opened ? "Opened System Settings." : "Could not open System Settings."
+            message: opened ? String(localized: "Opened System Settings.") : String(localized: "Could not open System Settings.")
         )
     }
 
@@ -389,7 +389,7 @@ final class PermissionProvider {
                 endpoint: "photos://library",
                 state: "cancelled",
                 required: true,
-                preview: "Photos permission request was cancelled."
+                preview: String(localized: "Photos permission request was cancelled.")
             )
         } catch {
             return permissionItem(
@@ -486,7 +486,7 @@ final class PermissionProvider {
             endpoint: endpoint,
             state: "cancelled",
             required: required,
-            preview: "Permission request was cancelled before opening system UI."
+            preview: String(localized: "Permission request was cancelled before opening system UI.")
         )
     }
 

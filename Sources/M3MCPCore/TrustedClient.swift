@@ -34,6 +34,24 @@ public enum TrustedClient {
         }
     }
 
+    public static var usesSandboxedHelper: Bool {
+        #if LOCALMCP_SANDBOX
+        true
+        #else
+        false
+        #endif
+    }
+
+    /// One shared resolver for configuration, local checks and signature pinning.
+    public static func bridgeURL(appExecutableURL: URL, sandboxed: Bool = usesSandboxedHelper) -> URL {
+        let executables = appExecutableURL.deletingLastPathComponent()
+        if sandboxed {
+            return executables.deletingLastPathComponent()
+                .appendingPathComponent("Helpers/LocalMCPBridge.app/Contents/MacOS/M3MCPBridge")
+        }
+        return executables.appendingPathComponent(bridgeExecutableName)
+    }
+
     public static func resolve(appExecutableURL: URL?) -> Resolution {
         if let raw = ProcessInfo.processInfo.environment[environmentKey] {
             let hashes = Set(
@@ -53,9 +71,7 @@ public enum TrustedClient {
             )
         }
 
-        let bridge = appExecutableURL
-            .deletingLastPathComponent()
-            .appendingPathComponent(bridgeExecutableName, isDirectory: false)
+        let bridge = bridgeURL(appExecutableURL: appExecutableURL)
 
         guard FileManager.default.isExecutableFile(atPath: bridge.path) else {
             return Resolution(

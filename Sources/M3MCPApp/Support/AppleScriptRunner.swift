@@ -54,6 +54,15 @@ enum AppleScriptRunner {
         )
     }
 
+    /// Runs a typed Apple Event operation under the same cancellation and admission gate.
+    /// The gate remains held until the native operation actually returns after a timeout.
+    static func runNativeOperation(
+        timeout: TimeInterval,
+        operation: @escaping @Sendable () -> Result<String, Failure>
+    ) async -> Result<String, Failure> {
+        await run("", timeout: timeout, gate: .shared, executor: { _ in operation() })
+    }
+
     /// Injectable execution seam for cancellation/admission tests. Neither production nor tests
     /// activate M3MCP here: a default-safe Notes read must remain background-only after its
     /// prompt-free permission preflight.
@@ -82,7 +91,7 @@ enum AppleScriptRunner {
         }
         guard gate.tryAcquire() else {
             return .failure(Failure(
-                message: "A Notes AppleScript or Automation permission check is already executing. Wait for it to finish before retrying."
+                message: "An Apple Event operation or Automation permission check is already executing. Wait for it to finish before retrying."
             ))
         }
 

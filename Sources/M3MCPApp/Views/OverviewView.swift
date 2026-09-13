@@ -4,6 +4,13 @@ import SwiftUI
 struct OverviewView: View {
     @ObservedObject var model: AppModel
     private var granted: Int { model.permissionItems.filter { $0.metadata["state"] == "authorized" }.count }
+    private var storePermissionHint: LocalizedStringKey {
+        #if LOCALMCP_SANDBOX
+        "Wähle unter Freigaben die Ordner für Mail und Sprachmemos aus."
+        #else
+        "Mail und Sprachmemos benötigen Festplattenvollzugriff."
+        #endif
+    }
     var body: some View {
         VStack(alignment: .leading, spacing: 24) {
             PageHeading(title: "Alles verbunden. Alles im Blick.",
@@ -28,7 +35,7 @@ struct OverviewView: View {
             }
             Panel {
                 Text("Deine nächsten Schritte").font(.headline)
-                OverviewStep(number: "1", title: "Daten freigeben", detail: "Mail und Sprachmemos benötigen Festplattenvollzugriff.", action: { model.destination = .permissions })
+                OverviewStep(number: "1", title: "Daten freigeben", detail: storePermissionHint, action: { model.destination = .permissions })
                 Divider()
                 OverviewStep(number: "2", title: "Client verbinden", detail: "Die Konfiguration mit Token in deinem MCP-Client einfügen.", action: { model.destination = .connection })
                 Divider()
@@ -60,7 +67,7 @@ private struct WelcomePanel: View {
 }
 private struct MetricCard: View {
     let title: LocalizedStringKey
-    let value: String
+    let value: LocalizedStringKey
     let icon: String
     let note: LocalizedStringKey
     var body: some View {

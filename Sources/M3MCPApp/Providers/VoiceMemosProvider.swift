@@ -1558,6 +1558,14 @@ final class VoiceMemosProvider {
         if let storeOverrideForTesting {
             return storeOverrideForTesting
         }
+        #if LOCALMCP_SANDBOX
+        let recordings = try SandboxStoreAccess.shared.url(for: .voiceMemos)
+        let database = recordings.appendingPathComponent(databaseName)
+        guard fileManager.fileExists(atPath: database.path) else {
+            throw VoiceMemoStoreFailure("Im freigegebenen Sprachmemo-Ordner fehlt CloudRecordings.db. Bitte den Ordner Recordings mit der Datenbank auswählen.")
+        }
+        return RecordingStore(recordings: recordings, database: database)
+        #else
         let home = fileManager.homeDirectoryForCurrentUser
 
         for relativePath in libraryPaths {
@@ -1574,6 +1582,7 @@ final class VoiceMemosProvider {
         }
 
         throw VoiceMemoStoreFailure("The Voice Memos store was not found below \(primary.path). Open Voice Memos at least once, and grant Full Disk Access to LocalMCP if the folder is protected.")
+        #endif
     }
 
     private func loadRecording(id: String) throws -> RecordingRow {

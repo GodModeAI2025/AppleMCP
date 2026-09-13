@@ -1716,9 +1716,17 @@ final class MailProvider {
         try checkCancellation(.requestBoundary)
         let override = ProcessInfo.processInfo.environment[Self.mailRootEnvironmentKey]?
             .trimmingCharacters(in: .whitespacesAndNewlines)
-        let mailRoot = (override.flatMap { $0.isEmpty ? nil : URL(fileURLWithPath: $0, isDirectory: true) })
-            ?? fileManager.homeDirectoryForCurrentUser
+        let mailRoot: URL
+        if let override, !override.isEmpty {
+            mailRoot = URL(fileURLWithPath: override, isDirectory: true)
+        } else {
+            #if LOCALMCP_SANDBOX
+            mailRoot = try SandboxStoreAccess.shared.url(for: .mail)
+            #else
+            mailRoot = fileManager.homeDirectoryForCurrentUser
                 .appendingPathComponent("Library/Mail", isDirectory: true)
+            #endif
+        }
 
         guard fileManager.fileExists(atPath: mailRoot.path) else {
             throw MailStoreFailure("Local Mail store was not found at \(mailRoot.path).")

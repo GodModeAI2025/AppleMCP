@@ -101,6 +101,9 @@ final class LocalAppClient: @unchecked Sendable {
     }
 
     func call(tool: String, arguments: [String: Any]) async -> ToolResponse {
+        if let message = M3MCPEndpoint.configurationError {
+            return ToolResponse(ok: false, source: "LocalMCP Bridge", message: message)
+        }
         let path = "/tools/\(tool.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? tool)"
 
         guard let credentials = resolvedCredentials() else {

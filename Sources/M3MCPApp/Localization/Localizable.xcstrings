@@ -1,0 +1,4834 @@
+{
+  "sourceLanguage": "de",
+  "strings": {
+    "\n\nAuswirkung\n%@": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "\n\nAuswirkung\n%@"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "\n\nEffect\n%@"
+          }
+        }
+      }
+    },
+    "„Liste meine letzten 45 Sprachmemos auf.“": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "„Liste meine letzten 45 Sprachmemos auf.“"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "“List my last 45 voice memos.”"
+          }
+        }
+      }
+    },
+    "„Zeige mir meine fünf neuesten Mails.“": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "„Zeige mir meine fünf neuesten Mails.“"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "“Show me my five most recent emails.”"
+          }
+        }
+      }
+    },
+    "%lld": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld"
+          }
+        }
+      }
+    },
+    "%lld / %lld": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$lld / %2$lld"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$lld / %2$lld"
+          }
+        }
+      }
+    },
+    "%lld / 32.000 Zeichen": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld / 32.000 Zeichen"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld / 32,000 characters"
+          }
+        }
+      }
+    },
+    "%lld Ergebnisse": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld Ergebnisse"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld results"
+          }
+        }
+      }
+    },
+    "%lld ms": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld ms"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld ms"
+          }
+        }
+      }
+    },
+    "••••••••  ••••••••  ••••••••": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "••••••••  ••••••••  ••••••••"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "••••••••  ••••••••  ••••••••"
+          }
+        }
+      }
+    },
+    "1. Daten auswählen": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "1. Daten auswählen"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "1. Choose your data"
+          }
+        }
+      }
+    },
+    "1. Konfiguration inklusive Token kopieren.": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "1. Konfiguration inklusive Token kopieren."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "1. Copy the configuration including the token."
+          }
+        }
+      }
+    },
+    "1. Konfiguration mit dem Knopf unten kopieren.": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "1. Konfiguration mit dem Knopf unten kopieren."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "1. Copy the configuration using the button below."
+          }
+        }
+      }
+    },
+    "2. Den Eintrag m3mcp in den mcpServers-Bereich deines Clients übernehmen. Vorhandene andere Server beibehalten.": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "2. Den Eintrag m3mcp in den mcpServers-Bereich deines Clients übernehmen. Vorhandene andere Server beibehalten."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "2. Add the m3mcp entry to your client's mcpServers section. Keep any other existing servers."
+          }
+        }
+      }
+    },
+    "2. In ~/.codex/config.toml den LocalMCP-Abschnitt ergänzen oder den vorhandenen LocalMCP-Eintrag ersetzen. Andere Server beibehalten.": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "2. In ~/.codex/config.toml den LocalMCP-Abschnitt ergänzen oder den vorhandenen LocalMCP-Eintrag ersetzen. Andere Server beibehalten."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "2. Add the LocalMCP section to ~/.codex/config.toml or replace the existing LocalMCP entry. Keep other servers."
+          }
+        }
+      }
+    },
+    "2. Token und Client verbinden": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "2. Token und Client verbinden"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "2. Connect token and client"
+          }
+        }
+      }
+    },
+    "3. Die MCP-Verbindung im Client neu laden; falls nötig, den Client neu starten.": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "3. Die MCP-Verbindung im Client neu laden; falls nötig, den Client neu starten."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "3. Reload the MCP connection in your client; restart the client if necessary."
+          }
+        }
+      }
+    },
+    "3. Speichern und die MCP-Verbindung neu laden.": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "3. Speichern und die MCP-Verbindung neu laden."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "3. Save and reload the MCP connection."
+          }
+        }
+      }
+    },
+    "3. Verbindung testen": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "3. Verbindung testen"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "3. Test the connection"
+          }
+        }
+      }
+    },
+    "Abbrechen": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Abbrechen"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cancel"
+          }
+        }
+      }
+    },
+    "Abhängig von macOS & Hardware": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Abhängig von macOS & Hardware"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Depends on macOS and hardware"
+          }
+        }
+      }
+    },
+    "Ablauf beendet. Bereits erteilte Freigaben bleiben erhalten.": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ablauf beendet. Bereits erteilte Freigaben bleiben erhalten."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sequence ended. Previously granted permissions are preserved."
+          }
+        }
+      }
+    },
+    "Ablehnen": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ablehnen"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Deny"
+          }
+        }
+      }
+    },
+    "Aktiv": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Aktiv"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Active"
+          }
+        }
+      }
+    },
+    "Aktiviere die Quellen, die du mit deinem MCP-Client nutzen möchtest.": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Aktiviere die Quellen, die du mit deinem MCP-Client nutzen möchtest."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Enable the sources you want to use with your MCP client."
+          }
+        }
+      }
+    },
+    "Aktivität": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Aktivität"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Activity"
+          }
+        }
+      }
+    },
+    "Alle acht Quellen durchlaufen. Prüfe unten die Ergebnisse. Fehlende Freigaben und Festplattenvollzugriff müssen gegebenenfalls in den Systemeinstellungen aktiviert werden.": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Alle acht Quellen durchlaufen. Prüfe unten die Ergebnisse. Fehlende Freigaben und Festplattenvollzugriff müssen gegebenenfalls in den Systemeinstellungen aktiviert werden."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "All eight sources checked. Review the results below. You may need to enable missing permissions and Full Disk Access in System Settings."
+          }
+        }
+      }
+    },
+    "Alles verbunden. Alles im Blick.": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Alles verbunden. Alles im Blick."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Everything connected. Everything in view."
+          }
+        }
+      }
+    },
+    "Andere Clients · JSON": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Andere Clients · JSON"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Other clients · JSON"
+          }
+        }
+      }
+    },
+    "Anfragen und Serverereignisse dieser Sitzung. Neue Einträge stehen oben.": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Anfragen und Serverereignisse dieser Sitzung. Neue Einträge stehen oben."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Requests and server events from this session. Newest entries appear first."
+          }
+        }
+      }
+    },
+    "Antwort": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Antwort"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Response"
+          }
+        }
+      }
+    },
+    "Anzeigen": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Anzeigen"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Show"
+          }
+        }
+      }
+    },
+    "App im Finder zeigen": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "App im Finder zeigen"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Show app in Finder"
+          }
+        }
+      }
+    },
+    "App neu starten": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "App neu starten"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Restart app"
+          }
+        }
+      }
+    },
+    "App und Bridge prüfen die Anmeldung …": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "App und Bridge prüfen die Anmeldung …"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "App and bridge are checking authentication …"
+          }
+        }
+      }
+    },
+    "Apple Intelligence": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Apple Intelligence"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Apple Intelligence"
+          }
+        }
+      }
+    },
+    "Apple Intelligence is not active for this process. Enable it in System Settings → Apple Intelligence & Siri. If it is already enabled, check that the Siri language matches the system language — a mismatch reports this same state.": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Apple Intelligence ist für diesen Prozess nicht aktiv. Aktiviere es unter Systemeinstellungen → Apple Intelligence & Siri. Wenn es bereits aktiviert ist, prüfe, ob die Siri-Sprache mit der Systemsprache übereinstimmt. Eine Abweichung führt zum gleichen Status."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Apple Intelligence is not active for this process. Enable it in System Settings → Apple Intelligence & Siri. If it is already enabled, check that the Siri language matches the system language — a mismatch reports this same state."
+          }
+        }
+      }
+    },
+    "Apple-Cloud-Bilddialog öffnen": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Apple-Cloud-Bilddialog öffnen"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Open Apple cloud image dialog"
+          }
+        }
+      }
+    },
+    "Apple-Intelligence-Funktionen nutzen: lokale Verarbeitung und ein ausdrücklich optionaler Apple-Cloud-Bilddialog.": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Apple-Intelligence-Funktionen nutzen: lokale Verarbeitung und ein ausdrücklich optionaler Apple-Cloud-Bilddialog."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Use Apple Intelligence features: local processing and an explicitly optional Apple cloud image dialog."
+          }
+        }
+      }
+    },
+    "Arbeitsbereich": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Arbeitsbereich"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Workspace"
+          }
+        }
+      }
+    },
+    "Assistent später fortsetzen": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Assistent später fortsetzen"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Resume setup later"
+          }
+        }
+      }
+    },
+    "Auf diesem Mac": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Auf diesem Mac"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "On this Mac"
+          }
+        }
+      }
+    },
+    "Aufgaben extrahieren": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Aufgaben extrahieren"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Extract action items"
+          }
+        }
+      }
+    },
+    "Aufgaben und Erinnerungslisten lesen.": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Aufgaben und Erinnerungslisten lesen."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Read tasks and reminder lists."
+          }
+        }
+      }
+    },
+    "Aufnahmen finden und vorhandene Transkripte lesen.": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Aufnahmen finden und vorhandene Transkripte lesen."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Find recordings and read existing transcripts."
+          }
+        }
+      }
+    },
+    "Automatische Bilderzeugung ist ab macOS 27 nicht verfügbar: Apple hat ImageCreator eingestellt. Kurzbefehle sind separat konfigurierbar.": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Automatische Bilderzeugung ist ab macOS 27 nicht verfügbar: Apple hat ImageCreator eingestellt. Kurzbefehle sind separat konfigurierbar."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Automatic image generation is unavailable on macOS 27 and later: Apple has discontinued ImageCreator. Shortcuts can be configured separately."
+          }
+        }
+      }
+    },
+    "Bearbeitung": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Bearbeitung"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Processing"
+          }
+        }
+      }
+    },
+    "Bereit für die erste Anfrage?": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Bereit für die erste Anfrage?"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ready for your first request?"
+          }
+        }
+      }
+    },
+    "Bestätigen und fortfahren": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Bestätigen und fortfahren"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Confirm and continue"
+          }
+        }
+      }
+    },
+    "Bild aus dem Apple-Dialog übernommen.": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Bild aus dem Apple-Dialog übernommen."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Image received from the Apple dialog."
+          }
+        }
+      }
+    },
+    "Bild konnte nicht übernommen werden: %@": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Bild konnte nicht übernommen werden: %@"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Could not import image: %@"
+          }
+        }
+      }
+    },
+    "Bild mit Apple Cloud erstellen": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Bild mit Apple Cloud erstellen"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Create an image with Apple cloud"
+          }
+        }
+      }
+    },
+    "Bildbeschreibung": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Bildbeschreibung"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Image description"
+          }
+        }
+      }
+    },
+    "Bilddatei im Finder zeigen": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Bilddatei im Finder zeigen"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Show image file in Finder"
+          }
+        }
+      }
+    },
+    "Bilderzeugung abgebrochen.": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Bilderzeugung abgebrochen."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Image generation cancelled."
+          }
+        }
+      }
+    },
+    "Bilderzeugung und Kurzbefehle": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Bilderzeugung und Kurzbefehle"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Image generation and Shortcuts"
+          }
+        }
+      }
+    },
+    "Bilderzeugung wird bei der Anfrage geprüft; Kurzbefehle sind separat konfigurierbar.": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Bilderzeugung wird bei der Anfrage geprüft; Kurzbefehle sind separat konfigurierbar."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Image generation availability is checked when requested; Shortcuts can be configured separately."
+          }
+        }
+      }
+    },
+    "Bitte kürze die Beschreibung auf höchstens 4.000 Zeichen.": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Bitte kürze die Beschreibung auf höchstens 4.000 Zeichen."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Please shorten the description to no more than 4,000 characters."
+          }
+        }
+      }
+    },
+    "Bitte lies diesen Hinweis, bevor du LocalMCP einrichtest.": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Bitte lies diesen Hinweis, bevor du LocalMCP einrichtest."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Please read this notice before setting up LocalMCP."
+          }
+        }
+      }
+    },
+    "Bitte zuerst den lokalen Server starten.": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Bitte zuerst den lokalen Server starten."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Please start the local server first."
+          }
+        }
+      }
+    },
+    "Bitte zuerst den Server starten und die vollständige App verwenden.": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Bitte zuerst den Server starten und die vollständige App verwenden."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Start the server first and use the complete app."
+          }
+        }
+      }
+    },
+    "Bitte zuerst die Einrichtung abschließen und den lokalen Server starten.": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Bitte zuerst die Einrichtung abschließen und den lokalen Server starten."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Please finish setup and start the local server first."
+          }
+        }
+      }
+    },
+    "Bitte zuerst unter Freigaben den %@ auswählen. Die Sandbox benötigt eine eigene Ordnerfreigabe; Festplattenvollzugriff allein reicht nicht.": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Bitte zuerst unter Freigaben den %@ auswählen. Die Sandbox benötigt eine eigene Ordnerfreigabe; Festplattenvollzugriff allein reicht nicht."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "First select the %@ in Permissions. The sandbox needs its own folder permission; Full Disk Access alone is not enough."
+          }
+        }
+      }
+    },
+    "Bridge hat die Anmeldung abgelehnt.": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Bridge hat die Anmeldung abgelehnt."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The bridge rejected authentication."
+          }
+        }
+      }
+    },
+    "Bridge-Diagnose hat das Zeitlimit überschritten.": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Bridge-Diagnose hat das Zeitlimit überschritten."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Bridge diagnostics timed out."
+          }
+        }
+      }
+    },
+    "Bridge-Start: %@ / %lld": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Bridge-Start: %1$@ / %2$lld"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Bridge launch: %1$@ / %2$lld"
+          }
+        }
+      }
+    },
+    "Client verbinden": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Client verbinden"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Connect client"
+          }
+        }
+      }
+    },
+    "Client-Konfiguration": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Client-Konfiguration"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Client configuration"
+          }
+        }
+      }
+    },
+    "Codex · TOML": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Codex · TOML"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Codex · TOML"
+          }
+        }
+      }
+    },
+    "Could not open System Settings.": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Die Systemeinstellungen konnten nicht geöffnet werden."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Could not open System Settings."
+          }
+        }
+      }
+    },
+    "Daten freigeben": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Daten freigeben"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Grant data access"
+          }
+        }
+      }
+    },
+    "Datenfreigaben gemeinsam einrichten": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Datenfreigaben gemeinsam einrichten"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Set up data permissions together"
+          }
+        }
+      }
+    },
+    "Datenfreigaben nacheinander anfragen": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Datenfreigaben nacheinander anfragen"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Request data permissions in sequence"
+          }
+        }
+      }
+    },
+    "Datenquellen": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Datenquellen"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Data sources"
+          }
+        }
+      }
+    },
+    "Datenschutzfreigaben verwalten": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Datenschutzfreigaben verwalten"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Manage privacy permissions"
+          }
+        }
+      }
+    },
+    "Datenzugriff prüfen": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Datenzugriff prüfen"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Check data access"
+          }
+        }
+      }
+    },
+    "Deaktiviert": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Deaktiviert"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Disabled"
+          }
+        }
+      }
+    },
+    "Dein Mac kann mehr.": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Dein Mac kann mehr."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Your Mac can do more."
+          }
+        }
+      }
+    },
+    "Dein Mac. Verbunden.": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Dein Mac. Verbunden."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Your Mac. Connected."
+          }
+        }
+      }
+    },
+    "Dein MCP-Token": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Dein MCP-Token"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Your MCP token"
+          }
+        }
+      }
+    },
+    "Deine Apple-Daten für deinen MCP-Client – mit Freigaben, die du kontrollierst.": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Deine Apple-Daten für deinen MCP-Client – mit Freigaben, die du kontrollierst."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Your Apple data for your MCP client — with permissions you control."
+          }
+        }
+      }
+    },
+    "Deine Daten. Deine Freigaben.": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Deine Daten. Deine Freigaben."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Your data. Your permissions."
+          }
+        }
+      }
+    },
+    "Deine nächsten Schritte": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Deine nächsten Schritte"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Your next steps"
+          }
+        }
+      }
+    },
+    "Deine Verbindung": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Deine Verbindung"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Your connection"
+          }
+        }
+      }
+    },
+    "Der Ablauf endet nach dem aktuellen Dialog.": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Der Ablauf endet nach dem aktuellen Dialog."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The sequence will end after the current dialog."
+          }
+        }
+      }
+    },
+    "Der Assistent hilft dir bei Freigaben, Token und Verbindung.": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Der Assistent hilft dir bei Freigaben, Token und Verbindung."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The assistant helps you with permissions, your token and connection."
+          }
+        }
+      }
+    },
+    "Der Schlüssel für die Verbindung mit dieser App.": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Der Schlüssel für die Verbindung mit dieser App."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The key for connecting to this app."
+          }
+        }
+      }
+    },
+    "Der Server bleibt ohne MCP-Token geschlossen: %@. Bitte den Mac entsperren und die App erneut starten. Bleibt der Fehler bestehen, prüfe die installierte App-Version und ihre Signatur.": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Der Server bleibt ohne MCP-Token geschlossen: %@. Bitte den Mac entsperren und die App erneut starten. Bleibt der Fehler bestehen, prüfe die installierte App-Version und ihre Signatur."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The server stays closed without an MCP token: %@. Please unlock your Mac and restart the app. If the error persists, check the installed app version and its signature."
+          }
+        }
+      }
+    },
+    "Der Text bleibt auf diesem Mac. Das Apple-Modell benötigt Apple Intelligence. Prüfe das Ergebnis auf Fehler und Auslassungen.": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Der Text bleibt auf diesem Mac. Das Apple-Modell benötigt Apple Intelligence. Prüfe das Ergebnis auf Fehler und Auslassungen."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The text stays on this Mac. The Apple model requires Apple Intelligence. Check the result for errors and omissions."
+          }
+        }
+      }
+    },
+    "Diagnoseordner: %@ / %lld": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Diagnoseordner: %1$@ / %2$lld"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Diagnostics folder: %1$@ / %2$lld"
+          }
+        }
+      }
+    },
+    "Die App konnte nicht neu geöffnet werden. Bitte LocalMCP mit ⌘Q beenden und erneut öffnen.": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Die App konnte nicht neu geöffnet werden. Bitte LocalMCP mit ⌘Q beenden und erneut öffnen."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The app could not be reopened. Please quit LocalMCP with ⌘Q and open it again."
+          }
+        }
+      }
+    },
+    "Die App prüft, ob Bridge und Anmeldung funktionieren.": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Die App prüft, ob Bridge und Anmeldung funktionieren."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The app checks that the bridge and authentication work."
+          }
+        }
+      }
+    },
+    "Die App verwendet die auf diesem Mac eingerichteten Apple-Accounts. Eine zusätzliche iCloud-Anmeldung in LocalMCP ist nicht nötig. Die Freigaben gelten für diesen Mac.": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Die App verwendet die auf diesem Mac eingerichteten Apple-Accounts. Eine zusätzliche iCloud-Anmeldung in LocalMCP ist nicht nötig. Die Freigaben gelten für diesen Mac."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The app uses the Apple accounts configured on this Mac. No additional iCloud sign-in is needed in LocalMCP. Permissions apply to this Mac."
+          }
+        }
+      }
+    },
+    "Die Datei liegt vorübergehend im App-Speicher. Kopiere sie zum dauerhaften Aufbewahren in einen eigenen Ordner.": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Die Datei liegt vorübergehend im App-Speicher. Kopiere sie zum dauerhaften Aufbewahren in einen eigenen Ordner."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The file is stored temporarily in the app's storage. Copy it to your own folder to keep it permanently."
+          }
+        }
+      }
+    },
+    "Die Konfiguration konnte nicht erstellt werden.": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Die Konfiguration konnte nicht erstellt werden."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The configuration could not be created."
+          }
+        }
+      }
+    },
+    "Die Konfiguration mit Token in deinem MCP-Client einfügen.": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Die Konfiguration mit Token in deinem MCP-Client einfügen."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Paste the configuration with its token into your MCP client."
+          }
+        }
+      }
+    },
+    "Die lokale Bearbeitung ist nicht verfügbar.": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Die lokale Bearbeitung ist nicht verfügbar."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Local text processing is unavailable."
+          }
+        }
+      }
+    },
+    "Die Systemeinstellungen konnten nicht geöffnet werden.": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Die Systemeinstellungen konnten nicht geöffnet werden."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "System Settings could not be opened."
+          }
+        }
+      }
+    },
+    "Die Vorschau verbirgt den Token. Der Kopierknopf setzt den echten Token und den aktuellen App-Pfad ein.": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Die Vorschau verbirgt den Token. Der Kopierknopf setzt den echten Token und den aktuellen App-Pfad ein."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The preview hides the token. The copy button inserts the real token and the current app path."
+          }
+        }
+      }
+    },
+    "Diesen Aufruf erlauben": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Diesen Aufruf erlauben"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Allow This Call"
+          }
+        }
+      }
+    },
+    "Dieser Test bestätigt die lokale App-Verbindung. Ob dein externer Client eingerichtet ist, prüfst du dort mit einer ersten Anfrage.": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Dieser Test bestätigt die lokale App-Verbindung. Ob dein externer Client eingerichtet ist, prüfst du dort mit einer ersten Anfrage."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "This test confirms the local app connection. Check your external client's setup by making your first request there."
+          }
+        }
+      }
+    },
+    "Du entscheidest, welche macOS-Freigaben du erteilst.": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Du entscheidest, welche macOS-Freigaben du erteilst."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "You decide which macOS permissions to grant."
+          }
+        }
+      }
+    },
+    "Durch macOS eingeschränkt": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Durch macOS eingeschränkt"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Restricted by macOS"
+          }
+        }
+      }
+    },
+    "Ein guter Start.\nIn wenigen Schritten.": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ein guter Start.\nIn wenigen Schritten."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "A good start.\nJust a few steps."
+          }
+        }
+      }
+    },
+    "Ein Kopierknopf übernimmt den Token in die fertige Konfiguration.": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ein Kopierknopf übernimmt den Token in die fertige Konfiguration."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "One copy button includes the token in the complete configuration."
+          }
+        }
+      }
+    },
+    "Ein lokaler MCP-Client hat diese Aktion angefordert.\n\nWerkzeug\n%@\n\nArgumente\n%@%@\n\nDie Erlaubnis gilt nur für diesen Aufruf. Standardmäßig wird abgelehnt.": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ein lokaler MCP-Client hat diese Aktion angefordert.\n\nWerkzeug\n%1$@\n\nArgumente\n%2$@%3$@\n\nDie Erlaubnis gilt nur für diesen Aufruf. Standardmäßig wird abgelehnt."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "A local MCP client requested this operation.\n\nTool\n%1$@\n\nArguments\n%2$@%3$@\n\nAllow applies to this call only. Deny is the default."
+          }
+        }
+      }
+    },
+    "Eine erfolgreiche Antwort hängt zusätzlich von den Freigaben für die jeweilige Datenquelle ab.": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Eine erfolgreiche Antwort hängt zusätzlich von den Freigaben für die jeweilige Datenquelle ab."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "A successful response also depends on permissions for the relevant data source."
+          }
+        }
+      }
+    },
+    "Eine Frage stellen": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Eine Frage stellen"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ask a question"
+          }
+        }
+      }
+    },
+    "Einen Aufruf von %@ erlauben?": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Einen Aufruf von %@ erlauben?"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Approve one call to %@?"
+          }
+        }
+      }
+    },
+    "Eingabe": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Eingabe"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Input"
+          }
+        }
+      }
+    },
+    "Einrichten": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Einrichten"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Set up"
+          }
+        }
+      }
+    },
+    "Einrichtung abschließen": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Einrichtung abschließen"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Finish setup"
+          }
+        }
+      }
+    },
+    "Einrichtungsassistent": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Einrichtungsassistent"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Setup assistant"
+          }
+        }
+      }
+    },
+    "Einrichtungsassistent öffnen": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Einrichtungsassistent öffnen"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Open setup assistant"
+          }
+        }
+      }
+    },
+    "Einstellungen": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Einstellungen"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Settings"
+          }
+        }
+      }
+    },
+    "Ergebnis": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ergebnis"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Result"
+          }
+        }
+      }
+    },
+    "Erinnerungen": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Erinnerungen"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Reminders"
+          }
+        }
+      }
+    },
+    "Erstelle vor der Nutzung ein aktuelles Backup. Erteile nur notwendige Freigaben, verbinde nur vertrauenswürdige Clients und prüfe jede angeforderte Änderung sorgfältig. Inhalte können durch den verbundenen Client an externe Dienste übertragen werden.": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Erstelle vor der Nutzung ein aktuelles Backup. Erteile nur notwendige Freigaben, verbinde nur vertrauenswürdige Clients und prüfe jede angeforderte Änderung sorgfältig. Inhalte können durch den verbundenen Client an externe Dienste übertragen werden."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Create a current backup before use. Grant only necessary permissions, connect only trusted clients and carefully review every requested change. A connected client may send content to external services."
+          }
+        }
+      }
+    },
+    "Falls macOS den ausgewählten Datenordner weiterhin schützt, erlaube zusätzlich Festplattenvollzugriff für diese App und starte sie neu.": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Falls macOS den ausgewählten Datenordner weiterhin schützt, erlaube zusätzlich Festplattenvollzugriff für diese App und starte sie neu."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "If macOS still protects the selected data folder, also grant Full Disk Access to this app and restart it."
+          }
+        }
+      }
+    },
+    "Fehlerhafte Anweisungen, Softwarefehler oder missbräuchliche Zugriffe können zum Verlust sämtlicher Daten führen, auf die die aktivierten Funktionen zugreifen können. Änderungen und Löschungen können über iCloud auch andere Geräte betreffen. Eine Wiederherstellung ist nicht garantiert.": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Fehlerhafte Anweisungen, Softwarefehler oder missbräuchliche Zugriffe können zum Verlust sämtlicher Daten führen, auf die die aktivierten Funktionen zugreifen können. Änderungen und Löschungen können über iCloud auch andere Geräte betreffen. Eine Wiederherstellung ist nicht garantiert."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Incorrect instructions, software errors or malicious access can cause the loss of all data accessible to the enabled features. Changes and deletions may also affect other devices through iCloud. Recovery is not guaranteed."
+          }
+        }
+      }
+    },
+    "Festplattenvollzugriff öffnen": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Festplattenvollzugriff öffnen"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Open Full Disk Access"
+          }
+        }
+      }
+    },
+    "Fotos": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Fotos"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Photos"
+          }
+        }
+      }
+    },
+    "Fotos und Alben anhand ihrer Metadaten finden.": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Fotos und Alben anhand ihrer Metadaten finden."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Find photos and albums by their metadata."
+          }
+        }
+      }
+    },
+    "Freigabe bestätigt · Neustart erforderlich": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Freigabe bestätigt · Neustart erforderlich"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Permission confirmed · Restart required"
+          }
+        }
+      }
+    },
+    "Freigabe prüfen": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Freigabe prüfen"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Check permission"
+          }
+        }
+      }
+    },
+    "Freigaben": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Freigaben"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Permissions"
+          }
+        }
+      }
+    },
+    "Freigaben verwalten": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Freigaben verwalten"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Manage permissions"
+          }
+        }
+      }
+    },
+    "Freigegeben": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Freigegeben"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Allowed"
+          }
+        }
+      }
+    },
+    "Freigegeben · App-Neustart nötig": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Freigegeben · App-Neustart nötig"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Allowed · App restart needed"
+          }
+        }
+      }
+    },
+    "Führt durch Kalender, Kontakte, Erinnerungen, Mail, Notizen, Fotos, Sprachmemos und Spracherkennung. Du kannst jeden Dialog ablehnen oder die Ordnerauswahl abbrechen. Bereits entschiedene Freigaben zeigt macOS nicht erneut an.": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Führt durch Kalender, Kontakte, Erinnerungen, Mail, Notizen, Fotos, Sprachmemos und Spracherkennung. Du kannst jeden Dialog ablehnen oder die Ordnerauswahl abbrechen. Bereits entschiedene Freigaben zeigt macOS nicht erneut an."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Walks through Calendar, Contacts, Reminders, Mail, Notes, Photos, Voice Memos and Speech Recognition. You can deny each dialog or cancel folder selection. macOS does not show previously decided permissions again."
+          }
+        }
+      }
+    },
+    "Führt eine begrenzte Leseabfrage aus und zeigt nur den Ergebnisstatus. Inhalte werden hier nicht angezeigt oder verändert.": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Führt eine begrenzte Leseabfrage aus und zeigt nur den Ergebnisstatus. Inhalte werden hier nicht angezeigt oder verändert."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Runs a limited read query and shows only the result status. Content is neither displayed nor modified here."
+          }
+        }
+      }
+    },
+    "Für diese Quelle ist keine Zugriffsprüfung verfügbar.": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Für diese Quelle ist keine Zugriffsprüfung verfügbar."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No access check is available for this source."
+          }
+        }
+      }
+    },
+    "Für diese Quellen benötigt LocalMCP Festplattenvollzugriff. Öffne die Systemeinstellungen, füge diese App über + hinzu und aktiviere den Schalter. Danach LocalMCP mit ⌘Q beenden und erneut öffnen.": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Für diese Quellen benötigt LocalMCP Festplattenvollzugriff. Öffne die Systemeinstellungen, füge diese App über + hinzu und aktiviere den Schalter. Danach LocalMCP mit ⌘Q beenden und erneut öffnen."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "LocalMCP needs Full Disk Access for these sources. Open System Settings, add this app using + and enable its switch. Then quit LocalMCP with ⌘Q and open it again."
+          }
+        }
+      }
+    },
+    "Gestoppt": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Gestoppt"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Stopped"
+          }
+        }
+      }
+    },
+    "Hier findest du deinen MCP-Token": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Hier findest du deinen MCP-Token"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Find your MCP token here"
+          }
+        }
+      }
+    },
+    "Ich habe die Risiken einschließlich möglicher Datenänderungen und Datenverluste verstanden und möchte LocalMCP auf eigene Gefahr nutzen.": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ich habe die Risiken einschließlich möglicher Datenänderungen und Datenverluste verstanden und möchte LocalMCP auf eigene Gefahr nutzen."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "I understand the risks, including possible data changes and data loss, and want to use LocalMCP at my own risk."
+          }
+        }
+      }
+    },
+    "Im aktuellen Profil": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Im aktuellen Profil"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "In the current profile"
+          }
+        }
+      }
+    },
+    "Image Playground ist auf diesem Mac derzeit nicht verfügbar. Prüfe Apple Intelligence in den Systemeinstellungen.": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Image Playground ist auf diesem Mac derzeit nicht verfügbar. Prüfe Apple Intelligence in den Systemeinstellungen."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Image Playground is currently unavailable on this Mac. Check Apple Intelligence in System Settings."
+          }
+        }
+      }
+    },
+    "In Systemeinstellungen freigeben": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "In Systemeinstellungen freigeben"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Allow in System Settings"
+          }
+        }
+      }
+    },
+    "Inhalte aus Apple Notizen suchen und lesen.": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Inhalte aus Apple Notizen suchen und lesen."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Search and read content from Apple Notes."
+          }
+        }
+      }
+    },
+    "Invalid style '%@'. Valid values: %@": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ungültiger Stil „%1$@“. Gültige Werte: %2$@"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Invalid style '%@'. Valid values: %@"
+          }
+        }
+      }
+    },
+    "Invalid System Settings URL.": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ungültige URL der Systemeinstellungen."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Invalid System Settings URL."
+          }
+        }
+      }
+    },
+    "Je nach Datenquelle": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Je nach Datenquelle"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Depends on the data source"
+          }
+        }
+      }
+    },
+    "Kalender": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Kalender"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Calendar"
+          }
+        }
+      }
+    },
+    "Kein zusätzlicher Apple-Login. LocalMCP nutzt die auf diesem Mac verfügbaren Daten. Auf einem weiteren Mac richtest du Freigaben und Verbindung erneut ein.": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Kein zusätzlicher Apple-Login. LocalMCP nutzt die auf diesem Mac verfügbaren Daten. Auf einem weiteren Mac richtest du Freigaben und Verbindung erneut ein."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No additional Apple sign-in. LocalMCP uses data available on this Mac. On another Mac, set up permissions and the connection again."
+          }
+        }
+      }
+    },
+    "Konfiguration ansehen · Token ausgeblendet": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Konfiguration ansehen · Token ausgeblendet"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "View configuration · Token hidden"
+          }
+        }
+      }
+    },
+    "Konfiguration inklusive Token kopieren": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Konfiguration inklusive Token kopieren"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Copy configuration including token"
+          }
+        }
+      }
+    },
+    "Konfiguration inklusive Token kopiert. Im Client einfügen und die Verbindung neu starten.": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Konfiguration inklusive Token kopiert. Im Client einfügen und die Verbindung neu starten."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Configuration copied including token. Paste it into your client and restart the connection."
+          }
+        }
+      }
+    },
+    "Konfiguration nicht verfügbar.": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Konfiguration nicht verfügbar."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Configuration unavailable."
+          }
+        }
+      }
+    },
+    "Kontakte": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Kontakte"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Contacts"
+          }
+        }
+      }
+    },
+    "Kürzen": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Kürzen"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Shorten"
+          }
+        }
+      }
+    },
+    "Lesen erlauben": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Lesen erlauben"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Allow Reading"
+          }
+        }
+      }
+    },
+    "Letzte Aktivitäten": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Letzte Aktivitäten"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Recent activity"
+          }
+        }
+      }
+    },
+    "LocalMCP": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "LocalMCP"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "LocalMCP"
+          }
+        }
+      }
+    },
+    "LocalMCP einrichten": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "LocalMCP einrichten"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Set up LocalMCP"
+          }
+        }
+      }
+    },
+    "LocalMCP ermöglicht verbundenen KI- und MCP-Clients den Zugriff auf deine Daten. Je nach erteilten Freigaben, aktivierten Werkzeugen und ausgeführten Kurzbefehlen können Daten gelesen, weitergegeben, erstellt, verändert, überschrieben oder gelöscht werden.": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "LocalMCP ermöglicht verbundenen KI- und MCP-Clients den Zugriff auf deine Daten. Je nach erteilten Freigaben, aktivierten Werkzeugen und ausgeführten Kurzbefehlen können Daten gelesen, weitergegeben, erstellt, verändert, überschrieben oder gelöscht werden."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "LocalMCP gives connected AI and MCP clients access to your data. Depending on granted permissions, enabled tools and executed shortcuts, data may be read, shared, created, changed, overwritten or deleted."
+          }
+        }
+      }
+    },
+    "LocalMCP FÜR MAC": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "LocalMCP FÜR MAC"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "LocalMCP FOR MAC"
+          }
+        }
+      }
+    },
+    "LocalMCP verbindet Apple-Daten mit deinem MCP-Client. Dieser Assistent führt dich durch die Einrichtung.": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "LocalMCP verbindet Apple-Daten mit deinem MCP-Client. Dieser Assistent führt dich durch die Einrichtung."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "LocalMCP connects Apple data to your MCP client. This assistant guides you through setup."
+          }
+        }
+      }
+    },
+    "Lokal auf diesem Mac": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Lokal auf diesem Mac"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Locally on this Mac"
+          }
+        }
+      }
+    },
+    "Lokal bearbeiten": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Lokal bearbeiten"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Process locally"
+          }
+        }
+      }
+    },
+    "Lokal bestätigt": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Lokal bestätigt"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Confirmed locally"
+          }
+        }
+      }
+    },
+    "Lokale Verbindung bestätigt: Die mitgelieferte Bridge wird mit deinem Token akzeptiert.": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Lokale Verbindung bestätigt: Die mitgelieferte Bridge wird mit deinem Token akzeptiert."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Local connection confirmed: the included bridge is accepted with your token."
+          }
+        }
+      }
+    },
+    "Lokale Verbindung testen": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Lokale Verbindung testen"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Test local connection"
+          }
+        }
+      }
+    },
+    "Lokaler Server": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Lokaler Server"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Local server"
+          }
+        }
+      }
+    },
+    "M3MCP_TOKEN": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "M3MCP_TOKEN"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "M3MCP_TOKEN"
+          }
+        }
+      }
+    },
+    "macOS hat deine Freigabe bestätigt. Der bisherige Prozess meldet noch den alten Status. Starte die App neu, damit auch die Datenabfragen den neuen Zugriff verwenden.": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "macOS hat deine Freigabe bestätigt. Der bisherige Prozess meldet noch den alten Status. Starte die App neu, damit auch die Datenabfragen den neuen Zugriff verwenden."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "macOS confirmed your permission. The current process still reports the old status. Restart the app so data queries also use the new access."
+          }
+        }
+      }
+    },
+    "macOS hat den Lesezugriff auf diesen Ordner nicht freigegeben.": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "macOS hat den Lesezugriff auf diesen Ordner nicht freigegeben."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "macOS did not grant read access to this folder."
+          }
+        }
+      }
+    },
+    "Mail": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mail"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mail"
+          }
+        }
+      }
+    },
+    "Mail & Sprachmemos": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mail & Sprachmemos"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mail & Voice Memos"
+          }
+        }
+      }
+    },
+    "Mail-Ordner": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mail-Ordner"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mail folder"
+          }
+        }
+      }
+    },
+    "Mail-Ordner auswählen": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mail-Ordner auswählen"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Select Mail folder"
+          }
+        }
+      }
+    },
+    "Manuelle Einrichtung": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Manuelle Einrichtung"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Manual setup"
+          }
+        }
+      }
+    },
+    "MCP-Client": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "MCP-Client"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "MCP client"
+          }
+        }
+      }
+    },
+    "MCP-Token & Verbindung": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "MCP-Token & Verbindung"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "MCP token & connection"
+          }
+        }
+      }
+    },
+    "MCP-Token kopieren": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "MCP-Token kopieren"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Copy MCP token"
+          }
+        }
+      }
+    },
+    "Missing required argument: text": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Erforderliche Eingabe fehlt: text"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Missing required argument: text"
+          }
+        }
+      }
+    },
+    "Nach aktuellem Dialog beenden": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nach aktuellem Dialog beenden"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Stop after current dialog"
+          }
+        }
+      }
+    },
+    "Nach deiner ersten MCP-Anfrage erscheint hier das Ergebnis.": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nach deiner ersten MCP-Anfrage erscheint hier das Ergebnis."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The result will appear here after your first MCP request."
+          }
+        }
+      }
+    },
+    "Nach dem Serverstart verfügbar": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nach dem Serverstart verfügbar"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Available after starting the server"
+          }
+        }
+      }
+    },
+    "Nachrichten und Postfächer aus Apple Mail durchsuchen.": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nachrichten und Postfächer aus Apple Mail durchsuchen."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Search messages and mailboxes in Apple Mail."
+          }
+        }
+      }
+    },
+    "Namen, Adressen und Kontaktdaten nachschlagen.": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Namen, Adressen und Kontaktdaten nachschlagen."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Look up names, addresses and contact details."
+          }
+        }
+      }
+    },
+    "Neu starten": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Neu starten"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Restart"
+          }
+        }
+      }
+    },
+    "Nicht freigegeben": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nicht freigegeben"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Not allowed"
+          }
+        }
+      }
+    },
+    "Noch keine Anfragen": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Noch keine Anfragen"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No requests yet"
+          }
+        }
+      }
+    },
+    "Noch nicht angefragt": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Noch nicht angefragt"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Not requested yet"
+          }
+        }
+      }
+    },
+    "Notizen": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Notizen"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Notes"
+          }
+        }
+      }
+    },
+    "Nur für bestimmte neue Transkriptionen erforderlich.": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nur für bestimmte neue Transkriptionen erforderlich."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Required only for certain new transcriptions."
+          }
+        }
+      }
+    },
+    "Nur im gewünschten MCP-Client einfügen. Nicht in Chats teilen. Die Zwischenablage wird nach 90 Sekunden geleert, sofern du nichts anderes kopiert hast.": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nur im gewünschten MCP-Client einfügen. Nicht in Chats teilen. Die Zwischenablage wird nach 90 Sekunden geleert, sofern du nichts anderes kopiert hast."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Paste only into your intended MCP client. Do not share in chats. The clipboard is cleared after 90 seconds unless you have copied something else."
+          }
+        }
+      }
+    },
+    "Nur Schreibzugriff · Lesezugriff fehlt": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nur Schreibzugriff · Lesezugriff fehlt"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Write only · Read access missing"
+          }
+        }
+      }
+    },
+    "Nutzung auf eigene Gefahr": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nutzung auf eigene Gefahr"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Use at your own risk"
+          }
+        }
+      }
+    },
+    "Offizielle Codex-Anleitung": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Offizielle Codex-Anleitung"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Official Codex instructions"
+          }
+        }
+      }
+    },
+    "On-device Apple foundation model available.": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Das lokale Apple-Sprachmodell ist verfügbar."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "On-device Apple foundation model available."
+          }
+        }
+      }
+    },
+    "On-device summarization failed: %@": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Lokale Zusammenfassung fehlgeschlagen: %@"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "On-device summarization failed: %@"
+          }
+        }
+      }
+    },
+    "On-device summarization is unavailable on this Mac.": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Die lokale Zusammenfassung ist auf diesem Mac nicht verfügbar."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "On-device summarization is unavailable on this Mac."
+          }
+        }
+      }
+    },
+    "On-device summarization requires macOS 26 or later.": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Die lokale Zusammenfassung erfordert macOS 26 oder neuer."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "On-device summarization requires macOS 26 or later."
+          }
+        }
+      }
+    },
+    "On-device summarization requires macOS 26.": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Die lokale Zusammenfassung erfordert macOS 26."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "On-device summarization requires macOS 26."
+          }
+        }
+      }
+    },
+    "Opened System Settings.": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Systemeinstellungen geöffnet."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Opened System Settings."
+          }
+        }
+      }
+    },
+    "Opening System Settings was cancelled.": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Das Öffnen der Systemeinstellungen wurde abgebrochen."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Opening System Settings was cancelled."
+          }
+        }
+      }
+    },
+    "Optional: Deine Bildbeschreibung wird an Apples Private Cloud Compute übermittelt. Diese Funktion arbeitet nicht offline. Im Apple-Dialog kannst du das Bild prüfen und übernehmen oder abbrechen.": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Optional: Deine Bildbeschreibung wird an Apples Private Cloud Compute übermittelt. Diese Funktion arbeitet nicht offline. Im Apple-Dialog kannst du das Bild prüfen und übernehmen oder abbrechen."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Optional: your image description is sent to Apple's Private Cloud Compute. This feature does not work offline. In the Apple dialog, you can review and accept the image or cancel."
+          }
+        }
+      }
+    },
+    "Ordner auswählen": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ordner auswählen"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Select folder"
+          }
+        }
+      }
+    },
+    "Ordnerfreigabe gespeichert. LocalMCP liest diesen Ordner mit deiner Freigabe.": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ordnerfreigabe gespeichert. LocalMCP liest diesen Ordner mit deiner Freigabe."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Folder permission saved. LocalMCP reads this folder with your permission."
+          }
+        }
+      }
+    },
+    "Ordnerfreigabe prüfen": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ordnerfreigabe prüfen"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Check folder permission"
+          }
+        }
+      }
+    },
+    "Permission request was cancelled before opening system UI.": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Die Berechtigungsanfrage wurde vor dem Öffnen des Systemdialogs abgebrochen."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Permission request was cancelled before opening system UI."
+          }
+        }
+      }
+    },
+    "Permission request was cancelled. No further permission prompt or settings action was started.": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Die Berechtigungsanfrage wurde abgebrochen. Es wurden keine weiteren Berechtigungsdialoge oder Einstellungsaktionen gestartet."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Permission request was cancelled. No further permission prompt or settings action was started."
+          }
+        }
+      }
+    },
+    "Photos permission request was cancelled.": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Die Anfrage für den Fotozugriff wurde abgebrochen."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Photos permission request was cancelled."
+          }
+        }
+      }
+    },
+    "Probiere es in deinem Client": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Probiere es in deinem Client"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Try it in your client"
+          }
+        }
+      }
+    },
+    "Prüfe die lokale Verbindung und lade danach LocalMCP in deinem Client neu.": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Prüfe die lokale Verbindung und lade danach LocalMCP in deinem Client neu."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Check the local connection, then reload LocalMCP in your client."
+          }
+        }
+      }
+    },
+    "Prüfen": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Prüfen"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Check"
+          }
+        }
+      }
+    },
+    "Prüft die mitgelieferte Bridge, den Token und die Anmeldung am laufenden Server. Persönliche Inhalte werden dabei nicht gelesen.": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Prüft die mitgelieferte Bridge, den Token und die Anmeldung am laufenden Server. Persönliche Inhalte werden dabei nicht gelesen."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Checks the included bridge, token and authentication with the running server. No personal content is read."
+          }
+        }
+      }
+    },
+    "Prüfung fehlgeschlagen": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Prüfung fehlgeschlagen"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Check failed"
+          }
+        }
+      }
+    },
+    "Required permissions are available.": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Die erforderlichen Freigaben sind verfügbar."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Required permissions are available."
+          }
+        }
+      }
+    },
+    "Risikohinweis": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Risikohinweis"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Risk notice"
+          }
+        }
+      }
+    },
+    "Schritt %lld von 4": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Schritt %lld von 4"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Step %lld of 4"
+          }
+        }
+      }
+    },
+    "Schritt %lld von 8: %@": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Schritt %1$lld von 8: %2$@"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Step %1$lld of 8: %2$@"
+          }
+        }
+      }
+    },
+    "Separat aktivierbare Zusatzfunktion": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Separat aktivierbare Zusatzfunktion"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Optional feature enabled separately"
+          }
+        }
+      }
+    },
+    "Server": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Server"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Server"
+          }
+        }
+      }
+    },
+    "Server läuft": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Server läuft"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Server running"
+          }
+        }
+      }
+    },
+    "Server neu starten": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Server neu starten"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Restart server"
+          }
+        }
+      }
+    },
+    "Server neu starten und App sowie Bridge aus derselben Installation verwenden.": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Server neu starten und App sowie Bridge aus derselben Installation verwenden."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Restart the server and use the app and bridge from the same installation."
+          }
+        }
+      }
+    },
+    "Server nicht aktiv": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Server nicht aktiv"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Server inactive"
+          }
+        }
+      }
+    },
+    "Server starten": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Server starten"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Start server"
+          }
+        }
+      }
+    },
+    "Server starten und prüfen, ob die MCP-Bridge im App-Paket vorhanden ist.": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Server starten und prüfen, ob die MCP-Bridge im App-Paket vorhanden ist."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Start the server and check that the MCP bridge is included in the app bundle."
+          }
+        }
+      }
+    },
+    "Server steuern": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Server steuern"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Server controls"
+          }
+        }
+      }
+    },
+    "Server stoppen": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Server stoppen"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Stop server"
+          }
+        }
+      }
+    },
+    "Some required permissions are still missing.": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Einige erforderliche Freigaben fehlen noch."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Some required permissions are still missing."
+          }
+        }
+      }
+    },
+    "Spracherkennung": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Spracherkennung"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Speech Recognition"
+          }
+        }
+      }
+    },
+    "Sprachmemo-Ordner": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sprachmemo-Ordner"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Voice Memos folder"
+          }
+        }
+      }
+    },
+    "Sprachmemo-Ordner auswählen": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sprachmemo-Ordner auswählen"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Select Voice Memos folder"
+          }
+        }
+      }
+    },
+    "Sprachmemos": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sprachmemos"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Voice Memos"
+          }
+        }
+      }
+    },
+    "Sprachmodell": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sprachmodell"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Language model"
+          }
+        }
+      }
+    },
+    "Standardmäßig sind Kalenderänderungen und Kurzbefehle deaktiviert. Ihre Aktivierung und die erforderlichen Einzelfreigaben bleiben separate Entscheidungen. Diese Bestätigung erteilt keine zusätzlichen Zugriffsrechte.": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Standardmäßig sind Kalenderänderungen und Kurzbefehle deaktiviert. Ihre Aktivierung und die erforderlichen Einzelfreigaben bleiben separate Entscheidungen. Diese Bestätigung erteilt keine zusätzlichen Zugriffsrechte."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Calendar changes and Shortcuts are disabled by default. Enabling them and granting the required individual permissions remain separate decisions. This confirmation grants no additional access rights."
+          }
+        }
+      }
+    },
+    "Starten": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Starten"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Start"
+          }
+        }
+      }
+    },
+    "Status aktualisieren": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Status aktualisieren"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Refresh status"
+          }
+        }
+      }
+    },
+    "Status prüfen": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Status prüfen"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Check status"
+          }
+        }
+      }
+    },
+    "Status wird ermittelt …": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Status wird ermittelt …"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Checking status …"
+          }
+        }
+      }
+    },
+    "Stelle deine Frage im verbundenen MCP-Client. LocalMCP führt die unterstützte Abfrage auf diesem Mac aus.": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Stelle deine Frage im verbundenen MCP-Client. LocalMCP führt die unterstützte Abfrage auf diesem Mac aus."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ask your question in the connected MCP client. LocalMCP runs the supported query on this Mac."
+          }
+        }
+      }
+    },
+    "Stichpunkte": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Stichpunkte"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Bullet points"
+          }
+        }
+      }
+    },
+    "Stoppen": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Stoppen"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Stop"
+          }
+        }
+      }
+    },
+    "Systemabfrage fehlgeschlagen": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Systemabfrage fehlgeschlagen"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "System query failed"
+          }
+        }
+      }
+    },
+    "Teilweise freigegeben": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Teilweise freigegeben"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Partially allowed"
+          }
+        }
+      }
+    },
+    "Termine und Kalender auf deinem Mac finden.": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Termine und Kalender auf deinem Mac finden."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Find events and calendars on your Mac."
+          }
+        }
+      }
+    },
+    "Text exceeds the %lld-character on-device model limit. Split it into smaller sections.": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Der Text überschreitet die Grenze des lokalen Modells von %lld Zeichen. Teile ihn in kleinere Abschnitte auf."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Text exceeds the %lld-character on-device model limit. Split it into smaller sections."
+          }
+        }
+      }
+    },
+    "Text lokal bearbeiten": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Text lokal bearbeiten"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Process text locally"
+          }
+        }
+      }
+    },
+    "Texte lokal zusammenfassen, kürzen und in Stichpunkte oder Aufgaben umwandeln.": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Texte lokal zusammenfassen, kürzen und in Stichpunkte oder Aufgaben umwandeln."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Summarise and shorten text locally, or turn it into bullet points or action items."
+          }
+        }
+      }
+    },
+    "The on-device model is still downloading or preparing. Try again shortly.": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Das lokale Modell wird noch geladen oder vorbereitet. Versuche es in Kürze erneut."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The on-device model is still downloading or preparing. Try again shortly."
+          }
+        }
+      }
+    },
+    "The on-device model returned no content.": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Das lokale Modell hat keinen Inhalt zurückgegeben."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The on-device model returned no content."
+          }
+        }
+      }
+    },
+    "The server is not running, so there is no token to copy.": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Der Server läuft nicht. Es ist kein Token zum Kopieren verfügbar."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The server is not running, so there is no token to copy."
+          }
+        }
+      }
+    },
+    "This Mac does not support Apple Intelligence, so on-device summarization is unavailable.": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Dieser Mac unterstützt Apple Intelligence nicht. Die lokale Zusammenfassung ist deshalb nicht verfügbar."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "This Mac does not support Apple Intelligence, so on-device summarization is unavailable."
+          }
+        }
+      }
+    },
+    "Token kopieren, Client einrichten und die lokale Verbindung prüfen.": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Token kopieren, Client einrichten und die lokale Verbindung prüfen."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Copy the token, set up your client and check the local connection."
+          }
+        }
+      }
+    },
+    "Token kopiert. Jetzt im MCP-Client als M3MCP_TOKEN einfügen.": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Token kopiert. Jetzt im MCP-Client als M3MCP_TOKEN einfügen."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Token copied. Paste it into your MCP client as M3MCP_TOKEN."
+          }
+        }
+      }
+    },
+    "Transport: STDIO / lokaler Befehl": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Transport: STDIO / lokaler Befehl"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Transport: STDIO / local command"
+          }
+        }
+      }
+    },
+    "Übernommenes Bild aus Apple Image Playground": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Übernommenes Bild aus Apple Image Playground"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Image accepted from Apple Image Playground"
+          }
+        }
+      }
+    },
+    "Übersicht": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Übersicht"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Overview"
+          }
+        }
+      }
+    },
+    "Umgebungsvariable: M3MCP_TOKEN. Als Wert den oben kopierten Token einfügen.": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Umgebungsvariable: M3MCP_TOKEN. Als Wert den oben kopierten Token einfügen."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Environment variable: M3MCP_TOKEN. Use the token copied above as its value."
+          }
+        }
+      }
+    },
+    "Unbekannter Fehler": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Unbekannter Fehler"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Unknown error"
+          }
+        }
+      }
+    },
+    "Verbergen": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Verbergen"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Hide"
+          }
+        }
+      }
+    },
+    "Verbinde deinen Client mit dieser App. Token, passender App-Pfad und fertige Konfiguration stehen an einem Ort.": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Verbinde deinen Client mit dieser App. Token, passender App-Pfad und fertige Konfiguration stehen an einem Ort."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Connect your client to this app. Token, matching app path and complete configuration in one place."
+          }
+        }
+      }
+    },
+    "Verbindung": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Verbindung"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Connection"
+          }
+        }
+      }
+    },
+    "Verbindung einrichten": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Verbindung einrichten"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Set up connection"
+          }
+        }
+      }
+    },
+    "Verbindung fehlgeschlagen: %@": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Verbindung fehlgeschlagen: %@"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Connection failed: %@"
+          }
+        }
+      }
+    },
+    "Verbindung prüfen": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Verbindung prüfen"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Check connection"
+          }
+        }
+      }
+    },
+    "Verbindung wird geprüft …": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Verbindung wird geprüft …"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Checking connection …"
+          }
+        }
+      }
+    },
+    "Verfügbar": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Verfügbar"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Available"
+          }
+        }
+      }
+    },
+    "Verfügbare Werkzeuge": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Verfügbare Werkzeuge"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Available tools"
+          }
+        }
+      }
+    },
+    "Wähle den Ordner Library/Mail in deinem Benutzerordner. Mit ⌘⇧G kannst du ~/Library/Mail eingeben.": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Wähle den Ordner Library/Mail in deinem Benutzerordner. Mit ⌘⇧G kannst du ~/Library/Mail eingeben."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Select the Library/Mail folder in your home folder. Use ⌘⇧G to enter ~/Library/Mail."
+          }
+        }
+      }
+    },
+    "Wähle den Ordner Recordings, der CloudRecordings.db und die lokalen Sprachmemos enthält.": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Wähle den Ordner Recordings, der CloudRecordings.db und die lokalen Sprachmemos enthält."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Select the Recordings folder containing CloudRecordings.db and your local voice memos."
+          }
+        }
+      }
+    },
+    "Wähle die beiden Datenordner ausdrücklich aus. LocalMCP speichert eine Lesefreigabe für diese App. macOS kann zusätzlich Festplattenvollzugriff verlangen.": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Wähle die beiden Datenordner ausdrücklich aus. LocalMCP speichert eine Lesefreigabe für diese App. macOS kann zusätzlich Festplattenvollzugriff verlangen."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Explicitly select both data folders. LocalMCP saves read permission for this app. macOS may additionally require Full Disk Access."
+          }
+        }
+      }
+    },
+    "Wähle unter Freigaben die Ordner für Mail und Sprachmemos aus.": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Wähle unter Freigaben die Ordner für Mail und Sprachmemos aus."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Select your Mail and Voice Memos folders in Permissions."
+          }
+        }
+      }
+    },
+    "Weiter": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Weiter"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Continue"
+          }
+        }
+      }
+    },
+    "Weiter zur Verbindung": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Weiter zur Verbindung"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Continue to connection"
+          }
+        }
+      }
+    },
+    "Werkzeuge": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Werkzeuge"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tools"
+          }
+        }
+      }
+    },
+    "Willkommen": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Willkommen"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Welcome"
+          }
+        }
+      }
+    },
+    "Zu bearbeitender Text": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Zu bearbeitender Text"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Text to process"
+          }
+        }
+      }
+    },
+    "Zugriff auf diese Quelle": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Zugriff auf diese Quelle"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Access to this source"
+          }
+        }
+      }
+    },
+    "Zugriff erfolgreich: Abfrage ausgeführt (%lld Ergebnisse innerhalb des Prüflimits). Es wurden keine Daten verändert.": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Zugriff erfolgreich: Abfrage ausgeführt (%lld Ergebnisse innerhalb des Prüflimits). Es wurden keine Daten verändert."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Access successful: query completed (%lld results within the check limit). No data was changed."
+          }
+        }
+      }
+    },
+    "Zugriff erlauben": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Zugriff erlauben"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Allow access"
+          }
+        }
+      }
+    },
+    "Zugriff fehlgeschlagen: %@": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Zugriff fehlgeschlagen: %@"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Access failed: %@"
+          }
+        }
+      }
+    },
+    "Zugriff jetzt prüfen": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Zugriff jetzt prüfen"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Check access now"
+          }
+        }
+      }
+    },
+    "Zugriff pro Datenquelle": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Zugriff pro Datenquelle"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Access by data source"
+          }
+        }
+      }
+    },
+    "Zum Beispiel: „Zeige mir meine fünf neuesten Mails.“": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Zum Beispiel: „Zeige mir meine fünf neuesten Mails.“"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "For example: “Show me my five most recent emails.”"
+          }
+        }
+      }
+    },
+    "Zurück": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Zurück"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Back"
+          }
+        }
+      }
+    },
+    "Zusammenfassen": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Zusammenfassen"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Summarise"
+          }
+        }
+      }
+    },
+    "Zusammenfassung und Aufgaben": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Zusammenfassung und Aufgaben"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Summary and action items"
+          }
+        }
+      }
+    },
+    "Mail und Sprachmemos benötigen Festplattenvollzugriff.": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mail und Sprachmemos benötigen Festplattenvollzugriff."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mail and Voice Memos require Full Disk Access."
+          }
+        }
+      }
+    },
+    "This build has no FoundationModels support; on-device summarization requires macOS 26 or later.": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Dieser Build unterstützt FoundationModels nicht. Die lokale Zusammenfassung erfordert macOS 26 oder neuer."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "This build has no FoundationModels support; on-device summarisation requires macOS 26 or later."
+          }
+        }
+      }
+    }
+  },
+  "version": "1.0"
+}

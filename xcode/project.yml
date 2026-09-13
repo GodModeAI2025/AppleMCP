@@ -1,0 +1,124 @@
+name: LocalMCP
+options:
+  developmentLanguage: de
+  knownRegions: [de, en]
+  deploymentTarget:
+    macOS: '15.0'
+  createIntermediateGroups: true
+settings:
+  base:
+    SWIFT_VERSION: '5.0'
+    SWIFT_EMIT_LOC_STRINGS: YES
+    SWIFT_ACTIVE_COMPILATION_CONDITIONS: '$(inherited) LOCALMCP_SANDBOX'
+    MACOSX_DEPLOYMENT_TARGET: '15.0'
+    DEVELOPMENT_TEAM: SP73Z8JWXM
+    CODE_SIGN_STYLE: Automatic
+    MARKETING_VERSION: '0.3.1'
+    CURRENT_PROJECT_VERSION: '12'
+    ENABLE_HARDENED_RUNTIME: YES
+    ARCHS: '$(ARCHS_STANDARD)'
+    ONLY_ACTIVE_ARCH: NO
+targets:
+  M3MCPCore:
+    type: library.static
+    platform: macOS
+    sources: ['../Sources/M3MCPCore']
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: de.mobilebox.LocalMCP.Core
+        DEFINES_MODULE: YES
+        SKIP_INSTALL: YES
+  M3MCPBridge:
+    type: application
+    platform: macOS
+    sources:
+      - ../Sources/M3MCPBridge
+      - path: Bridge.sdef
+        buildPhase: resources
+    dependencies:
+      - target: M3MCPCore
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: de.mobilebox.LocalMCP.Bridge
+        CODE_SIGN_ENTITLEMENTS: Bridge.entitlements
+        PRODUCT_NAME: LocalMCPBridge
+        EXECUTABLE_NAME: M3MCPBridge
+        GENERATE_INFOPLIST_FILE: NO
+        INFOPLIST_FILE: Bridge-Info.plist
+        ENABLE_APP_SANDBOX: YES
+        SKIP_INSTALL: YES
+  LocalMCP:
+    type: application
+    platform: macOS
+    sources:
+      - path: ../Sources/M3MCPApp
+        excludes: ['Resources']
+      - path: ../Sources/M3MCPApp/Resources/AppIcon.icns
+        buildPhase: resources
+      - path: ../LICENSE
+        buildPhase: resources
+      - path: ../docs/THIRD_PARTY.md
+        buildPhase: resources
+    dependencies:
+      - target: M3MCPCore
+      - target: M3MCPBridge
+        link: false
+    settings:
+      base:
+        PRODUCT_NAME: LocalMCP-TestFlight
+        EXECUTABLE_NAME: M3MCPApp
+        PRODUCT_BUNDLE_IDENTIFIER: de.mobilebox.LocalMCP
+        INFOPLIST_FILE: Info.plist
+        CODE_SIGN_ENTITLEMENTS: TestFlight.entitlements
+        ENABLE_APP_SANDBOX: YES
+        OTHER_LDFLAGS: '$(inherited) -weak_framework FoundationModels'
+        SKIP_INSTALL: NO
+    postBuildScripts:
+      - name: Embed signed MCP bridge
+        basedOnDependencyAnalysis: false
+        script: |
+          set -eu
+          mkdir -p "${TARGET_BUILD_DIR}/${CONTENTS_FOLDER_PATH}/Helpers"
+          ditto "${BUILT_PRODUCTS_DIR}/LocalMCPBridge.app" "${TARGET_BUILD_DIR}/${CONTENTS_FOLDER_PATH}/Helpers/LocalMCPBridge.app"
+        inputFiles: ['$(BUILT_PRODUCTS_DIR)/LocalMCPBridge.app']
+        outputFiles: ['$(TARGET_BUILD_DIR)/$(CONTENTS_FOLDER_PATH)/Helpers/LocalMCPBridge.app']
+  SandboxTransportProbe:
+    type: application
+    platform: macOS
+    sources:
+      - ../Tests/SandboxRuntime/TransportProbe.swift
+      - ../Sources/M3MCPApp/Services/LocalHTTPServer.swift
+    dependencies:
+      - target: M3MCPCore
+      - target: M3MCPBridge
+        link: false
+    postBuildScripts:
+      - name: Embed sandbox fixture bridge
+        basedOnDependencyAnalysis: false
+        script: |
+          set -eu
+          mkdir -p "${TARGET_BUILD_DIR}/${CONTENTS_FOLDER_PATH}/Helpers"
+          ditto "${BUILT_PRODUCTS_DIR}/LocalMCPBridge.app" "${TARGET_BUILD_DIR}/${CONTENTS_FOLDER_PATH}/Helpers/LocalMCPBridge.app"
+        inputFiles: ['$(BUILT_PRODUCTS_DIR)/LocalMCPBridge.app']
+        outputFiles: ['$(TARGET_BUILD_DIR)/$(CONTENTS_FOLDER_PATH)/Helpers/LocalMCPBridge.app']
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: de.mobilebox.LocalMCP.TransportProbe
+        GENERATE_INFOPLIST_FILE: YES
+        INFOPLIST_KEY_LSUIElement: YES
+        CODE_SIGN_ENTITLEMENTS: TestFlight.entitlements
+        ENABLE_APP_SANDBOX: YES
+        SKIP_INSTALL: YES
+schemes:
+  SandboxTransportProbe:
+    build:
+      targets:
+        SandboxTransportProbe: all
+  LocalMCP-TestFlight:
+    build:
+      targets:
+        LocalMCP: all
+    run:
+      config: Debug
+    archive:
+      config: Release

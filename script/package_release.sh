@@ -94,6 +94,7 @@ cp "$ROOT_DIR/Sources/$APP_NAME/Resources/Info.plist" "$APP_BUNDLE/Contents/Info
 chmod 644 "$APP_BUNDLE/Contents/Info.plist"
 mkdir -p "$APP_BUNDLE/Contents/Resources"
 cp "$ROOT_DIR/Sources/M3MCPApp/Resources/AppIcon.icns" "$APP_BUNDLE/Contents/Resources/AppIcon.icns"
+python3 "$ROOT_DIR/script/compile_localizations.py" "$APP_BUNDLE/Contents/Resources"
 cp "$ROOT_DIR/LICENSE" "$APP_BUNDLE/Contents/Resources/LICENSE"
 cp "$ROOT_DIR/docs/THIRD_PARTY.md" "$APP_BUNDLE/Contents/Resources/THIRD_PARTY.md"
 chmod 644 "$APP_BUNDLE/Contents/Resources/LICENSE" "$APP_BUNDLE/Contents/Resources/THIRD_PARTY.md"

@@ -3,6 +3,7 @@ import PackageDescription
 
 let package = Package(
     name: "M3MCP",
+    defaultLocalization: "de",
     platforms: [
         .macOS("15.0")
     ],
@@ -19,7 +20,7 @@ let package = Package(
             name: "M3MCPApp",
             dependencies: ["M3MCPCore"],
             path: "Sources/M3MCPApp",
-            exclude: ["Resources"],
+            exclude: ["Resources", "Localization"],
             linkerSettings: [
                 .unsafeFlags([
                     "-Xlinker", "-sectcreate",

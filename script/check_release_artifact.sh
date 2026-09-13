@@ -45,6 +45,12 @@ $BUNDLE/Contents/Resources/
 $BUNDLE/Contents/Resources/AppIcon.icns
 $BUNDLE/Contents/Resources/LICENSE
 $BUNDLE/Contents/Resources/THIRD_PARTY.md
+$BUNDLE/Contents/Resources/de.lproj/
+$BUNDLE/Contents/Resources/de.lproj/InfoPlist.strings
+$BUNDLE/Contents/Resources/de.lproj/Localizable.strings
+$BUNDLE/Contents/Resources/en.lproj/
+$BUNDLE/Contents/Resources/en.lproj/InfoPlist.strings
+$BUNDLE/Contents/Resources/en.lproj/Localizable.strings
 $BUNDLE/Contents/_CodeSignature/
 $BUNDLE/Contents/_CodeSignature/CodeResources
 EOF
@@ -307,6 +313,23 @@ if cmp -s "$ROOT_DIR/docs/THIRD_PARTY.md" "$APP/Contents/Resources/THIRD_PARTY.m
   pass "third-party notices are retained byte-for-byte"
 else
   fail "third-party notices are missing or changed"
+fi
+
+# Compile from the reviewed catalogs and require byte-identical packaged translations.
+EXPECTED_LOCALIZATIONS="$WORK_DIR/expected-localizations"
+if python3 "$ROOT_DIR/script/compile_localizations.py" "$EXPECTED_LOCALIZATIONS"; then
+  for language in de en; do
+    for table in InfoPlist Localizable; do
+      resource="$language.lproj/$table.strings"
+      if cmp -s "$EXPECTED_LOCALIZATIONS/$resource" "$APP/Contents/Resources/$resource"; then
+        pass "localized resource $resource matches the catalog"
+      else
+        fail "localized resource $resource missing or changed"
+      fi
+    done
+  done
+else
+  fail "translation catalogs cannot be compiled completely"
 fi
 
 # --- bounded packaged MCP lifecycle and catalog checks ----------------------------------------

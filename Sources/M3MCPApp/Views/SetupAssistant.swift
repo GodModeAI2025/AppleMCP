@@ -42,7 +42,7 @@ struct SetupAssistant: View {
                 }
                 Spacer()
                 Button { model.showsSetup = false } label: { Image(systemName: "xmark") }
-                    .buttonStyle(.plain).accessibilityLabel("Assistent später fortsetzen")
+                    .buttonStyle(.plain).accessibilityLabel("Assistent später fortsetzen").disabled(model.permissionBusy)
             }.padding(24)
             HStack(spacing: 12) {
                 ForEach(SetupStep.allCases) { item in
@@ -90,8 +90,9 @@ struct SetupAssistant: View {
                         step = SetupStep(rawValue: step.rawValue + 1) ?? .finish
                     }.buttonStyle(.borderedProminent)
                 }
-            }.padding(20)
+            }.padding(20).disabled(model.permissionBusy)
         }.frame(width: 760, height: 720).tint(.indigo)
+        .interactiveDismissDisabled(model.permissionBusy)
     }
 }
 

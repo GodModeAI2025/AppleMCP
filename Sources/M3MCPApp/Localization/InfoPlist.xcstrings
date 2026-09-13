@@ -1,0 +1,210 @@
+{
+  "sourceLanguage": "de",
+  "strings": {
+    "CFBundleDisplayName": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "LocalMCP"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "LocalMCP"
+          }
+        }
+      }
+    },
+    "CFBundleName": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "LocalMCP"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "LocalMCP"
+          }
+        }
+      }
+    },
+    "NSAppDataUsageDescription": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "LocalMCP liest mit deiner Freigabe den lokalen Mail-Index und lokale Voice-Memos-Dateien für MCP-Abfragen; die Originaldaten werden nicht verändert."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "With your permission, LocalMCP reads the local Mail index and local Voice Memos files for MCP requests. Original data is not changed."
+          }
+        }
+      }
+    },
+    "NSAppleEventsUsageDescription": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "LocalMCP verwendet Apple Events, um mit deiner Freigabe Notizen aus Notes.app lokal zu suchen und zu lesen."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "With your permission, LocalMCP uses Apple Events to search and read notes locally in Notes.app."
+          }
+        }
+      }
+    },
+    "NSCalendarsFullAccessUsageDescription": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "LocalMCP liest lokale Kalenderdaten. Separat aktivierte Kalenderwerkzeuge können nach deiner Einzelfreigabe Termine und Kalender erstellen, ändern oder löschen."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "LocalMCP reads local calendar data. Separately enabled calendar tools can create, change or delete events and calendars after your approval for each operation."
+          }
+        }
+      }
+    },
+    "NSCalendarsUsageDescription": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "LocalMCP liest lokale Kalenderdaten. Separat aktivierte Kalenderwerkzeuge können nach deiner Einzelfreigabe Termine und Kalender erstellen, ändern oder löschen."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "LocalMCP reads local calendar data. Separately enabled calendar tools can create, change or delete events and calendars after your approval for each operation."
+          }
+        }
+      }
+    },
+    "NSContactsUsageDescription": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "LocalMCP liest mit deiner Freigabe lokale Kontakte für MCP-Abfragen."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "With your permission, LocalMCP reads local contacts for MCP requests."
+          }
+        }
+      }
+    },
+    "NSHumanReadableCopyright": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Copyright © 2026 Mark Zimmermann"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Copyright © 2026 Mark Zimmermann"
+          }
+        }
+      }
+    },
+    "NSPhotoLibraryUsageDescription": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "LocalMCP liest mit deiner Freigabe Metadaten vorhandener Fotos. PhotoKit bezeichnet diesen Zugriff als Lesen und Schreiben; die bereitgestellten Foto-Werkzeuge verändern die Mediathek nicht."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "With your permission, LocalMCP reads metadata of existing photos. PhotoKit calls this access Read and Write; the provided photo tools do not change your library."
+          }
+        }
+      }
+    },
+    "NSRemindersFullAccessUsageDescription": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "LocalMCP liest mit deiner Freigabe lokale Erinnerungen für MCP-Abfragen."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "With your permission, LocalMCP reads local reminders for MCP requests."
+          }
+        }
+      }
+    },
+    "NSRemindersUsageDescription": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "LocalMCP liest mit deiner Freigabe lokale Erinnerungen für MCP-Abfragen."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "With your permission, LocalMCP reads local reminders for MCP requests."
+          }
+        }
+      }
+    },
+    "NSSpeechRecognitionUsageDescription": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "LocalMCP transkribiert ausgewählte lokale Sprachmemos ausschließlich mit einem verfügbaren On-Device-Sprachmodell; ohne lokales Modell schlägt der Vorgang fehl."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "LocalMCP transcribes selected local voice memos only using an available on-device speech model. The operation fails if no local model is available."
+          }
+        }
+      }
+    }
+  },
+  "version": "1.0"
+}

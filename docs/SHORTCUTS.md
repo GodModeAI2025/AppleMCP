@@ -4,7 +4,7 @@ LocalMCP's `ai_writing_tools` and `ai_translate` tools call user-created Shortcu
 
 Every invocation still requires one native approval in M3MCPApp.
 
-## Invocation behavior
+## Direct-distribution invocation behavior
 
 - Shortcut names are exactly `Writing Tools` and `Translate`.
 - LocalMCP invokes `/usr/bin/shortcuts` directly with an argument vector. It does not use a shell, AppleScript, or Python to construct the command.
@@ -13,6 +13,15 @@ Every invocation still requires one native approval in M3MCPApp.
 - The Shortcut must return non-empty UTF-8 plain text.
 - Standard output and standard error are each capped at 1 MiB; truncation of either stream fails the call.
 - Execution is terminated after 60 seconds.
+
+## Sandbox invocation behavior (integration in progress)
+
+The TestFlight build uses typed ScriptingBridge calls to Shortcuts Events. The
+same JSON document is passed as a text input Apple Event parameter. The result
+must be plain text, non-empty, at most 1 MiB. No input file or CLI process is used.
+A timed-out request returns an error, but a running Shortcut can continue; the
+shared native operation gate remains occupied until the actual call finishes.
+The scripting access-group entitlement and real native execution remain pending.
 
 The JSON object is contract version 1. Consumers should reject unsupported future versions rather than guessing.
 

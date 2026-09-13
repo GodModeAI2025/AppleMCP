@@ -30,6 +30,9 @@ enum ShortcutRunner {
             return .failure(Failure(message: "Shortcut request was cancelled before launch."))
         }
 
+        #if LOCALMCP_SANDBOX
+        return await NativeShortcutRunner.run(named: name, jsonInput: jsonInput, timeout: timeout)
+        #else
         let invocation = processInvocation(named: name, jsonInput: jsonInput, timeout: timeout)
 
         do {
@@ -71,6 +74,7 @@ enum ShortcutRunner {
         } catch {
             return .failure(Failure(message: error.localizedDescription))
         }
+        #endif
     }
 
     /// `shortcuts run` accepts `-` as the input path, which makes it read stdin. Keeping the JSON on

@@ -23,6 +23,9 @@ final class AppModel: ObservableObject {
     @Published private(set) var connectionVerified: Bool?
     @Published private(set) var connectionMessage: String?
     @Published private(set) var permissionBusy = false
+    @Published private(set) var permissionProgress: String?
+    @Published private(set) var permissionSequenceRunning = false
+    private var stopPermissionSequence = false
     private let nativePermissions = PermissionProvider()
     private var permissionPresentation = NativePermissionPresentation()
     private var permissionRefreshGeneration = UUID()
@@ -35,9 +38,21 @@ final class AppModel: ObservableObject {
     var hasCapabilityToken: Bool { capabilityToken != nil }
     var tokenForDisplay: String { capabilityToken ?? "" }
     var bridgeURL: URL {
-        (Bundle.main.executableURL?.deletingLastPathComponent() ?? Bundle.main.bundleURL)
-            .appendingPathComponent("M3MCPBridge")
+        TrustedClient.bridgeURL(appExecutableURL: Bundle.main.executableURL
+            ?? Bundle.main.bundleURL.appendingPathComponent("Contents/MacOS/M3MCPApp"))
     }
+    var requiresStoreSelection: Bool { TrustedClient.usesSandboxedHelper }
+
+    func acceptStoreSelection(_ result: Result<[URL], Error>, for store: SandboxStoreAccess.Store) async {
+        guard requiresStoreSelection else { return }
+        do {
+            guard let url = try result.get().first else { return }
+            try SandboxStoreAccess.shared.install(url, for: store)
+            permissionMessage = String(localized: "Ordnerfreigabe gespeichert. LocalMCP liest diesen Ordner mit deiner Freigabe.")
+            await refreshPermissions()
+        } catch { permissionMessage = error.localizedDescription }
+    }
+
     var bridgeAvailable: Bool { FileManager.default.isExecutableFile(atPath: bridgeURL.path) }
     var enabledToolCount: Int { securityPolicy.toolAvailability.filter(\.isEnabled).count }
 
@@ -81,6 +96,13 @@ final class AppModel: ObservableObject {
             return
         }
         guard server == nil else { return }
+        if let message = M3MCPEndpoint.configurationError {
+            serverState = "failed"
+            authenticationSummary = "unavailable"
+            record(tool: "server_start", response: ToolResponse(ok: false,
+                source: "LocalMCP Server", message: message), durationMilliseconds: 0)
+            return
+        }
         serverState = "starting"
 
         // Fail closed. If the token cannot be read or created the server does not come up at all:
@@ -91,9 +113,7 @@ final class AppModel: ObservableObject {
             credentials = try CapabilityToken.loadOrCreate()
         } catch {
             serverState = "failed"
-            let message = "No capability token, so the endpoint stays closed: \(error.localizedDescription). "
-                + "Unlock the login keychain and start again, or set \(CapabilityToken.environmentKey) "
-                + "for this run."
+            let message = String(localized: "Der Server bleibt ohne MCP-Token geschlossen: \(error.localizedDescription). Bitte den Mac entsperren und die App erneut starten. Bleibt der Fehler bestehen, prüfe die installierte App-Version und ihre Signatur.")
             authenticationSummary = "unavailable"
             AppLogger.log(message)
             record(
@@ -211,30 +231,30 @@ final class AppModel: ObservableObject {
     @discardableResult
     func copyCapabilityToken() -> String {
         guard let capabilityToken else {
-            return "The server is not running, so there is no token to copy."
+            return String(localized: "The server is not running, so there is no token to copy.")
         }
         copySensitiveText(capabilityToken)
-        copyMessage = "Token kopiert. Jetzt im MCP-Client als M3MCP_TOKEN einfügen."
+        copyMessage = String(localized: "Token kopiert. Jetzt im MCP-Client als M3MCP_TOKEN einfügen.")
         return copyMessage!
     }
 
     func configurationPreview(format: ClientConfiguration.Format) -> String {
         (try? ClientConfiguration.render(format: format, bridgePath: bridgeURL.path,
-            token: "<MCP_TOKEN>", policy: securityPolicy)) ?? "Konfiguration nicht verfügbar."
+            token: "<MCP_TOKEN>", policy: securityPolicy)) ?? String(localized: "Konfiguration nicht verfügbar.")
     }
 
     func copyClientConfiguration(format: ClientConfiguration.Format) {
         guard let capabilityToken, bridgeAvailable else {
-            copyMessage = "Bitte zuerst den Server starten und die vollständige App verwenden."
+            copyMessage = String(localized: "Bitte zuerst den Server starten und die vollständige App verwenden.")
             return
         }
         do {
             let text = try ClientConfiguration.render(format: format, bridgePath: bridgeURL.path,
                 token: capabilityToken, policy: securityPolicy)
             copySensitiveText(text)
-            copyMessage = "Konfiguration inklusive Token kopiert. Im Client einfügen und die Verbindung neu starten."
+            copyMessage = String(localized: "Konfiguration inklusive Token kopiert. Im Client einfügen und die Verbindung neu starten.")
         } catch {
-            copyMessage = "Die Konfiguration konnte nicht erstellt werden."
+            copyMessage = String(localized: "Die Konfiguration konnte nicht erstellt werden.")
         }
     }
 
@@ -264,12 +284,12 @@ final class AppModel: ObservableObject {
         guard !checkingConnection else { return }
         guard hasCapabilityToken, serverState == "running", bridgeAvailable else {
             connectionVerified = false
-            connectionMessage = "Server starten und prüfen, ob die MCP-Bridge im App-Paket vorhanden ist."
+            connectionMessage = String(localized: "Server starten und prüfen, ob die MCP-Bridge im App-Paket vorhanden ist.")
             return
         }
         checkingConnection = true
         connectionVerified = nil
-        connectionMessage = "App und Bridge prüfen die Anmeldung …"
+        connectionMessage = String(localized: "App und Bridge prüfen die Anmeldung …")
         let generation = connectionGeneration
         var environment = ProcessInfo.processInfo.environment
         for (key, value) in ClientConfiguration.environment(token: capabilityToken!, policy: securityPolicy) {
@@ -280,8 +300,92 @@ final class AppModel: ObservableObject {
         guard generation == connectionGeneration else { return }
         connectionVerified = ok
         connectionMessage = ok
-            ? "Lokale Verbindung bestätigt: Die mitgelieferte Bridge wird mit deinem Token akzeptiert."
-            : "Verbindung fehlgeschlagen. Server neu starten und App sowie Bridge aus derselben Installation verwenden."
+            ? String(localized: "Lokale Verbindung bestätigt: Die mitgelieferte Bridge wird mit deinem Token akzeptiert.")
+            : String(localized: "Verbindung fehlgeschlagen: \(ConnectionCheck.diagnostic ?? String(localized: "Server neu starten und App sowie Bridge aus derselben Installation verwenden."))")
+    }
+
+    func checkSourceAccess(_ source: String) async -> String {
+        guard usageRiskAccepted, serverState == "running" else { return String(localized: "Bitte zuerst den lokalen Server starten.") }
+        let tool: String
+        switch source {
+        case "Calendar": tool = "calendar_list_calendars"
+        case "Contacts / Address Book": tool = "contacts_search"
+        case "Reminders": tool = "reminders_search"
+        case "Notes": tool = "notes_search"
+        case "Photos": tool = "photos_albums"
+        default: return String(localized: "Für diese Quelle ist keine Zugriffsprüfung verfügbar.")
+        }
+        var input: [String: JSONValue] = source == "Calendar" ? [:] : ["limit": .number(1)]
+        if source == "Notes" || source == "Reminders" { input["max_candidates"] = .number(10) }
+        if source == "Notes" { input["include_body"] = .bool(false) }
+        let response = await service.handle(tool: tool, input: input)
+        return response.ok
+            ? String(localized: "Zugriff erfolgreich: Abfrage ausgeführt (\(response.items.count) Ergebnisse innerhalb des Prüflimits). Es wurden keine Daten verändert.")
+            : String(localized: "Zugriff fehlgeschlagen: \(response.message ?? String(localized: "Unbekannter Fehler"))")
+    }
+
+    func requestDataPermissions() async {
+        await runDataPermissionSequence(performStep: { id in
+            if id == "mail_local_store" || id == "voice_memos_store" {
+                if requiresStoreSelection {
+                    let store: SandboxStoreAccess.Store = id == "mail_local_store" ? .mail : .voiceMemos
+                    let panel = NSOpenPanel()
+                    panel.canChooseDirectories = true
+                    panel.canChooseFiles = false
+                    panel.allowsMultipleSelection = false
+                    panel.prompt = String(localized: "Lesen erlauben")
+                    panel.message = String(localized: store.instruction)
+                    let response = await withCheckedContinuation { continuation in
+                        panel.begin { response in continuation.resume(returning: response) }
+                    }
+                    if response == .OK, let url = panel.url {
+                        await acceptStoreSelection(.success([url]), for: store)
+                    }
+                }
+            } else {
+                await performPermissionRequest(id: id)
+            }
+        }, refresh: { await self.refreshPermissions() })
+    }
+
+    /// The whole sequence owns the busy state, including user-controlled folder dialogs.
+    /// Injected effects let tests verify ordering and cancellation without requesting real rights.
+    func runDataPermissionSequence(
+        performStep: (String) async -> Void,
+        refresh: () async -> Void
+    ) async {
+        guard !permissionBusy else { return }
+        permissionBusy = true
+        permissionSequenceRunning = true
+        stopPermissionSequence = false
+        defer { permissionBusy = false; permissionSequenceRunning = false }
+        let steps: [(String, LocalizedStringResource)] = [
+            ("calendar", "Kalender"), ("contacts", "Kontakte"), ("reminders", "Erinnerungen"),
+            ("mail_local_store", "Mail"), ("notes_automation", "Notizen"), ("photos", "Fotos"),
+            ("voice_memos_store", "Sprachmemos"), ("speech_recognition", "Spracherkennung")
+        ]
+        for (index, step) in steps.enumerated() {
+            guard !Task.isCancelled, !stopPermissionSequence else { break }
+            permissionProgress = String(localized: "Schritt \(index + 1) von 8: \(String(localized: step.1))")
+            await performStep(step.0)
+        }
+        await refresh()
+        permissionProgress = stopPermissionSequence || Task.isCancelled
+            ? String(localized: "Ablauf beendet. Bereits erteilte Freigaben bleiben erhalten.")
+            : String(localized: "Alle acht Quellen durchlaufen. Prüfe unten die Ergebnisse. Fehlende Freigaben und Festplattenvollzugriff müssen gegebenenfalls in den Systemeinstellungen aktiviert werden.")
+    }
+
+    func cancelPermissionSequence() {
+        // A macOS consent dialog belongs to the user; finish that dialog before stopping.
+        stopPermissionSequence = true
+        permissionProgress = String(localized: "Der Ablauf endet nach dem aktuellen Dialog.")
+    }
+
+    func processLocalText(_ text: String, style: String) async -> ToolResponse {
+        guard usageRiskAccepted, serverState == "running" else {
+            return ToolResponse(ok: false, source: "Apple Intelligence", message: String(localized: "Bitte zuerst die Einrichtung abschließen und den lokalen Server starten."))
+        }
+        return await service.handle(tool: "ai_summarize", input: ["text": .string(text), "style": .string(style)])
     }
 
     func stop() {
@@ -324,6 +428,10 @@ final class AppModel: ObservableObject {
         guard !permissionBusy else { return }
         permissionBusy = true
         defer { permissionBusy = false }
+        await performPermissionRequest(id: id)
+    }
+
+    private func performPermissionRequest(id: String) async {
         permissionRefreshGeneration = UUID()
         let result = await nativePermissions.requestFromNativeUI(id: id)
         permissionRefreshGeneration = UUID()
@@ -349,7 +457,7 @@ final class AppModel: ObservableObject {
         NSWorkspace.shared.openApplication(at: Bundle.main.bundleURL, configuration: configuration) { _, error in
             Task { @MainActor in
                 if error != nil {
-                    self.permissionMessage = "Die App konnte nicht neu geöffnet werden. Bitte LocalMCP mit ⌘Q beenden und erneut öffnen."
+                    self.permissionMessage = String(localized: "Die App konnte nicht neu geöffnet werden. Bitte LocalMCP mit ⌘Q beenden und erneut öffnen.")
                     self.startIfNeeded()
                 } else {
                     NSApplication.shared.terminate(nil)
@@ -360,7 +468,7 @@ final class AppModel: ObservableObject {
 
     func openPermissionSettings(pane: String) {
         let response = nativePermissions.openSettings(input: ["pane": .string(pane)])
-        if !response.ok { permissionMessage = "Die Systemeinstellungen konnten nicht geöffnet werden." }
+        if !response.ok { permissionMessage = String(localized: "Die Systemeinstellungen konnten nicht geöffnet werden.") }
     }
 
     func statusResponse(includeActivity: Bool = true) -> StatusResponse {
@@ -395,7 +503,7 @@ final class AppModel: ObservableObject {
             provider: response.source,
             status: response.ok ? "ok" : "error",
             detail: response.ok
-                ? "\(response.items.count) item(s)"
+                ? String(localized: "\(response.items.count) Ergebnisse")
                 : String((response.message ?? "error").prefix(2_000)),
             durationMilliseconds: durationMilliseconds,
             toolName: tool,
