@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+## 1.0.1 — 2026-09-13
+
+- Prepare the German and English Mac App Store release using Xcode 27 RC.
+- Add accessible privacy-policy and support links and explicit privacy manifests.
+
 - Add a custom LocalMCP macOS icon, including all standard ICNS sizes and installation/release validation.
 
 ## 0.3.1 — 2026-09-11 (local build)

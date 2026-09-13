@@ -116,6 +116,7 @@ private struct UsageRiskDialog: View {
             Divider()
             ScrollView {
                 VStack(alignment: .leading, spacing: 18) {
+                    PrivacyLinks()
                     Text("LocalMCP ermöglicht verbundenen KI- und MCP-Clients den Zugriff auf deine Daten. Je nach erteilten Freigaben, aktivierten Werkzeugen und ausgeführten Kurzbefehlen können Daten gelesen, weitergegeben, erstellt, verändert, überschrieben oder gelöscht werden.")
                     Text("Fehlerhafte Anweisungen, Softwarefehler oder missbräuchliche Zugriffe können zum Verlust sämtlicher Daten führen, auf die die aktivierten Funktionen zugreifen können. Änderungen und Löschungen können über iCloud auch andere Geräte betreffen. Eine Wiederherstellung ist nicht garantiert.")
                         .fontWeight(.semibold)

@@ -335,6 +335,7 @@ chmod +x "$STAGED_BRIDGE_BINARY"
 mkdir -p "$STAGED_APP/Contents/Resources"
 cp "$ROOT_DIR/Sources/M3MCPApp/Resources/AppIcon.icns" "$STAGED_APP/Contents/Resources/AppIcon.icns"
 python3 "$ROOT_DIR/script/compile_localizations.py" "$STAGED_APP/Contents/Resources"
+cp "$ROOT_DIR/Sources/M3MCPApp/Resources/PrivacyInfo.xcprivacy" "$STAGED_APP/Contents/Resources/PrivacyInfo.xcprivacy"
 cp "$SOURCE_INFO_PLIST" "$STAGED_APP/Contents/Info.plist"
 printf 'APPL????' > "$STAGED_APP/Contents/PkgInfo"
 xattr -cr "$STAGED_APP" 2>/dev/null || true

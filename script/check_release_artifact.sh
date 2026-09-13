@@ -44,6 +44,7 @@ $BUNDLE/Contents/PkgInfo
 $BUNDLE/Contents/Resources/
 $BUNDLE/Contents/Resources/AppIcon.icns
 $BUNDLE/Contents/Resources/LICENSE
+$BUNDLE/Contents/Resources/PrivacyInfo.xcprivacy
 $BUNDLE/Contents/Resources/THIRD_PARTY.md
 $BUNDLE/Contents/Resources/de.lproj/
 $BUNDLE/Contents/Resources/de.lproj/InfoPlist.strings
@@ -313,6 +314,12 @@ if cmp -s "$ROOT_DIR/docs/THIRD_PARTY.md" "$APP/Contents/Resources/THIRD_PARTY.m
   pass "third-party notices are retained byte-for-byte"
 else
   fail "third-party notices are missing or changed"
+fi
+
+if cmp -s "$ROOT_DIR/Sources/M3MCPApp/Resources/PrivacyInfo.xcprivacy" "$APP/Contents/Resources/PrivacyInfo.xcprivacy"; then
+  pass "privacy manifest matches reviewed source"
+else
+  fail "privacy manifest is missing or changed"
 fi
 
 # Compile from the reviewed catalogs and require byte-identical packaged translations.

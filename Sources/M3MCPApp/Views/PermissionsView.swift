@@ -12,6 +12,7 @@ struct PermissionsView: View {
             if !compact {
                 PageHeading(title: "Deine Daten. Deine Freigaben.", subtitle: "Aktiviere die Quellen, die du mit deinem MCP-Client nutzen möchtest.")
             }
+            PrivacyLinks()
             Panel {
                 HStack(alignment: .top, spacing: 14) {
                     FeatureIcon(symbol: "externaldrive.badge.person.crop")
