@@ -111,6 +111,7 @@ final class MailProvider {
     private static let maximumQueryCharacters = 4_096
     private static let maximumQueryTerms = 64
     private static let maximumMailboxFilterCharacters = 1_024
+    private static let maximumFlagColorCharacters = 256
     static let maximumMailboxRows = 20_000
     private static let maximumListedMailboxes = 1_000
     static let maximumRecipientJoinRows = 20_000
@@ -154,12 +155,13 @@ final class MailProvider {
 
         guard input.string("query").count <= Self.maximumQueryCharacters,
               input.string("mailbox").count <= Self.maximumMailboxFilterCharacters,
+              input.string("flag_color").count <= Self.maximumFlagColorCharacters,
               Self.hasBoundedFieldSelector(input["fields"]),
               Self.hasValidFieldSelector(input["fields"]) else {
             return ToolResponse(
                 ok: false,
                 source: sourceName,
-                message: "Mail search input is too large. query is limited to \(Self.maximumQueryCharacters) characters, mailbox to \(Self.maximumMailboxFilterCharacters), and fields to the documented four names."
+                message: "Mail search input is too large. query is limited to \(Self.maximumQueryCharacters) characters, mailbox to \(Self.maximumMailboxFilterCharacters), flag_color to \(Self.maximumFlagColorCharacters), and fields to the documented four names."
             )
         }
         let requestedMatch = StringSanitizer.lower(input.string("match", default: "all"))
@@ -170,7 +172,17 @@ final class MailProvider {
                 message: "Mail match must be one of: all, any, phrase."
             )
         }
-        let request = SearchRequest(input: input)
+        let flagColor: MailFlagColorFilter
+        do {
+            flagColor = try MailFlagColorFilter.parse(input.string("flag_color"))
+        } catch let parseError as MailFlagColorFilter.ParseError {
+            return ToolResponse(ok: false, source: sourceName, message: parseError.message)
+        } catch {
+            // parse throws ParseError and nothing else, so this branch is unreachable. It
+            // exists only because Swift requires exhaustive error handling.
+            return ToolResponse(ok: false, source: sourceName, message: error.localizedDescription)
+        }
+        let request = SearchRequest(input: input, flagColor: flagColor)
         guard request.terms.count <= Self.maximumQueryTerms else {
             return ToolResponse(
                 ok: false,
@@ -373,6 +385,88 @@ final class MailProvider {
         }
     }
 
+    // MARK: - Flag colors
+
+    private enum MailFlagColor {
+        /// (code, canonical name, German aliases)
+        static let palette: [(code: Int, name: String, aliases: [String])] = [
+            (0, "red",    ["rot"]),
+            (1, "orange", ["orange"]),
+            (2, "yellow", ["gelb"]),
+            (3, "green",  ["grün", "gruen"]),
+            (4, "blue",   ["blau"]),
+            (5, "purple", ["lila"]),
+            (6, "gray",   ["grau", "grey"]),
+        ]
+
+        static func name(forCode code: Int) -> String {
+            palette.first(where: { $0.code == code })?.name ?? "unknown"
+        }
+
+        /// One already-trimmed token: canonical name, German alias, or a digit 0-6.
+        /// Case-insensitive and umlaut-tolerant. nil for an invalid token.
+        static func resolve(_ token: String) -> Int? {
+            guard !token.isEmpty else { return nil }
+
+            // Digit form: exactly ONE character from 0-6.
+            // Int(token) on its own is not enough: it would also accept "+5", "05" and "-1".
+            // Int(_:) is ASCII-only, so digits such as "\u{0665}" are rejected here.
+            if token.count == 1, let code = Int(token), (0...6).contains(code) {
+                return code
+            }
+
+            // Name form. lowercased() is the locale-INdependent Unicode default folding;
+            // localizedLowercase is not (under a Turkish locale it folds "I" to "\u{0131}").
+            // Swift compares strings by canonical equivalence, so the NFC and the NFD spelling
+            // of an umlaut alias both match.
+            let needle = token.lowercased()
+            for entry in palette where entry.name == needle || entry.aliases.contains(needle) {
+                return entry.code
+            }
+            return nil
+        }
+    }
+
+    /// Closed filter type. "Not requested" and "invalid" must not share a value: if they did,
+    /// an invalid input could silently degrade into "no filter" instead of failing.
+    enum MailFlagColorFilter {
+        /// No filter requested (empty or whitespace-only input).
+        case none
+        /// Validated, deduplicated, sorted, non-empty list of codes (0-6).
+        case codes([Int])
+
+        struct ParseError: Error { let message: String }
+
+        /// Empty input becomes .none. Invalid input throws immediately, at parse time.
+        static func parse(_ raw: String) throws -> MailFlagColorFilter {
+            let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !trimmed.isEmpty else { return .none }
+            let tokens = trimmed.split(separator: ",")
+                .map { $0.trimmingCharacters(in: .whitespaces) }
+                .filter { !$0.isEmpty }
+            var resolved: Set<Int> = []
+            for token in tokens {
+                guard let code = MailFlagColor.resolve(token) else {
+                    throw ParseError(message: Self.invalidInputMessage)
+                }
+                resolved.insert(code)
+            }
+            // Separator-only input ("," or " , ") survives the empty-token filter as an empty
+            // list. Without this guard it would become .codes([]) and buildWhere would emit
+            // `IN ()`, which SQLite accepts as an empty set. A bad request would then read as a
+            // legitimate "no matches" instead of an error.
+            guard !resolved.isEmpty else {
+                throw ParseError(message: Self.invalidInputMessage)
+            }
+            return .codes(resolved.sorted())
+        }
+
+        static let invalidInputMessage =
+            "Mail flag_color must be one of: red, orange, yellow, green, blue, purple, gray "
+            + "(or German aliases rot, orange, gelb, grün, blau, lila, grau), or codes 0–6, "
+            + "comma-separated."
+    }
+
     // MARK: - Request
 
     /// Everything the caller asked for, resolved once so the SQL builder and the response metadata
@@ -395,8 +489,11 @@ final class MailProvider {
         let includeBody: Bool
         let includeRecipients: Bool
         let maxCandidates: Int
+        let flaggedOnly: Bool
+        let flagColorFilter: String
+        let flagColorCodes: [Int]?
 
-        init(input: [String: JSONValue]) {
+        init(input: [String: JSONValue], flagColor: MailFlagColorFilter) {
             rawQuery = input.string("query").trimmingCharacters(in: .whitespacesAndNewlines)
 
             // The old behaviour read "unread", "heute", "24h" out of the query text and turned them
@@ -437,6 +534,13 @@ final class MailProvider {
             includeBody = input.bool("include_body", default: false)
             includeRecipients = input.bool("include_recipients", default: false)
             maxCandidates = max(limit, min(input.int("max_candidates", default: 500), 5_000))
+            flaggedOnly = input.bool("flagged_only", default: false)
+            flagColorFilter = input.string("flag_color")
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+            switch flagColor {
+            case .none:            flagColorCodes = nil
+            case .codes(let list): flagColorCodes = list
+            }
         }
 
         var searchesBody: Bool { fields.contains("body") && !terms.isEmpty }
@@ -659,6 +763,10 @@ final class MailProvider {
             "include_junk": String(request.includeJunk),
             "mailbox_filter": request.mailboxFilter,
             "mailbox_filter_matched": String(mailboxFilterMatched),
+            "flagged_only": String(request.flaggedOnly),
+            "flag_color": request.flagColorFilter,   // ≤ 256 characters, bounded like mailbox_filter
+            "flag_color_codes": (request.flagColorCodes ?? [])
+                .map(String.init).joined(separator: ","),
             "mailboxes_known": String(mailboxes.count),
             "recipients_searchable": String(schema.canSearchRecipients),
             "body_searchable": "true"
@@ -753,6 +861,8 @@ final class MailProvider {
         let deleted: String?
         let junk: String?
         let mailbox: String?
+        let flagged: String?   // provider.pick(columns, ["flagged", "is_flagged"])
+        let flags: String?     // provider.pick(columns, ["flags"])
 
         let hasSubjectsLookup: Bool
         let hasAddressesLookup: Bool
@@ -775,6 +885,8 @@ final class MailProvider {
             deleted = provider.pick(columns, ["deleted", "is_deleted", "isDeleted"])
             junk = provider.pick(columns, ["junk", "is_junk", "isJunk"])
             mailbox = provider.pick(columns, ["mailbox"])
+            flagged = provider.pick(columns, ["flagged", "is_flagged"])
+            flags = provider.pick(columns, ["flags"])
 
             let subjects = try provider.tableColumns(database: database, table: "subjects")
             let addresses = try provider.tableColumns(database: database, table: "addresses")
@@ -866,6 +978,27 @@ final class MailProvider {
                 throw MailStoreFailure("Unread filtering is not available in this Mail index schema.")
             }
             predicates.append("messages.\(Self.quoted(read)) = 0")
+        }
+
+        // Both flagged_only and a colour filter imply flagged = 1. Mail does not clear the
+        // colour bits when a message is unmarked, so the code alone is not a sound predicate.
+        if request.flaggedOnly || request.flagColorCodes != nil {
+            guard let flagged = schema.flagged else {
+                throw MailStoreFailure("Flag filtering is not available in this Mail index schema.")
+            }
+            predicates.append("messages.\(Self.quoted(flagged)) = 1")
+        }
+        if let codes = request.flagColorCodes {   // non-nil implies validated and non-empty
+            guard let flags = schema.flags else {
+                throw MailStoreFailure("Flag-color filtering is not available in this Mail index schema.")
+            }
+            let list = codes.map(String.init).joined(separator: ",")
+            predicates.append("((messages.\(Self.quoted(flags)) >> 39) & 7) IN (\(list))")
+            // Deliberately NO bindings.append. Only validated integer literals reach the SQL,
+            // never a character of the user input, so there is no injection surface. Binding
+            // them instead would be actively wrong: ((flags >> 39) & 7) is an expression and
+            // therefore has no column affinity, so SQLite would never match it against the TEXT
+            // value that bind() produces, and the filter would silently return nothing.
         }
 
         // In SQL, not after the LIMIT. Filtering a already-truncated page in memory is only correct
@@ -987,6 +1120,8 @@ final class MailProvider {
         let messageIDExpr = schema.messageID.map { "messages.\(Self.quoted($0))" } ?? "NULL"
         let readExpr = schema.read.map { "messages.\(Self.quoted($0))" } ?? "NULL"
         let mailboxExpr = schema.mailbox.map { "messages.\(Self.quoted($0))" } ?? "NULL"
+        let flaggedExpr = schema.flagged.map { "messages.\(Self.quoted($0))" } ?? "NULL"
+        let flagsExpr = schema.flags.map { "messages.\(Self.quoted($0))" } ?? "NULL"
 
         var sql = """
         SELECT
@@ -997,7 +1132,9 @@ final class MailProvider {
           \(dateExpr ?? "NULL"),
           \(readExpr),
           \(mailboxExpr),
-          \(schema.senderMatchExpression)
+          \(schema.senderMatchExpression),
+          \(flaggedExpr),
+          \(flagsExpr)
         FROM messages
         """
         for join in schema.joins { sql += " " + join }
@@ -1043,7 +1180,9 @@ final class MailProvider {
                     senderHaystack: String(
                         (try textValue(statement, column: 7, field: "messages.sender_search") ?? "")
                             .prefix(8_000)
-                    )
+                    ),
+                    isFlagged: boolValue(statement, column: 8),
+                    flagColorCode: intValue(statement, column: 9).map { ($0 >> 39) & 7 }
                 )
             )
         }
@@ -1346,6 +1485,13 @@ final class MailProvider {
         if let isRead = row.isRead {
             metadata["read"] = String(isRead)
         }
+        if let isFlagged = row.isFlagged {
+            metadata["flagged"] = String(isFlagged)
+            if isFlagged, let code = row.flagColorCode {
+                metadata["flag_color"] = String(code)
+                metadata["flag_color_name"] = MailFlagColor.name(forCode: code)
+            }
+        }
         if let mailboxID = row.mailboxID, let box = mailboxes[mailboxID] {
             metadata["mailbox_id"] = box.id
             metadata["mailbox"] = box.path.isEmpty ? box.name : box.path
@@ -1401,6 +1547,8 @@ final class MailProvider {
         let recipientsTruncated: Bool
         let receivedDate: Date?
         let isRead: Bool?
+        let isFlagged: Bool?
+        let flagColorCode: Int?
         let body: String
         var mailbox: String?
         var mailboxRole: String?
@@ -1415,6 +1563,8 @@ final class MailProvider {
         let isRead: Bool?
         let mailboxID: String?
         let senderHaystack: String
+        let isFlagged: Bool?
+        let flagColorCode: Int?
     }
 
     private struct MailStoreFailure: Error {
@@ -1518,6 +1668,13 @@ final class MailProvider {
         if let isRead = detail.isRead {
             metadata["read"] = String(isRead)
         }
+        if let isFlagged = detail.isFlagged {
+            metadata["flagged"] = String(isFlagged)
+            if isFlagged, let code = detail.flagColorCode {
+                metadata["flag_color"] = String(code)
+                metadata["flag_color_name"] = MailFlagColor.name(forCode: code)
+            }
+        }
         if !detail.recipients.isEmpty {
             metadata["to"] = detail.recipients
         }
@@ -1562,6 +1719,8 @@ final class MailProvider {
         let messageIDExpr = schema.messageID.map { "messages.\(Self.quoted($0))" } ?? "NULL"
         let readExpr = schema.read.map { "messages.\(Self.quoted($0))" } ?? "NULL"
         let mailboxExpr = schema.mailbox.map { "messages.\(Self.quoted($0))" } ?? "NULL"
+        let flaggedExpr = schema.flagged.map { "messages.\(Self.quoted($0))" } ?? "NULL"
+        let flagsExpr = schema.flags.map { "messages.\(Self.quoted($0))" } ?? "NULL"
 
         var sql = """
         SELECT
@@ -1571,7 +1730,9 @@ final class MailProvider {
           \(schema.senderDisplayExpression),
           \(dateExpr),
           \(readExpr),
-          \(mailboxExpr)
+          \(mailboxExpr),
+          \(flaggedExpr),
+          \(flagsExpr)
         FROM messages
         """
         for join in schema.joins { sql += " " + join }
@@ -1600,6 +1761,8 @@ final class MailProvider {
         )
         let date = dateValue(statement, column: 4)
         let isRead = boolValue(statement, column: 5)
+        let isFlagged = boolValue(statement, column: 7)
+        let flagColorCode = intValue(statement, column: 8).map { ($0 >> 39) & 7 }
         let mailboxID = try textValue(statement, column: 6, field: "messages.mailbox")
 
         var body = ""
@@ -1640,6 +1803,8 @@ final class MailProvider {
             recipientsTruncated: boundedRecipients.truncated,
             receivedDate: date,
             isRead: isRead,
+            isFlagged: isFlagged,
+            flagColorCode: flagColorCode,
             body: body.isEmpty ? "(body not available — .emlx file not found)" : body,
             mailbox: box.map { $0.path.isEmpty ? $0.name : $0.path },
             mailboxRole: box?.role
