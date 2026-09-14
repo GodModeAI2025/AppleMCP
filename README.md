@@ -360,6 +360,34 @@ Re-verification procedure: mark seven fresh test messages, one in each of the se
 read their codes with the SQL above, and compare against the table. If the codes diverge,
 treat this documentation and the provider mapping as stale.
 
+### Mail date range filters
+
+`mail_search` accepts an absolute time range alongside the relative `since_hours` window:
+
+- `date_from` (string, maximum 40 characters): absolute lower bound, inclusive. Accepts
+  `YYYY`, `YYYY-MM`, `YYYY-MM-DD`, or a full ISO 8601 timestamp; the short forms resolve to
+  the START of the named period, so `date_from=2025` is 1 January 00:00 local time.
+- `date_to` (string, maximum 40 characters): absolute upper bound, inclusive. Same formats,
+  but the short forms resolve to the END of the named period, so `date_to=2025` includes
+  31 December 23:59:59.999. Truncating at midnight would silently drop the last day.
+- Timestamps are read in the machine's local time zone, because Mail shows local times; a
+  timestamp that carries an explicit zone (`Z` or `+02:00`) wins over the local zone.
+- `date_from`/`date_to` cannot be combined with `since_hours`: a `since_hours` above zero
+  is rejected as an invocation error, while a `since_hours` that `auto_intent`
+  derived from the query text is discarded in favour of the range. `meta.time_filter`
+  reports which time filter ran (`date_range`, `since_hours`, or `none`).
+- Invalid input — an unrecognized format, an impossible date such as `2025-02-30`, a year
+  outside 1970–2100, or a reversed range — fails closed with a clear error instead of
+  returning an empty result set.
+- `meta.date_from_applied` and `meta.date_to_applied` report the instants the inputs
+  actually resolved to, including the zone, so the end-of-day rule is visible.
+
+Known quirk of the data source, not fixable here: the Envelope Index sorts by the raw date
+column value, which mixes Unix epoch seconds and Core Data reference-date seconds. With
+mixed encodings in one result, reference-dated rows sort after epoch-dated rows regardless
+of their true time. The date range filter itself handles both encodings with separate SQL
+branches.
+
 ## Optional tool groups
 
 Each group is disabled when its variable is absent, empty, malformed, or false. Accepted true values are `1`, `true`, `yes`, and `on` (case-insensitive).

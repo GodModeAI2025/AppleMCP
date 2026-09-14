@@ -214,6 +214,180 @@ final class MailProviderSearchSemanticsTests: XCTestCase {
         XCTAssertEqual(unmatched.meta?["mailbox_filter_matched"], "0")
     }
 
+    // MARK: - Date range filters
+
+    /// ISO 8601 stamp with the machine's local zone, the zone the provider resolves zoneless
+    /// input in. The instant is what matters; the zone designator only makes it unambiguous.
+    private func isoStamp(_ date: Date) -> String {
+        let formatter = ISO8601DateFormatter()
+        formatter.timeZone = Calendar.current.timeZone
+        return formatter.string(from: date)
+    }
+
+    /// Core regression: the date column mixes Unix epoch seconds and Core Data reference-date
+    /// seconds, so the range filter must carry both SQL branches. A single-branch filter would
+    /// silently drop either the epoch-dated or the reference-dated row.
+    func testDateRangeMatchesBothEpochs() async {
+        let now = Date()
+        let response = await search([
+            "query": .string("timestamp"),
+            "fields": .array([.string("subject")]),
+            "date_from": .string(isoStamp(now.addingTimeInterval(-3_600))),
+            "date_to": .string(isoStamp(now))
+        ])
+        XCTAssertTrue(response.ok, response.message ?? "")
+        XCTAssertEqual(Set(response.items.map(\.id)), ["7", "8"], "one row is epoch-dated, the other reference-dated")
+        XCTAssertEqual(response.meta?["time_filter"], "date_range")
+    }
+
+    /// date_to is inclusive and, for the short forms, the END of the named period: a message
+    /// at 23:30 must survive date_to naming its own day. Truncating at midnight would drop it.
+    func testDateToIncludesTheWholeDay() async {
+        let response = await search([
+            "query": .string("evening"),
+            "fields": .array([.string("subject")]),
+            "date_to": .string("2025-12-31")
+        ])
+        XCTAssertTrue(response.ok, response.message ?? "")
+        XCTAssertEqual(response.items.map(\.id), ["14"])
+    }
+
+    /// The short forms are the main use case: date_from=2025 and date_to=2025 must cover
+    /// 1 January through 31 December inclusive, and must not reach into the following year.
+    func testShortFormsResolveToPeriodEdges() async {
+        let response = await search([
+            "query": .string("memo"),
+            "fields": .array([.string("subject")]),
+            "date_from": .string("2025"),
+            "date_to": .string("2025")
+        ])
+        XCTAssertTrue(response.ok, response.message ?? "")
+        XCTAssertEqual(Set(response.items.map(\.id)), ["13", "14"], "1 January and 31 December both belong to 2025")
+        XCTAssertFalse(response.items.contains { $0.id == "15" }, "1 January 2026 is not part of 2025")
+    }
+
+    /// An invalid input must throw at parse time, never degrade into an empty result set: for
+    /// an archival search "no hits" looks like a result.
+    func testInvalidDateFailsClosed() async {
+        for raw in ["2025-02-30", "gestern", "17.03.2025"] {
+            let response = await search([
+                "query": .string("memo"),
+                "date_from": .string(raw)
+            ])
+            XCTAssertFalse(response.ok, "\(raw) must fail closed, not return nothing")
+            XCTAssertTrue(
+                response.message?.contains("Mail date_from and date_to accept") == true,
+                "\(raw): \(response.message ?? "")"
+            )
+        }
+    }
+
+    /// date_from after date_to is an invocation error, not a filter that happens to match
+    /// nothing. Both resolved instants belong in the message.
+    func testReversedRangeIsAnError() async {
+        let response = await search([
+            "query": .string("memo"),
+            "date_from": .string("2025-06"),
+            "date_to": .string("2025-03")
+        ])
+        XCTAssertFalse(response.ok)
+        XCTAssertTrue(response.message?.contains("2025-06-01") == true, response.message ?? "")
+        XCTAssertTrue(response.message?.contains("2025-03-31") == true, response.message ?? "")
+    }
+
+    /// A since_hours above zero next to an absolute range is an invocation error, not a silent
+    /// AND of two conflicting time filters.
+    func testExplicitSinceHoursWithRangeIsAnError() async {
+        let response = await search([
+            "query": .string("memo"),
+            "date_from": .string("2025"),
+            "date_to": .string("2025"),
+            "since_hours": .number(24)
+        ])
+        XCTAssertFalse(response.ok)
+        XCTAssertTrue(response.message?.contains("since_hours") == true, response.message ?? "")
+    }
+
+    /// A present-but-zero since_hours is not a competing filter, because the predicate only fires
+    /// above zero. Rejecting it would refuse a correct call from any client that pads optional
+    /// arguments with their defaults, which is what a model typically does.
+    func testZeroSinceHoursDoesNotConflictWithRange() async {
+        let response = await search([
+            "query": .string("timestamp"),
+            "fields": .array([.string("subject")]),
+            "date_from": .string("2025"),
+            "date_to": .string("2025"),
+            "since_hours": .number(0)
+        ])
+        XCTAssertTrue(response.ok, response.message ?? "")
+        XCTAssertEqual(response.meta?["time_filter"], "date_range")
+    }
+
+    /// A since_hours that auto_intent derived from the query text yields to the
+    /// absolute range instead of silently ANDing into an empty set. meta.time_filter says
+    /// which filter won. The query uses "letzte 24h" because the intent cleaner removes that
+    /// phrase but keeps "heute" as a literal term, which would break match=all for reasons
+    /// unrelated to the date range.
+    func testAutoIntentSinceHoursYieldsToRange() async {
+        let response = await search([
+            "query": .string("memo letzte 24h"),
+            "fields": .array([.string("subject")]),
+            "auto_intent": .bool(true),
+            "date_from": .string("2025"),
+            "date_to": .string("2025")
+        ])
+        XCTAssertTrue(response.ok, response.message ?? "")
+        XCTAssertEqual(Set(response.items.map(\.id)), ["13", "14"])
+        XCTAssertEqual(response.meta?["time_filter"], "date_range")
+        XCTAssertEqual(response.meta?["since_hours"], "0", "the auto-intent window was discarded")
+    }
+
+    /// Without a date column an unfiltered search keeps working; a requested range fails closed
+    /// with a clear message instead of silently searching everything.
+    func testMissingDateColumnFailsClosed() async throws {
+        let plain = try MailFixture(withDateColumn: false)
+        defer { plain.tearDown() }
+
+        let unfiltered = await plain.withMailRoot {
+            await MailProvider().search(input: [
+                "query": .string("quarterly"),
+                "fields": .array([.string("subject")])
+            ])
+        }
+        XCTAssertTrue(unfiltered.ok, unfiltered.message ?? "")
+        XCTAssertEqual(unfiltered.items.map(\.id), ["1"])
+
+        let ranged = await plain.withMailRoot {
+            await MailProvider().search(input: [
+                "query": .string("quarterly"),
+                "date_from": .string("2025")
+            ])
+        }
+        XCTAssertFalse(ranged.ok)
+        XCTAssertTrue(
+            ranged.message?.contains("Date filtering is not available") == true,
+            ranged.message ?? ""
+        )
+    }
+
+    /// meta.date_*_applied shows the instant the short form actually resolved to, including the
+    /// zone: without it the end-of-day rule for date_to would be invisible.
+    func testAppliedBoundsInMetadata() async {
+        let response = await search([
+            "query": .string("memo"),
+            "date_from": .string("2025"),
+            "date_to": .string("2025")
+        ])
+        XCTAssertTrue(response.ok, response.message ?? "")
+        let fromApplied = response.meta?["date_from_applied"] ?? ""
+        let toApplied = response.meta?["date_to_applied"] ?? ""
+        XCTAssertTrue(fromApplied.hasPrefix("2025-01-01T00:00:00"), fromApplied)
+        XCTAssertTrue(toApplied.hasPrefix("2025-12-31T23:59:59"), toApplied)
+        XCTAssertEqual(response.meta?["time_filter"], "date_range")
+        XCTAssertEqual(response.meta?["date_from"], "2025")
+        XCTAssertEqual(response.meta?["date_to"], "2025")
+    }
+
     // MARK: - Flag metadata and filters
 
     func testFlagMetadataInSearchResults() async {
@@ -513,7 +687,7 @@ private final class MailFixture {
     let root: URL
     private let outside: URL
 
-    init(withFlagColumns: Bool = true) throws {
+    init(withFlagColumns: Bool = true, withDateColumn: Bool = true) throws {
         let unique = UUID().uuidString
         root = URL(fileURLWithPath: "/private/tmp/m3mail-semantics-\(unique)", isDirectory: true)
         outside = URL(fileURLWithPath: "/private/tmp/m3mail-outside-\(unique)", isDirectory: true)
@@ -552,7 +726,7 @@ private final class MailFixture {
             throw Self.error("could not create the synthetic Envelope Index")
         }
         defer { sqlite3_close(database) }
-        try Self.populate(database, withFlagColumns: withFlagColumns)
+        try Self.populate(database, withFlagColumns: withFlagColumns, withDateColumn: withDateColumn)
     }
 
     func tearDown() {
@@ -601,9 +775,17 @@ private final class MailFixture {
         try Data("\(email.utf8.count)\n\(email)".utf8).write(to: url)
     }
 
-    private static func populate(_ database: OpaquePointer, withFlagColumns: Bool) throws {
+    private static func populate(_ database: OpaquePointer, withFlagColumns: Bool, withDateColumn: Bool) throws {
         let epochNow = Date().timeIntervalSince1970
         let referenceNow = Date().timeIntervalSinceReferenceDate
+
+        // Fixed 2025/2026 dates for the date-range tests, resolved through Calendar so month
+        // lengths and leap years are never computed by hand. Row 13 is deliberately stored in
+        // the reference epoch, rows 14 and 15 in the Unix epoch.
+        let calendar = Calendar.current
+        let newYear2025 = calendar.date(from: DateComponents(year: 2025, month: 1, day: 1, hour: 12))!
+        let lateEvening2025 = calendar.date(from: DateComponents(year: 2025, month: 12, day: 31, hour: 23, minute: 30))!
+        let followingYear2026 = calendar.date(from: DateComponents(year: 2026, month: 1, day: 1, hour: 9))!
 
         try execute(
             """
@@ -626,7 +808,10 @@ private final class MailFixture {
                 (9, 'timestamp epoch old'),
                 (10, 'timestamp reference old'),
                 (11, 'Multipart message'),
-                (12, 'Message behind a symlink');
+                (12, 'Message behind a symlink'),
+                (13, 'New year memo'),
+                (14, 'Late evening memo'),
+                (15, 'Following year memo');
 
             CREATE TABLE addresses (address TEXT, comment TEXT);
             INSERT INTO addresses (ROWID, address, comment) VALUES
@@ -637,22 +822,18 @@ private final class MailFixture {
             on: database
         )
 
-        var messagesSchema = """
-            CREATE TABLE messages (
-                message_id TEXT,
-                subject INTEGER,
-                sender INTEGER,
-                date_received REAL,
-                read INTEGER,
-                deleted INTEGER,
-                junk INTEGER,
-                mailbox INTEGER
-            """
+        var messageColumns = ["message_id TEXT", "subject INTEGER", "sender INTEGER"]
+        if withDateColumn { messageColumns.append("date_received REAL") }
+        messageColumns.append(contentsOf: ["read INTEGER", "deleted INTEGER", "junk INTEGER", "mailbox INTEGER"])
         if withFlagColumns {
-            messagesSchema += ",\n                flagged INTEGER,\n                flags INTEGER"
+            messageColumns.append(contentsOf: ["flagged INTEGER", "flags INTEGER"])
         }
-        messagesSchema += "\n            );"
-        try execute(messagesSchema, on: database)
+        try execute(
+            "CREATE TABLE messages (\n                "
+                + messageColumns.joined(separator: ",\n                ")
+                + "\n            );",
+            on: database
+        )
 
         try execute(
             """
@@ -687,20 +868,29 @@ private final class MailFixture {
             (9, 9, 2, epochNow - 400_000, 0, 0, 0, 1),
             (10, 10, 2, referenceNow - 400_000, 0, 0, 0, 1),
             (11, 11, 2, epochNow - 700, 0, 0, 0, 1),
-            (12, 12, 2, epochNow - 800, 0, 0, 0, 3)
+            (12, 12, 2, epochNow - 800, 0, 0, 0, 3),
+            (13, 13, 2, newYear2025.timeIntervalSinceReferenceDate, 0, 0, 0, 1),
+            (14, 14, 2, lateEvening2025.timeIntervalSince1970, 0, 0, 0, 1),
+            (15, 15, 2, followingYear2026.timeIntervalSince1970, 0, 0, 0, 1)
         ]
         for (id, subject, sender, date, read, deleted, junk, mailbox) in rows {
             let flag: (flagged: Int, flags: Int) = withFlagColumns
                 ? (flagRows[id] ?? (flagged: 0, flags: 0))
                 : (flagged: 0, flags: 0)
-            let flagColumns = withFlagColumns ? ", flagged, flags" : ""
-            let flagValues = withFlagColumns ? ", \(flag.flagged), \(flag.flags)" : ""
+            var columnList = "ROWID, message_id, subject, sender"
+            var valueList = "(\(id), 'm\(id)', \(subject), \(sender)"
+            if withDateColumn {
+                columnList += ", date_received"
+                valueList += ", \(date)"
+            }
+            columnList += ", read, deleted, junk, mailbox"
+            valueList += ", \(read), \(deleted), \(junk), \(mailbox)"
+            if withFlagColumns {
+                columnList += ", flagged, flags"
+                valueList += ", \(flag.flagged), \(flag.flags)"
+            }
             try execute(
-                """
-                INSERT INTO messages
-                    (ROWID, message_id, subject, sender, date_received, read, deleted, junk, mailbox\(flagColumns))
-                VALUES (\(id), 'm\(id)', \(subject), \(sender), \(date), \(read), \(deleted), \(junk), \(mailbox)\(flagValues));
-                """,
+                "INSERT INTO messages (\(columnList)) VALUES \(valueList));",
                 on: database
             )
         }

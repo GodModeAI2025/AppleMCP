@@ -112,6 +112,7 @@ final class MailProvider {
     private static let maximumQueryTerms = 64
     private static let maximumMailboxFilterCharacters = 1_024
     private static let maximumFlagColorCharacters = 256
+    private static let maximumDateBoundCharacters = 40
     static let maximumMailboxRows = 20_000
     private static let maximumListedMailboxes = 1_000
     static let maximumRecipientJoinRows = 20_000
@@ -156,12 +157,14 @@ final class MailProvider {
         guard input.string("query").count <= Self.maximumQueryCharacters,
               input.string("mailbox").count <= Self.maximumMailboxFilterCharacters,
               input.string("flag_color").count <= Self.maximumFlagColorCharacters,
+              input.string("date_from").count <= Self.maximumDateBoundCharacters,
+              input.string("date_to").count <= Self.maximumDateBoundCharacters,
               Self.hasBoundedFieldSelector(input["fields"]),
               Self.hasValidFieldSelector(input["fields"]) else {
             return ToolResponse(
                 ok: false,
                 source: sourceName,
-                message: "Mail search input is too large. query is limited to \(Self.maximumQueryCharacters) characters, mailbox to \(Self.maximumMailboxFilterCharacters), flag_color to \(Self.maximumFlagColorCharacters), and fields to the documented four names."
+                message: "Mail search input is too large. query is limited to \(Self.maximumQueryCharacters) characters, mailbox to \(Self.maximumMailboxFilterCharacters), flag_color to \(Self.maximumFlagColorCharacters), date_from and date_to to \(Self.maximumDateBoundCharacters), and fields to the documented four names."
             )
         }
         let requestedMatch = StringSanitizer.lower(input.string("match", default: "all"))
@@ -182,7 +185,44 @@ final class MailProvider {
             // exists only because Swift requires exhaustive error handling.
             return ToolResponse(ok: false, source: sourceName, message: error.localizedDescription)
         }
-        let request = SearchRequest(input: input, flagColor: flagColor)
+        let calendar = Calendar.current
+        let from: MailDateBound
+        let to: MailDateBound
+        do {
+            from = try MailDateBound.parse(input.string("date_from"), edge: .start, calendar: calendar)
+            to   = try MailDateBound.parse(input.string("date_to"),   edge: .end,   calendar: calendar)
+        } catch let parseError as MailDateBound.ParseError {
+            return ToolResponse(ok: false, source: sourceName, message: parseError.message)
+        } catch {
+            // parse throws ParseError and nothing else, so this branch is unreachable. It
+            // exists only because Swift requires exhaustive error handling.
+            return ToolResponse(ok: false, source: sourceName, message: error.localizedDescription)
+        }
+        if let fromInstant = from.instant, let toInstant = to.instant, fromInstant > toInstant {
+            return ToolResponse(
+                ok: false,
+                source: sourceName,
+                message: "Mail date_from resolves to \(Self.isoString(fromInstant)) and date_to to \(Self.isoString(toInstant)); date_from must not lie after date_to."
+            )
+        }
+        // A present-but-zero since_hours is not a second time filter: the predicate below only
+        // fires above zero, so rejecting it would refuse a correct call from any client that
+        // pads optional arguments with their defaults.
+        if (from.instant != nil || to.instant != nil), input.int("since_hours", default: 0) > 0 {
+            return ToolResponse(
+                ok: false,
+                source: sourceName,
+                message: "Mail date_from and date_to cannot be combined with since_hours; pass one time filter, not two."
+            )
+        }
+        let request = SearchRequest(
+            input: input,
+            flagColor: flagColor,
+            dateFromRaw: input.string("date_from").trimmingCharacters(in: .whitespacesAndNewlines),
+            dateToRaw: input.string("date_to").trimmingCharacters(in: .whitespacesAndNewlines),
+            dateFrom: from.instant,
+            dateTo: to.instant
+        )
         guard request.terms.count <= Self.maximumQueryTerms else {
             return ToolResponse(
                 ok: false,
@@ -487,6 +527,184 @@ final class MailProvider {
             + "comma-separated."
     }
 
+    // MARK: - Date bounds
+
+    /// One parsed bound of an absolute date range.
+    ///
+    /// "Not requested" and "invalid" must not share a value: an unparseable input throws at
+    /// parse time instead of silently degrading into "no filter", which would read as a
+    /// legitimate empty result set.
+    enum MailDateBound {
+        /// No bound requested (empty or whitespace-only input).
+        case none
+        /// A resolved instant. For date_to this is the inclusive end of the named period.
+        case instant(Date)
+
+        struct ParseError: Error { let message: String }
+
+        enum Edge { case start, end }
+
+        /// The instant behind the bound, nil exactly for .none.
+        var instant: Date? {
+            switch self {
+            case .none: return nil
+            case .instant(let date): return date
+            }
+        }
+
+        /// Years outside this window are refused: the date column's two-epoch threshold at
+        /// 1000000000 only classifies sane modern dates, so a bound outside it would silently
+        /// misclassify whole centuries.
+        private static let minimumYear = 1_970
+        private static let maximumYear = 2_100
+
+        /// Uniform message for input no parser step recognizes.
+        static let invalidInputMessage =
+            "Mail date_from and date_to accept YYYY, YYYY-MM, YYYY-MM-DD, or a full ISO 8601 timestamp. "
+            + "date_from is the start of the named period, date_to its inclusive end."
+
+        /// A shape the parser knows but a value it cannot resolve.
+        static let yearWindowMessage =
+            "Mail date_from and date_to accept years from 1970 through 2100 only."
+
+        static let impossibleDateMessage =
+            "Mail date_from and date_to accept real calendar dates only; this input names a date that does not exist."
+
+        /// Empty input becomes .none. Anything unparseable throws, at parse time.
+        static func parse(_ raw: String, edge: Edge, calendar: Calendar) throws -> MailDateBound {
+            let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !trimmed.isEmpty else { return .none }
+
+            // 1. Full ISO 8601 timestamp, with or without a zone designator. Measured on this
+            //    toolchain: `.withInternetDateTime` alone refuses zoneless input and any fraction,
+            //    and `.withFractionalSeconds` requires the fraction, so the chain needs all three
+            //    steps. A stamp that carries a zone is resolved by the first two; the zoneless
+            //    DateFormatter reads the stamp in the machine's local zone, which is what the
+            //    time-zone rule wants.
+            let internetDateTime = ISO8601DateFormatter()
+            internetDateTime.formatOptions = .withInternetDateTime
+            internetDateTime.timeZone = calendar.timeZone
+            if let date = internetDateTime.date(from: trimmed) {
+                return try Self.timestamp(date, raw: trimmed)
+            }
+
+            let fractional = ISO8601DateFormatter()
+            fractional.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+            fractional.timeZone = calendar.timeZone
+            if let date = fractional.date(from: trimmed) {
+                return try Self.timestamp(date, raw: trimmed)
+            }
+
+            let zoneless = DateFormatter()
+            zoneless.dateFormat = "yyyy-MM-dd'T'HH:mm:ss"
+            zoneless.timeZone = calendar.timeZone
+            zoneless.isLenient = false
+            if let date = zoneless.date(from: trimmed) {
+                return try Self.timestamp(date, raw: trimmed)
+            }
+
+            // 2-4. Short forms, strict ASCII digit checks: Int(_:) alone would also accept "+5"
+            //      and "05", and Unicode carries digit look-alikes that must not parse as a year.
+            let parts = trimmed.split(separator: "-", omittingEmptySubsequences: false).map(String.init)
+            switch parts.count {
+            case 1 where Self.digitsOnly(parts[0], length: 4):
+                return try Self.period(year: Int(parts[0])!, month: nil, day: nil, edge: edge, calendar: calendar)
+            case 2 where Self.digitsOnly(parts[0], length: 4) && Self.digitsOnly(parts[1], length: 2):
+                return try Self.period(year: Int(parts[0])!, month: Int(parts[1])!, day: nil, edge: edge, calendar: calendar)
+            case 3 where Self.digitsOnly(parts[0], length: 4)
+                && Self.digitsOnly(parts[1], length: 2) && Self.digitsOnly(parts[2], length: 2):
+                return try Self.period(year: Int(parts[0])!, month: Int(parts[1])!, day: Int(parts[2])!, edge: edge, calendar: calendar)
+            default:
+                throw ParseError(message: Self.invalidInputMessage)
+            }
+        }
+
+        /// A full timestamp: the year window applies here too, read from the input's leading
+        /// digits — every string the formatters accept starts with the year.
+        private static func timestamp(_ date: Date, raw: String) throws -> MailDateBound {
+            let yearPrefix = String(raw.prefix(4))
+            guard Self.digitsOnly(yearPrefix, length: 4), let year = Int(yearPrefix) else {
+                throw ParseError(message: Self.invalidInputMessage)
+            }
+            guard (minimumYear...maximumYear).contains(year) else {
+                throw ParseError(message: Self.yearWindowMessage)
+            }
+            return .instant(date)
+        }
+
+        /// Builds the named period through Calendar and takes its start, or — for edge .end —
+        /// its last representable moment. Month lengths and leap years come from Calendar;
+        /// nothing is computed by hand here.
+        private static func period(
+            year: Int, month: Int?, day: Int?, edge: Edge, calendar: Calendar
+        ) throws -> MailDateBound {
+            guard (minimumYear...maximumYear).contains(year) else {
+                throw ParseError(message: Self.yearWindowMessage)
+            }
+            var components = DateComponents()
+            components.year = year
+            components.month = month
+            components.day = day
+            guard let start = calendar.date(from: components) else {
+                throw ParseError(message: Self.impossibleDateMessage)
+            }
+            // Calendar rolls impossible dates forward (2025-02-30 becomes 2 March), so the
+            // round-trip through dateComponents is what actually detects them; without it an
+            // impossible date would silently name a different period.
+            let resolved = calendar.dateComponents([.year, .month, .day], from: start)
+            guard resolved.year == year,
+                  month == nil || resolved.month == month,
+                  day == nil || resolved.day == day else {
+                throw ParseError(message: Self.impossibleDateMessage)
+            }
+            switch edge {
+            case .start:
+                return .instant(start)
+            case .end:
+                // The last representable moment of the period, not the start of the next one,
+                // so the SQL `<=` comparison is inclusive over the whole named period. Calendar
+                // provides the next start; the one-millisecond step back is only the resolution
+                // of "last representable moment", so date_to=2025 reads as 23:59:59.999.
+                let nextStart: Date
+                switch (month, day) {
+                case (nil, nil):
+                    guard let added = calendar.date(byAdding: .year, value: 1, to: start) else {
+                        throw ParseError(message: Self.impossibleDateMessage)
+                    }
+                    nextStart = added
+                case (_, nil):
+                    guard let added = calendar.date(byAdding: .month, value: 1, to: start) else {
+                        throw ParseError(message: Self.impossibleDateMessage)
+                    }
+                    nextStart = added
+                default:
+                    guard let added = calendar.date(byAdding: .day, value: 1, to: start) else {
+                        throw ParseError(message: Self.impossibleDateMessage)
+                    }
+                    nextStart = added
+                }
+                return .instant(nextStart.addingTimeInterval(-1.0 / 1_000))
+            }
+        }
+
+        /// Exactly `length` ASCII digits: Int(_:) alone would also accept "+5" and "05", and
+        /// Unicode digit look-alikes must not parse as a date component.
+        private static func digitsOnly(_ value: String, length: Int) -> Bool {
+            value.count == length
+                && value.unicodeScalars.allSatisfy { $0.value >= 48 && $0.value <= 57 }
+        }
+    }
+
+    /// ISO 8601 with fractional seconds in the machine's local zone — the zone the bounds were
+    /// resolved in. The fraction is part of the contract: date_to=2025 resolves to 23:59:59.999,
+    /// and without it the end-of-day rule would be invisible in the metadata.
+    private static func isoString(_ date: Date) -> String {
+        let formatter = ISO8601DateFormatter()
+        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        formatter.timeZone = Calendar.current.timeZone
+        return formatter.string(from: date)
+    }
+
     // MARK: - Request
 
     /// Everything the caller asked for, resolved once so the SQL builder and the response metadata
@@ -512,8 +730,20 @@ final class MailProvider {
         let flaggedOnly: Bool
         let flagColorFilter: String
         let flagColorCodes: [Int]?
+        let dateFromRaw: String     // trimmed raw value, length-bounded, for the echo
+        let dateToRaw: String
+        let dateFrom: Date?         // nil exactly when no filter was requested
+        let dateTo: Date?
+        let timeFilterDescription: String
 
-        init(input: [String: JSONValue], flagColor: MailFlagColorFilter) {
+        init(
+            input: [String: JSONValue],
+            flagColor: MailFlagColorFilter,
+            dateFromRaw: String,
+            dateToRaw: String,
+            dateFrom: Date?,
+            dateTo: Date?
+        ) {
             rawQuery = input.string("query").trimmingCharacters(in: .whitespacesAndNewlines)
 
             // The old behaviour read "unread", "heute", "24h" out of the query text and turned them
@@ -548,7 +778,16 @@ final class MailProvider {
             limit = max(1, min(input.int("limit", default: 25), 500))
             offset = max(0, min(input.int("offset", default: 0), 1_000_000))
             unreadOnly = input.bool("unread_only", default: autoIntent ? intent.1 : false)
-            sinceHours = max(0, min(input.int("since_hours", default: (autoIntent ? intent.2 : nil) ?? 0), 175_200))
+            // 4.4: an absolute range and since_hours are two time filters on the same column.
+            // An explicitly passed since_hours next to a range is refused before this init runs;
+            // a since_hours that auto_intent derived from the query text yields to the range.
+            let sinceHoursRequested = input.int("since_hours", default: (autoIntent ? intent.2 : nil) ?? 0)
+            let rangeRequested = dateFrom != nil || dateTo != nil
+            if rangeRequested, input["since_hours"] == nil {
+                sinceHours = 0
+            } else {
+                sinceHours = max(0, min(sinceHoursRequested, 175_200))
+            }
             includeJunk = input.bool("include_junk", default: false)
             mailboxFilter = input.string("mailbox").trimmingCharacters(in: .whitespacesAndNewlines)
             includeBody = input.bool("include_body", default: false)
@@ -561,6 +800,13 @@ final class MailProvider {
             case .none:            flagColorCodes = nil
             case .codes(let list): flagColorCodes = list
             }
+            self.dateFromRaw = dateFromRaw
+            self.dateToRaw = dateToRaw
+            self.dateFrom = dateFrom
+            self.dateTo = dateTo
+            timeFilterDescription = rangeRequested
+                ? "date_range"
+                : (sinceHours > 0 ? "since_hours" : "none")
         }
 
         var searchesBody: Bool { fields.contains("body") && !terms.isEmpty }
@@ -790,6 +1036,11 @@ final class MailProvider {
             "flag_color": request.flagColorFilter,   // ≤ 256 characters, bounded like mailbox_filter
             "flag_color_codes": (request.flagColorCodes ?? [])
                 .map(String.init).joined(separator: ","),
+            "date_from": request.dateFromRaw,   // ≤ 40 characters, pattern like mailbox_filter
+            "date_to": request.dateToRaw,
+            "date_from_applied": request.dateFrom.map(Self.isoString) ?? "",
+            "date_to_applied": request.dateTo.map(Self.isoString) ?? "",
+            "time_filter": request.timeFilterDescription,   // "date_range", "since_hours" or "none"
             "mailboxes_known": String(mailboxes.count),
             "recipients_searchable": String(schema.canSearchRecipients),
             "body_searchable": "true"
@@ -1035,6 +1286,33 @@ final class MailProvider {
                 "((messages.\(Self.quoted(date)) > 1000000000 AND messages.\(Self.quoted(date)) >= \(epoch))"
                 + " OR (messages.\(Self.quoted(date)) <= 1000000000 AND messages.\(Self.quoted(date)) >= \(reference)))"
             )
+        }
+
+        // The resolution in SearchRequest guarantees at most one of the two time filters above
+        // and below is non-empty, so this block sits beside the since_hours block without
+        // ever ANDing into it.
+        if request.dateFrom != nil || request.dateTo != nil {
+            guard let date = schema.date else {
+                throw MailStoreFailure("Date filtering is not available in this Mail index schema.")
+            }
+            let column = "messages.\(Self.quoted(date))"
+            // The column mixes Unix epoch seconds and Core Data reference-date seconds, so each
+            // branch compares against the bound expressed in its own epoch. Dropping a branch
+            // would silently lose every row stored in the other one.
+            func branch(_ threshold: String, _ lower: Double?, _ upper: Double?) -> String {
+                var parts = ["\(column) \(threshold) 1000000000"]
+                if let lower { parts.append("\(column) >= \(lower)") }
+                if let upper { parts.append("\(column) <= \(upper)") }
+                return "(" + parts.joined(separator: " AND ") + ")"
+            }
+            let epochBranch = branch(">", request.dateFrom?.timeIntervalSince1970,
+                                      request.dateTo?.timeIntervalSince1970)
+            let refBranch   = branch("<=", request.dateFrom?.timeIntervalSinceReferenceDate,
+                                     request.dateTo?.timeIntervalSinceReferenceDate)
+            predicates.append("(\(epochBranch) OR \(refBranch))")
+            // Literals, not bindings: these are server-computed Doubles, no character of the user
+            // input reaches the SQL. Binding them as text would compare TEXT against a numeric
+            // column and match nothing.
         }
 
         if let mailboxIDs, let mailbox = schema.mailbox {

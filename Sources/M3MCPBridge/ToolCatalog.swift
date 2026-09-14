@@ -315,6 +315,12 @@ enum ToolCatalog {
                     "description": "Filter flagged messages by marker color. Accepts comma-separated names or codes: red/rot=0, orange=1, yellow/gelb=2, green/grün=3, blue/blau=4, purple/lila=5, gray/grau=6. Implies flagged_only. Colors are read from the flags bitmask (bits 39-41); the flag_color DB column is unreliable and ignored. Maximum 256 characters."
                 ],
                 "since_hours": ["type": "integer", "description": "Only return messages received within the last N hours, e.g. 24. Applied in the query, not after the page was cut."],
+                "date_from": ["type": "string",
+                    "description": "Absolute lower bound, inclusive. Accepts YYYY, YYYY-MM, YYYY-MM-DD, or a full ISO 8601 timestamp; the short forms resolve to the START of the named period. Local time unless the timestamp carries a zone. Cannot be combined with since_hours."
+                ],
+                "date_to": ["type": "string",
+                    "description": "Absolute upper bound, inclusive. Same formats as date_from, but the short forms resolve to the END of the named period, so date_to=2025 includes 31 December. meta.date_to_applied reports the instant actually used."
+                ],
                 "max_candidates": ["type": "integer", "description": "Upper bound on messages inspected when body matching is requested. Default 500. meta.scan_capped says whether the bound was reached."]
             ])
         ),
