@@ -388,6 +388,26 @@ final class MailProvider {
     // MARK: - Flag colors
 
     private enum MailFlagColor {
+        /// Apple Mail keeps the marker colour in bits 39-41 of the `flags` bitmask, verified
+        /// empirically against a live Envelope Index (macOS 26, Index V10). A future macOS may
+        /// move it. Both extraction forms below are derived from these two constants so the
+        /// filter and the reported colour cannot drift apart: the filter runs in SQLite, the
+        /// metadata in Swift, and a half-updated layout would produce silently wrong colours
+        /// rather than an error.
+        static let shift = 39
+        static let mask = 7
+
+        /// Colour code from a raw `flags` value. The mask discards the sign extension, so a
+        /// negative flags value yields the same code as the SQL form.
+        static func code(fromFlags flags: Int) -> Int {
+            (flags >> shift) & mask
+        }
+
+        /// The same extraction as a SQL expression. `column` must already be quoted.
+        static func sqlExpression(column: String) -> String {
+            "((\(column) >> \(shift)) & \(mask))"
+        }
+
         /// (code, canonical name, German aliases)
         static let palette: [(code: Int, name: String, aliases: [String])] = [
             (0, "red",    ["rot"]),
@@ -993,10 +1013,11 @@ final class MailProvider {
                 throw MailStoreFailure("Flag-color filtering is not available in this Mail index schema.")
             }
             let list = codes.map(String.init).joined(separator: ",")
-            predicates.append("((messages.\(Self.quoted(flags)) >> 39) & 7) IN (\(list))")
+            let expression = MailFlagColor.sqlExpression(column: "messages.\(Self.quoted(flags))")
+            predicates.append("\(expression) IN (\(list))")
             // Deliberately NO bindings.append. Only validated integer literals reach the SQL,
             // never a character of the user input, so there is no injection surface. Binding
-            // them instead would be actively wrong: ((flags >> 39) & 7) is an expression and
+            // them instead would be actively wrong: the shift-and-mask is an expression and
             // therefore has no column affinity, so SQLite would never match it against the TEXT
             // value that bind() produces, and the filter would silently return nothing.
         }
@@ -1182,7 +1203,7 @@ final class MailProvider {
                             .prefix(8_000)
                     ),
                     isFlagged: boolValue(statement, column: 8),
-                    flagColorCode: intValue(statement, column: 9).map { ($0 >> 39) & 7 }
+                    flagColorCode: intValue(statement, column: 9).map(MailFlagColor.code(fromFlags:))
                 )
             )
         }
@@ -1762,7 +1783,7 @@ final class MailProvider {
         let date = dateValue(statement, column: 4)
         let isRead = boolValue(statement, column: 5)
         let isFlagged = boolValue(statement, column: 7)
-        let flagColorCode = intValue(statement, column: 8).map { ($0 >> 39) & 7 }
+        let flagColorCode = intValue(statement, column: 8).map(MailFlagColor.code(fromFlags:))
         let mailboxID = try textValue(statement, column: 6, field: "messages.mailbox")
 
         var body = ""
