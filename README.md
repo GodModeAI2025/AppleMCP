@@ -308,7 +308,22 @@ Mail index on 2026-09-13 (macOS 26, Index V10):
 Caveats baked into the implementation: the `flag_color` database column is unreliable and
 ignored; unmarked messages can still carry leftover color codes in the bits (Mail does not
 clear them when unmarking), so filters and metadata always combine `flagged = 1` with the
-code; code 7 is invalid and reported as `unknown`.
+code; code 7 is invalid and reported as `unknown`. Because a colour filter implies
+`flagged = 1`, `meta.flagged_only` reports the predicate that ran, not only the explicit
+parameter.
+
+Two caveats of the data source itself, observed on macOS 26 and not fixable here:
+
+- **A newly received message can take minutes to appear**, flag and all. Flagging a message
+  that is already in the index is visible immediately, because only the flag has to be
+  written; a message that arrived moments ago needs its whole row indexed first. Verified
+  on 2026-09-14: flags set on older messages were visible on the first query, a message
+  received nine minutes earlier took several more minutes.
+- **A colour can appear as red for a while after it is set.** Flagging in Mail is red first
+  and the colour is a second step, and a flag that round-trips through a server may come
+  back without its colour. A filter on one colour can therefore miss a message that was
+  just marked. When freshness matters, search `flag_color=purple,red` rather than one
+  colour alone.
 
 Because Apple can change the bit layout in a future macOS version, the mapping can be
 re-verified against the live index with read-only SQL:

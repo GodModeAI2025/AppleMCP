@@ -783,7 +783,10 @@ final class MailProvider {
             "include_junk": String(request.includeJunk),
             "mailbox_filter": request.mailboxFilter,
             "mailbox_filter_matched": String(mailboxFilterMatched),
-            "flagged_only": String(request.flaggedOnly),
+            // flag_color implies the flagged = 1 predicate, so report the predicate that actually
+            // ran, not only the explicit parameter. A caller reading `false` would otherwise have
+            // to assume unflagged messages could be in the result, which is never true here.
+            "flagged_only": String(request.flaggedOnly || request.flagColorCodes != nil),
             "flag_color": request.flagColorFilter,   // ≤ 256 characters, bounded like mailbox_filter
             "flag_color_codes": (request.flagColorCodes ?? [])
                 .map(String.init).joined(separator: ","),

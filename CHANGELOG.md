@@ -14,6 +14,9 @@
   keeps unfiltered searches working and rejects requested flag filters with a clear message.
   Read-only throughout: no write operations, no new permissions. See the README section
   "Mail flag metadata (marker colors)" for the mapping table and the re-verification SQL.
+  `meta.flagged_only` reports the predicate that ran, so a colour filter shows `true`.
+  Two caveats of the data source are documented alongside: a newly received message can take
+  minutes to be indexed, and a colour can read as red for a while after it is set.
 
 ## 1.0.1 — 2026-09-13
 

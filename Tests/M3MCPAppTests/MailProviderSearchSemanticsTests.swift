@@ -298,6 +298,40 @@ final class MailProviderSearchSemanticsTests: XCTestCase {
         )
     }
 
+    /// A colour filter implies flagged = 1, and the metadata must say so. A caller reading
+    /// flagged_only: false would otherwise have to assume unflagged messages could be present.
+    func testFlagColorImpliesFlaggedOnlyInMetadata() async {
+        let response = await search(["flag_color": .string("lila")])
+        XCTAssertTrue(response.ok, response.message ?? "")
+        XCTAssertEqual(response.meta?["flagged_only"], "true")
+        XCTAssertEqual(response.meta?["flag_color_codes"], "5")
+    }
+
+    /// limit and offset must reach the SQL and come back in the metadata. Worth its own test
+    /// because a client that serialises them as strings gets a type error instead, and from the
+    /// response alone "rejected" and "silently ignored" look the same.
+    func testLimitAndOffsetAreAppliedAndReported() async {
+        let wide = await search(["limit": .number(50)])
+        XCTAssertTrue(wide.ok, wide.message ?? "")
+        XCTAssertEqual(wide.meta?["limit"], "50")
+        let total = Int(wide.meta?["total"] ?? "0") ?? 0
+        XCTAssertGreaterThan(total, 3, "the fixture must hold enough rows to page through")
+
+        let first = await search(["limit": .number(2), "offset": .number(0)])
+        XCTAssertEqual(first.meta?["limit"], "2")
+        XCTAssertEqual(first.meta?["offset"], "0")
+        XCTAssertEqual(first.items.count, 2)
+        XCTAssertEqual(first.meta?["has_more"], "true")
+
+        let second = await search(["limit": .number(2), "offset": .number(2)])
+        XCTAssertEqual(second.meta?["offset"], "2")
+        XCTAssertEqual(second.items.count, 2)
+        XCTAssertTrue(
+            Set(first.items.map(\.id)).isDisjoint(with: second.items.map(\.id)),
+            "a second page must not repeat the first"
+        )
+    }
+
     /// Regression: separator-only input must produce the parse error, not a silent empty
     /// result by way of `IN ()`.
     func testFlagColorFilterRejectsSeparatorOnlyInput() async {
