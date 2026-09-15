@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Installs M3MCP as a login-time background service.
+# Installs LocalMCP as a login-time background service.
 #
 # Differences from build_and_run.sh, which is meant for one-off runs:
 #
@@ -19,7 +19,7 @@ set -euo pipefail
 
 APP_NAME="M3MCPApp"
 BRIDGE_NAME="M3MCPBridge"
-BUNDLE_NAME="M3MCP"
+BUNDLE_NAME="LocalMCP"
 BUNDLE_ID="de.markzimmermann.m3mcp"
 CONFIGURATION="${M3MCP_CONFIGURATION:-release}"
 INSTALL_DIR="${M3MCP_INSTALL_DIR:-$HOME/Applications}"
@@ -332,6 +332,10 @@ chmod +x "$STAGED_APP_BINARY"
 # without this file falls back to token-only and says so in its window and in /health.
 cp "$BUILT_BRIDGE" "$STAGED_BRIDGE_BINARY"
 chmod +x "$STAGED_BRIDGE_BINARY"
+mkdir -p "$STAGED_APP/Contents/Resources"
+cp "$ROOT_DIR/Sources/M3MCPApp/Resources/AppIcon.icns" "$STAGED_APP/Contents/Resources/AppIcon.icns"
+python3 "$ROOT_DIR/script/compile_localizations.py" "$STAGED_APP/Contents/Resources"
+cp "$ROOT_DIR/Sources/M3MCPApp/Resources/PrivacyInfo.xcprivacy" "$STAGED_APP/Contents/Resources/PrivacyInfo.xcprivacy"
 cp "$SOURCE_INFO_PLIST" "$STAGED_APP/Contents/Info.plist"
 printf 'APPL????' > "$STAGED_APP/Contents/PkgInfo"
 xattr -cr "$STAGED_APP" 2>/dev/null || true

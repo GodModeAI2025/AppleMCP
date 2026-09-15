@@ -1,7 +1,7 @@
 # Original app screenshots
 
-Captured on 11 September 2026 from the installed native M3MCP app, version 0.3.1,
-build 5, corresponding to application commit `3c58613cc5fa716bf08f66beabf9c7cf362fab13`.
+Captured on 12 September 2026 from the installed native LocalMCP app, version 0.3.1,
+build 6, from the source accompanying these captures.
 This is a development build; the latest published release can differ.
 
 These are original JPEG window captures, not generated mockups or recreated interfaces.

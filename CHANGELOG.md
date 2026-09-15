@@ -2,7 +2,16 @@
 
 ## Unreleased
 
+## 1.0.1 — 2026-09-13
+
+- Prepare the German and English Mac App Store release using Xcode 27 RC.
+- Add accessible privacy-policy and support links and explicit privacy manifests.
+
+- Add a custom LocalMCP macOS icon, including all standard ICNS sizes and installation/release validation.
+
 ## 0.3.1 — 2026-09-11 (local build)
+
+- Renamed the visible app and product to LocalMCP, including native UI, bundle, documentation, landing page and release assets; existing security and configuration identifiers remain compatible.
 
 - Rebuilt the German repository landing page with four original app screenshots, guided setup instructions and explicit access and release limitations.
 - Added an explicit German usage-risk dialog before server startup, with an unchecked confirmation, cancellation and a locally stored versioned acknowledgement; existing installs must also acknowledge it.
@@ -76,7 +85,7 @@
   overrides the sibling lookup. Where no sibling bridge exists the pin cannot be computed and the
   endpoint says so instead of implying it. `script/install_local.sh` now stages, signs, and commits
   the bridge together with the app, the way `script/package_release.sh` already did, and
-  `script/build_and_run.sh` stages one into its `dist/M3MCP.app` for the same reason. README and the
+  `script/build_and_run.sh` stages one into its `dist/LocalMCP.app` for the same reason. README and the
   landing page now name which bridge to configure for each way of running the app: after an install
   the copy in `.build/release/` is a different binary to the pin and is refused.
 - **Silence no longer takes the endpoint away.** Accepted connections are read through a dispatch

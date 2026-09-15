@@ -6,8 +6,8 @@
 # checksum, signature, metadata, and license gates pass.
 set -euo pipefail
 
-ZIP_NAME="M3MCP.app.zip"
-BUNDLE="M3MCP.app"
+ZIP_NAME="LocalMCP.app.zip"
+BUNDLE="LocalMCP.app"
 MAXIMUM_ZIP_BYTES=268435456
 MAXIMUM_UNPACKED_BYTES=536870912
 MAXIMUM_BRIDGE_OUTPUT_BYTES=20971520
@@ -42,8 +42,16 @@ $BUNDLE/Contents/MacOS/M3MCPApp
 $BUNDLE/Contents/MacOS/M3MCPBridge
 $BUNDLE/Contents/PkgInfo
 $BUNDLE/Contents/Resources/
+$BUNDLE/Contents/Resources/AppIcon.icns
 $BUNDLE/Contents/Resources/LICENSE
+$BUNDLE/Contents/Resources/PrivacyInfo.xcprivacy
 $BUNDLE/Contents/Resources/THIRD_PARTY.md
+$BUNDLE/Contents/Resources/de.lproj/
+$BUNDLE/Contents/Resources/de.lproj/InfoPlist.strings
+$BUNDLE/Contents/Resources/de.lproj/Localizable.strings
+$BUNDLE/Contents/Resources/en.lproj/
+$BUNDLE/Contents/Resources/en.lproj/InfoPlist.strings
+$BUNDLE/Contents/Resources/en.lproj/Localizable.strings
 $BUNDLE/Contents/_CodeSignature/
 $BUNDLE/Contents/_CodeSignature/CodeResources
 EOF
@@ -151,7 +159,7 @@ else
   sed 's/^/        /' "$ENTRY_DIFF" >&2
 fi
 
-if ZIP_TYPES="$(zipinfo -l "$ZIP" 2>/dev/null | awk '$NF ~ /^M3MCP\.app\// { print substr($1, 1, 1) " " $NF }')"; then
+if ZIP_TYPES="$(zipinfo -l "$ZIP" 2>/dev/null | awk '$NF ~ /^LocalMCP\.app\// { print substr($1, 1, 1) " " $NF }')"; then
   while IFS=' ' read -r entry_type entry; do
     [[ -z "$entry" ]] && continue
     if [[ "$entry" == */ ]]; then
@@ -292,6 +300,11 @@ if [[ "$(< "$APP/Contents/PkgInfo")" == "APPL????" ]]; then
 else
   fail "PkgInfo content differs from APPL????"
 fi
+if [[ "$(plist_value CFBundleIconFile)" == "AppIcon" ]] && cmp -s "$ROOT_DIR/Sources/M3MCPApp/Resources/AppIcon.icns" "$APP/Contents/Resources/AppIcon.icns"; then
+  pass "custom app icon matches source and bundle metadata"
+else
+  fail "custom app icon missing or mismatched"
+fi
 if cmp -s "$ROOT_DIR/LICENSE" "$APP/Contents/Resources/LICENSE"; then
   pass "Apache-2.0 license is retained byte-for-byte"
 else
@@ -301,6 +314,29 @@ if cmp -s "$ROOT_DIR/docs/THIRD_PARTY.md" "$APP/Contents/Resources/THIRD_PARTY.m
   pass "third-party notices are retained byte-for-byte"
 else
   fail "third-party notices are missing or changed"
+fi
+
+if cmp -s "$ROOT_DIR/Sources/M3MCPApp/Resources/PrivacyInfo.xcprivacy" "$APP/Contents/Resources/PrivacyInfo.xcprivacy"; then
+  pass "privacy manifest matches reviewed source"
+else
+  fail "privacy manifest is missing or changed"
+fi
+
+# Compile from the reviewed catalogs and require byte-identical packaged translations.
+EXPECTED_LOCALIZATIONS="$WORK_DIR/expected-localizations"
+if python3 "$ROOT_DIR/script/compile_localizations.py" "$EXPECTED_LOCALIZATIONS"; then
+  for language in de en; do
+    for table in InfoPlist Localizable; do
+      resource="$language.lproj/$table.strings"
+      if cmp -s "$EXPECTED_LOCALIZATIONS/$resource" "$APP/Contents/Resources/$resource"; then
+        pass "localized resource $resource matches the catalog"
+      else
+        fail "localized resource $resource missing or changed"
+      fi
+    done
+  done
+else
+  fail "translation catalogs cannot be compiled completely"
 fi
 
 # --- bounded packaged MCP lifecycle and catalog checks ----------------------------------------

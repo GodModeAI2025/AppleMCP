@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE dictionary SYSTEM "file://localhost/System/Library/DTDs/sdef.dtd">
+<dictionary title="LocalMCP Bridge">
+  <suite name="Connection Diagnostics" code="lmcp" description="One-shot authenticated connection check.">
+    <command name="check connection" code="lmcptest" description="Check the local server without reading personal content.">
+      <cocoa class="LocalMCPDiagnosticCommand"/>
+      <access-group identifier="de.mobilebox.LocalMCP.Bridge.diagnostic"/>
+      <parameter name="identifier" code="lmID" type="text" description="One-time diagnostic identifier."/>
+      <parameter name="capability" code="lmTK" type="text" description="Local server capability."/>
+    </command>
+  </suite>
+</dictionary>

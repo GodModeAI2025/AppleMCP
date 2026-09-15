@@ -33,4 +33,12 @@ final class ShortcutRunnerTests: XCTestCase {
         XCTAssertEqual(invocation.maximumOutputBytes, 1_048_576)
         XCTAssertFalse(invocation.arguments.contains { $0.contains("m3mcp-shortcut-input-") })
     }
+    func testNativeOutputAcceptsOnlyBoundedNonemptyText() throws {
+        XCTAssertEqual(try NativeShortcutRunner.decodeOutput("  Grüße\n").get(), "Grüße")
+        XCTAssertThrowsError(try NativeShortcutRunner.decodeOutput(nil).get())
+        XCTAssertThrowsError(try NativeShortcutRunner.decodeOutput(["text"]).get())
+        XCTAssertThrowsError(try NativeShortcutRunner.decodeOutput("  \n").get())
+        XCTAssertNoThrow(try NativeShortcutRunner.decodeOutput(String(repeating: "a", count: 1_048_576)).get())
+        XCTAssertThrowsError(try NativeShortcutRunner.decodeOutput(String(repeating: "ä", count: 524_289)).get())
+    }
 }

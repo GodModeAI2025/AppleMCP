@@ -299,15 +299,7 @@ enum SpeechTranscription {
             throw TranscriptionFailure.unsupportedAudio("\(url.lastPathComponent) is not readable (\(error.localizedDescription))")
         }
 
-        let settings: [String: Any] = [
-            AVFormatIDKey: kAudioFormatLinearPCM,
-            AVLinearPCMBitDepthKey: 32,
-            AVLinearPCMIsFloatKey: true,
-            AVLinearPCMIsNonInterleaved: false,
-            AVLinearPCMIsBigEndianKey: false,
-            AVSampleRateKey: SpeechTranscodePolicy.outputSampleRate,
-            AVNumberOfChannelsKey: SpeechTranscodePolicy.outputChannelCount
-        ]
+        let settings = analyzerPCMOutputSettings
         let output = AVAssetReaderTrackOutput(track: track, outputSettings: settings)
         guard reader.canAdd(output) else {
             throw TranscriptionFailure.unsupportedAudio("\(url.lastPathComponent) cannot be decoded to PCM")
@@ -318,6 +310,19 @@ enum SpeechTranscription {
             output: output,
             sourceName: url.lastPathComponent
         )
+    }
+
+    // Keep this shared with the native input regression test: Float32 traps in Speech on macOS 27.
+    static var analyzerPCMOutputSettings: [String: Any] {
+        [
+            AVFormatIDKey: kAudioFormatLinearPCM,
+            AVLinearPCMBitDepthKey: 16,
+            AVLinearPCMIsFloatKey: false,
+            AVLinearPCMIsNonInterleaved: false,
+            AVLinearPCMIsBigEndianKey: false,
+            AVSampleRateKey: SpeechTranscodePolicy.outputSampleRate,
+            AVNumberOfChannelsKey: SpeechTranscodePolicy.outputChannelCount
+        ]
     }
 
     /// Pull-driven decoding gives SpeechAnalyzer one bounded buffer at a time. The unfolding
@@ -384,6 +389,11 @@ enum SpeechTranscription {
                         continue
                     }
 
+                    guard format.commonFormat == .pcmFormatInt16 else {
+                        throw TranscriptionFailure.unsupportedAudio(
+                            "\(sourceName): SpeechAnalyzer requires decoded Int16 PCM"
+                        )
+                    }
                     let frameCount = CMSampleBufferGetNumSamples(sampleBuffer)
                     guard frameCount > 0 else {
                         try record(frames: 0, bytes: 0)

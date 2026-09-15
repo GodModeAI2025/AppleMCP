@@ -11,7 +11,7 @@ struct M3MCPApp: App {
     }
 
     var body: some Scene {
-        WindowGroup("M3MCP") {
+        WindowGroup("LocalMCP") {
             ContentView(model: model)
                 .frame(minWidth: 1000, minHeight: 700)
                 .task {
@@ -21,6 +21,10 @@ struct M3MCPApp: App {
         .defaultSize(width: 1180, height: 820)
         .commands {
             CommandGroup(replacing: .newItem) {}
+            CommandGroup(replacing: .help) {
+                Link("Datenschutzerklärung", destination: URL(string: "https://www.mobilebox-consulting.de/datenschutzerkl%C3%A4rung-privacy-policy/")!)
+                Link("Support kontaktieren", destination: URL(string: "mailto:mobile_box@icloud.com")!)
+            }
             CommandMenu("Server") {
                 Button("Einrichtungsassistent öffnen") { model.showsSetup = true }
                 Button("MCP-Token & Verbindung") { model.destination = .connection }

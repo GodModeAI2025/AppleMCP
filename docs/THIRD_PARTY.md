@@ -10,11 +10,11 @@ derived implementation is primarily in:
 - `Sources/M3MCPCore/VoiceMemoTranscript.swift`
 - `Tests/M3MCPCoreTests/VoiceMemoTranscriptTests.swift`
 
-The original project is a TypeScript MCP server with a Swift transcription helper. AppleMCP's
+The original project is a TypeScript MCP server with a Swift transcription helper. LocalMCP's
 subsequent WAL snapshot, parser hardening, macOS 26 speech path, cache, temporary-file controls, and
-security policy are later AppleMCP work rather than claims about upstream behavior.
+security policy are later LocalMCP work rather than claims about upstream behavior.
 
-Repository provenance records the initial AppleMCP import in commit
+Repository provenance records the initial LocalMCP import in commit
 [`56ec977f4bcc7ef79f1ac4590e9ba69dce19100b`](https://github.com/GodModeAI2025/AppleMCP/commit/56ec977f4bcc7ef79f1ac4590e9ba69dce19100b).
 That import did not record an exact upstream commit, so this notice does not invent one.
 

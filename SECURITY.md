@@ -1,6 +1,6 @@
 # Security Policy
 
-AppleMCP is a local privileged service: its native app can hold Full Disk Access and macOS TCC
+LocalMCP is a local privileged service: its native app can hold Full Disk Access and macOS TCC
 grants, then exposes a bounded tool surface to an MCP client over an owner-only Unix socket. Treat
 that app-to-client boundary as security-sensitive.
 

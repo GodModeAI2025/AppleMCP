@@ -1,10 +1,10 @@
-# AppleMCP Security Model
+# LocalMCP Security Model
 
-This document describes the security properties and limits of AppleMCP 0.3.0. It is a statement about the implemented controls, not a claim that all local data is isolated from every process or that macOS system services never use a network.
+This document describes the security properties and limits of LocalMCP 0.3.0. It is a statement about the implemented controls, not a claim that all local data is isolated from every process or that macOS system services never use a network.
 
 ## Trust boundaries
 
-AppleMCP has three relevant components:
+LocalMCP has three relevant components:
 
 1. The MCP client and model send JSON-RPC over the bridge's standard input and output.
 2. `M3MCPBridge` validates the MCP lifecycle and forwards enabled tool calls.
@@ -113,11 +113,11 @@ The boundary of the mechanism, stated rather than implied:
   can spend it.
 
 Permission UI does not use this additional sheet because macOS owns the permission prompt or System Settings surface. The group is still disabled by default so an MCP caller cannot make the app activate or raise security UI without a launch-time choice.
-Cancelling a permission sequence returns control to AppleMCP, ignores late framework callbacks, and suppresses every later prompt in that sequence. A macOS permission prompt that the framework already displayed is system-owned and may remain on screen until the user dismisses it.
+Cancelling a permission sequence returns control to LocalMCP, ignores late framework callbacks, and suppresses every later prompt in that sequence. A macOS permission prompt that the framework already displayed is system-owned and may remain on screen until the user dismisses it.
 
 ## macOS permissions
 
-All 21 default tools preflight any TCC authorization they require and do not request permission or open System Settings. Contacts, Calendar, Reminders, Photos, and Notes reads fail with guidance when access is missing. When fresh Voice Memos transcription reaches the legacy `SFSpeechRecognizer` path, it checks Speech Recognition with `prompt: false` and also fails with guidance; the macOS 26 `SpeechAnalyzer` path does not use that legacy authorization callback. Permission requests and settings navigation are isolated in the optional permission-UI group. An Apple framework's system behavior while acquiring an on-device model asset is separate from AppleMCP's TCC request tools.
+All 21 default tools preflight any TCC authorization they require and do not request permission or open System Settings. Contacts, Calendar, Reminders, Photos, and Notes reads fail with guidance when access is missing. When fresh Voice Memos transcription reaches the legacy `SFSpeechRecognizer` path, it checks Speech Recognition with `prompt: false` and also fails with guidance; the macOS 26 `SpeechAnalyzer` path does not use that legacy authorization callback. Permission requests and settings navigation are isolated in the optional permission-UI group. An Apple framework's system behavior while acquiring an on-device model asset is separate from LocalMCP's TCC request tools.
 
 `permissions_status` checks Notes Automation with prompting disabled and never starts Notes. For an
 explicit `notes_search` or `notes_read`, a `procNotFound` preflight can mean that an already-authorized
@@ -129,7 +129,7 @@ an arbitrarily slow target or system prompt cannot block the app's main thread.
 Important distinctions:
 
 - Calendar uses Full Calendar Access because optional, separately gated tools can create, update, and delete real events and calendars.
-- PhotoKit exposes `.addOnly` and `.readWrite`, not a read-existing-assets-only authorization level. AppleMCP must request `.readWrite` to fetch the existing library, although its Photos tool implementation contains no mutation operation.
+- PhotoKit exposes `.addOnly` and `.readWrite`, not a read-existing-assets-only authorization level. LocalMCP must request `.readWrite` to fetch the existing library, although its Photos tool implementation contains no mutation operation.
 - Notes is read through Notes.app Apple Events because macOS has no equivalent public read API. This requires Automation permission for Notes.
 - Notes Automation determination and Notes AppleScript execution share one process-wide synchronous
   Apple Event slot. Each native Automation determination has a 30-second caller deadline;
@@ -141,7 +141,7 @@ Important distinctions:
 - Mail has no AppleScript fallback in 0.3.0. It reads only the local Envelope Index and `.emlx` files and returns Full Disk Access guidance when that store is unavailable.
 - Voice Memos uses a local store and recording files. Full Disk Access can be required for those paths.
 
-TCC protects data sources from the app until the user grants access. Once granted, TCC does not distinguish one caller of AppleMCP's socket from another caller under the same trusted local account.
+TCC protects data sources from the app until the user grants access. Once granted, TCC does not distinguish one caller of LocalMCP's socket from another caller under the same trusted local account.
 
 ## Local transport controls
 
@@ -196,7 +196,7 @@ marker when either value is cut; error detail is limited to 2,000 characters. Tr
 sensitive. The app retains at most 100 activity entries in memory and does not persist them as an
 activity database.
 
-Application diagnostics use macOS Unified Logging with dynamic text marked private and hash-masked. AppleMCP no longer appends a predictable log file under `/tmp`.
+Application diagnostics use macOS Unified Logging with dynamic text marked private and hash-masked. LocalMCP no longer appends a predictable log file under `/tmp`.
 
 ## Data and resource bounds
 
@@ -214,7 +214,7 @@ Application diagnostics use macOS Unified Logging with dynamic text marked priva
   by advancing `offset` by the returned item count, while mailbox callers can narrow their filters.
 - Mail local row IDs must be canonical positive decimal values returned by `mail_search`; path-like and legacy AppleScript IDs are rejected.
 - Contacts uses a predicate-bearing incremental fetch and stops after `limit + 1` callbacks rather than materializing all name matches. Identifiers, names, organization fields, and up to eight email addresses and phone numbers each have fixed UTF-8 response bounds; `metadata.content_truncated` reports field/value clipping.
-- Calendar search queries EventKit in seven-day chunks and inspects 2,000 events by default, at most 5,000. Calendar discovery processes at most 400 calendars. Both return machine-readable scan/truncation metadata, and selected event/calendar fields have fixed UTF-8 response bounds. EventKit itself does not expose a per-query fetch limit, so one unusually dense seven-day chunk may still be materialized before AppleMCP's inspection budget is applied.
+- Calendar search queries EventKit in seven-day chunks and inspects 2,000 events by default, at most 5,000. Calendar discovery processes at most 400 calendars. Both return machine-readable scan/truncation metadata, and selected event/calendar fields have fixed UTF-8 response bounds. EventKit itself does not expose a per-query fetch limit, so one unusually dense seven-day chunk may still be materialized before LocalMCP's inspection budget is applied.
 - Reminders rejects contradictory completed/incomplete filters, fetches one list at a time, and stops provider-side inspection after 1,000 reminders by default or 5,000 at most. Metadata names this a `post_fetch_scan_budget`: EventKit has no fetch-limit parameter and can still materialize one list's callback result before the provider applies that budget. Search/output fields have fixed UTF-8 bounds.
 - Notes queries and direct ids are bounded before the prompt-free Automation preflight. AppleScript truncates identifiers, names, folders, dates, and bodies before building its result, the in-process result has a 2 MiB ceiling, and Swift repeats per-field UTF-8 bounds before response encoding. A direct note body is at most 65,536 characters and reports `metadata.content_truncated`.
 - Photos album discovery inspects at most 2,000 albums and returns 50 by default, at most 200. Response metadata separately reports scan-budget, output-limit, and title-content truncation.
@@ -225,21 +225,21 @@ Application diagnostics use macOS Unified Logging with dynamic text marked priva
 - The local HTTP request parser and MCP message validator impose independent size and structural limits. Responses above 1,000,000 encoded bytes retain one complete compact JSON text result and omit the otherwise duplicate structured-content representation. Bridge stdout is nonblocking with a 15-second absolute write deadline; reservations continue to occupy the 16-call admission bound until output succeeds, is suppressed, or fails. A complete response that grows beyond the 16 MiB stdout limit through JSON-string escaping is replaced before writing by a bounded normal tool error for the same request ID. A partial/failed line or invalid internal JSON permanently fails that writer and prevents further tool dispatch in the process.
 - Shortcut standard output and standard error are each limited to 1 MiB, and execution is limited to 60 seconds.
 
-Data read from Mail, Notes, Calendar, contacts, reminders, photos, recordings, and transcripts is untrusted content. A downstream model can still interpret text as instructions. The `contentTrust` marker exposes that boundary to clients, but AppleMCP's allowlist, annotations, marker, and native approval cannot make source text semantically trustworthy.
+Data read from Mail, Notes, Calendar, contacts, reminders, photos, recordings, and transcripts is untrusted content. A downstream model can still interpret text as instructions. The `contentTrust` marker exposes that boundary to clients, but LocalMCP's allowlist, annotations, marker, and native approval cannot make source text semantically trustworthy.
 
 ## Speech and network behavior
 
 Fresh Voice Memo transcription is fail-closed for remote recognition:
 
-- On macOS 26, AppleMCP uses `SpeechAnalyzer`/`SpeechTranscriber`.
-- On earlier supported systems, or if the newer analyzer cannot service the locale, AppleMCP checks `SFSpeechRecognizer.supportsOnDeviceRecognition` before creating a recognition task and sets `requiresOnDeviceRecognition = true`.
-- If on-device recognition is unavailable, the call fails. AppleMCP does not fall back to cloud recognition.
+- On macOS 26, LocalMCP uses `SpeechAnalyzer`/`SpeechTranscriber`.
+- On earlier supported systems, or if the newer analyzer cannot service the locale, LocalMCP checks `SFSpeechRecognizer.supportsOnDeviceRecognition` before creating a recognition task and sets `requiresOnDeviceRecognition = true`.
+- If on-device recognition is unavailable, the call fails. LocalMCP does not fall back to cloud recognition.
 
 The first use of an on-device speech locale can ask an Apple framework to download a model asset. Apple Intelligence and Image Playground can also depend on system-provided assets. Those downloads are different from uploading the caller's recording or prompt for remote processing, but they mean an absolute "no network activity" claim would be inaccurate.
 
-The optional user-created Shortcuts are explicitly open-world. A Shortcut can use network actions, write data, contact other apps, or cause any other side effect configured by its author. AppleMCP invokes a fixed system binary without a shell, supplies the documented JSON contract, bounds execution, and asks for one-call native approval; it cannot sandbox the Shortcut's internal actions.
+The optional user-created Shortcuts are explicitly open-world. A Shortcut can use network actions, write data, contact other apps, or cause any other side effect configured by its author. LocalMCP invokes a fixed system binary without a shell, supplies the documented JSON contract, bounds execution, and asks for one-call native approval; it cannot sandbox the Shortcut's internal actions.
 
-Apple apps and macOS services can independently sync their own data according to the user's Apple account and system settings. AppleMCP does not disable or control that system behavior.
+Apple apps and macOS services can independently sync their own data according to the user's Apple account and system settings. LocalMCP does not disable or control that system behavior.
 
 ## Files, caches, and cleanup
 
@@ -253,7 +253,7 @@ Apple apps and macOS services can independently sync their own data according to
 | Generated transcript cache | `~/Library/Application Support/M3MCP/transcripts`, directory `0700`, files `0600` | Persists by recording digest to avoid retranscription; no automatic expiration |
 | In-memory activity | App process memory | Maximum 100 entries; discarded when the app exits |
 
-Cleanup only matches an exact AppleMCP prefix, canonical UUID, expected file type, current owner, and minimum age. It opens the temporary directory no-follow and consumes top-level entries incrementally rather than materializing the directory. One pass inspects at most 4,096 entries and attempts at most 64 removals; leftovers wait for a later launch. The app retains exactly one cancellable utility task per lifecycle and starts it only after the Unix-socket start attempt, so cleanup neither blocks the main actor nor races stale-socket setup. Cancellation is checked between entries and removals. The cleanup does not follow symlinks or sweep arbitrary temporary files.
+Cleanup only matches an exact LocalMCP prefix, canonical UUID, expected file type, current owner, and minimum age. It opens the temporary directory no-follow and consumes top-level entries incrementally rather than materializing the directory. One pass inspects at most 4,096 entries and attempts at most 64 removals; leftovers wait for a later launch. The app retains exactly one cancellable utility task per lifecycle and starts it only after the Unix-socket start attempt, so cleanup neither blocks the main actor nor races stale-socket setup. Cancellation is checked between entries and removals. The cleanup does not follow symlinks or sweep arbitrary temporary files.
 
 ## Enabling optional groups in installed or development builds
 

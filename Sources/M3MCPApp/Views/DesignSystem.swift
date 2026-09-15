@@ -54,9 +54,9 @@ struct FeatureIcon: View {
 }
 
 struct SourcePresentation {
-    let title: String
+    let title: LocalizedStringResource
     let icon: String
-    let description: String
+    let description: LocalizedStringResource
     let permissionID: String?
     let prefix: String
 
@@ -69,8 +69,8 @@ struct SourcePresentation {
         case "Notes": return .init(title: "Notizen", icon: "note.text", description: "Inhalte aus Apple Notizen suchen und lesen.", permissionID: "notes_automation", prefix: "notes_")
         case "Photos": return .init(title: "Fotos", icon: "photo", description: "Fotos und Alben anhand ihrer Metadaten finden.", permissionID: "photos", prefix: "photos_")
         case "Voice Memos": return .init(title: "Sprachmemos", icon: "waveform", description: "Aufnahmen finden und vorhandene Transkripte lesen.", permissionID: "voice_memos_store", prefix: "voicememos_")
-        case "Foundation Models": return .init(title: "Sprachmodell", icon: "brain", description: "Texte mit dem verfügbaren lokalen Apple-Modell zusammenfassen.", permissionID: nil, prefix: "ai_summarize")
-        default: return .init(title: "Apple Intelligence", icon: "sparkles", description: "Lokale Apple-Intelligence-Funktionen auf unterstützten Macs verwenden.", permissionID: nil, prefix: "ai_")
+        case "Foundation Models": return .init(title: "Sprachmodell", icon: "brain", description: "Texte lokal zusammenfassen, kürzen und in Stichpunkte oder Aufgaben umwandeln.", permissionID: nil, prefix: "ai_summarize")
+        default: return .init(title: "Apple Intelligence", icon: "sparkles", description: "Apple-Intelligence-Funktionen nutzen: lokale Verarbeitung und ein ausdrücklich optionaler Apple-Cloud-Bilddialog.", permissionID: nil, prefix: "ai_")
         }
     }
 }

@@ -135,23 +135,23 @@ final class NativeToolApprovalCoordinator {
     private func makeAlert(for request: M3MCPToolApprovalRequest) -> NSAlert {
         let alert = NSAlert()
         alert.alertStyle = .warning
-        alert.messageText = "Approve one call to \(request.tool.rawValue)?"
-        let effect = request.effectPreview.map { "\n\nEffect\n\($0)" } ?? ""
-        alert.informativeText = """
-        A local MCP client requested this operation.
+        alert.messageText = String(localized: "Einen Aufruf von \(request.tool.rawValue) erlauben?")
+        let effect = request.effectPreview.map { String(localized: "\n\nAuswirkung\n\($0)") } ?? ""
+        alert.informativeText = String(localized: """
+        Ein lokaler MCP-Client hat diese Aktion angefordert.
 
-        Tool
+        Werkzeug
         \(request.tool.rawValue)
 
-        Arguments
+        Argumente
         \(request.argumentPreview)\(effect)
 
-        Allow applies to this call only. Deny is the default.
-        """
+        Die Erlaubnis gilt nur für diesen Aufruf. Standardmäßig wird abgelehnt.
+        """)
 
-        let denyButton = alert.addButton(withTitle: "Deny")
+        let denyButton = alert.addButton(withTitle: String(localized: "Ablehnen"))
         denyButton.keyEquivalent = "\r"
-        let allowButton = alert.addButton(withTitle: "Allow This Call")
+        let allowButton = alert.addButton(withTitle: String(localized: "Diesen Aufruf erlauben"))
         allowButton.keyEquivalent = ""
         return alert
     }

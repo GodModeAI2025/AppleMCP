@@ -11,6 +11,22 @@ private actor DeadlineStartRecorder {
     }
 }
 
+private actor DeadlineCompletionGate {
+    private var released = false
+    private var continuation: CheckedContinuation<Void, Never>?
+
+    func wait() async {
+        guard !released else { return }
+        await withCheckedContinuation { continuation = $0 }
+    }
+
+    func release() {
+        released = true
+        continuation?.resume()
+        continuation = nil
+    }
+}
+
 final class SpeechPrivacyPolicyTests: XCTestCase {
     func testLegacyRecognitionRequiresOnDeviceCapability() {
         XCTAssertTrue(OnDeviceSpeechPolicy.permitsRecognition(supportsOnDeviceRecognition: true))
@@ -141,28 +157,29 @@ final class SpeechPrivacyPolicyTests: XCTestCase {
 
     func testDeadlineReturnsWhileCancellationIgnoringChildFinishesUnderAdmissionLease() async {
         let admission = AsyncOperationAdmission(maximumConcurrentOperations: 1)
-        let started = DispatchTime.now().uptimeNanoseconds
+        let gate = DeadlineCompletionGate()
+        let childStarted = expectation(description: "Cancellation-ignoring child started")
+        let timeoutReturned = expectation(description: "Deadline returned before child release")
 
-        do {
-            _ = try await AsyncOperationDeadline.run(seconds: 0.02, admission: admission) {
-                // A framework callback bridged through a continuation does not automatically react
-                // to Task cancellation. This deliberately completes later to exercise that shape.
-                await withCheckedContinuation { continuation in
-                    DispatchQueue.global().asyncAfter(deadline: .now() + 0.25) {
-                        continuation.resume()
-                    }
+        let task = Task {
+            do {
+                _ = try await AsyncOperationDeadline.run(seconds: zeitbudget(1), admission: admission) {
+                    childStarted.fulfill()
+                    // Explicitly hold the callback instead of racing two wall-clock sleeps.
+                    // Cancellation must return without releasing this operation's lease.
+                    await gate.wait()
+                    return "late"
                 }
-                return "late"
+                XCTFail("Expected deadline to expire")
+            } catch is AsyncOperationDeadline.TimedOut {
+                // Expected.
+            } catch {
+                XCTFail("Unexpected error: \(error)")
             }
-            XCTFail("Expected deadline to expire")
-        } catch is AsyncOperationDeadline.TimedOut {
-            // Expected.
-        } catch {
-            XCTFail("Unexpected error: \(error)")
+            timeoutReturned.fulfill()
         }
 
-        let elapsed = Double(DispatchTime.now().uptimeNanoseconds - started) / 1_000_000_000
-        XCTAssertLessThan(elapsed, zeitbudget(0.15))
+        await fulfillment(of: [childStarted, timeoutReturned], timeout: zeitbudget(5))
         XCTAssertEqual(admission.activeOperationCount, 1)
 
         do {
@@ -176,7 +193,13 @@ final class SpeechPrivacyPolicyTests: XCTestCase {
             XCTFail("Unexpected error: \(error)")
         }
 
-        try? await Task.sleep(nanoseconds: 350_000_000)
+        // Also release on a failed expectation so a regression cannot strand the child.
+        await gate.release()
+        await task.value
+        let cleanupDeadline = Date().addingTimeInterval(zeitbudget(5))
+        while admission.activeOperationCount != 0 && Date() < cleanupDeadline {
+            try? await Task.sleep(nanoseconds: 10_000_000)
+        }
         XCTAssertEqual(admission.activeOperationCount, 0)
         let recovered = try? await AsyncOperationDeadline.run(seconds: 1, admission: admission) {
             "recovered"

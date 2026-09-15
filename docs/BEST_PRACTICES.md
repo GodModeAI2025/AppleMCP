@@ -1,20 +1,20 @@
-# AppleMCP Access Best Practices
+# LocalMCP Access Best Practices
 
-AppleMCP bridges privacy-controlled macOS data into MCP. Operate it as a local privileged service, not as a general-purpose or multi-user API.
+LocalMCP bridges privacy-controlled macOS data into MCP. Operate it as a local privileged service, not as a general-purpose or multi-user API.
 
 ## Identity and macOS privacy
 
 - Keep the bundle identifier stable: `de.markzimmermann.m3mcp`.
 - Sign the app with a stable identity when persistent TCC grants are needed. Ad-hoc signatures can change identity across rebuilds.
 - Keep the packaged `Info.plist` identical to `Sources/M3MCPApp/Resources/Info.plist`; changing a signed bundle invalidates its signature.
-- Grant only the permissions for providers you actually use. Full Disk Access is high impact because it covers much more than AppleMCP's local Mail and Voice Memos paths.
+- Grant only the permissions for providers you actually use. Full Disk Access is high impact because it covers much more than LocalMCP's local Mail and Voice Memos paths.
 - Every default tool, including fresh Voice Memos transcription, should preflight only. Do not add implicit TCC prompts or settings navigation to the default catalog.
 - Keep permission requests and System Settings navigation behind `M3MCP_ENABLE_PERMISSION_UI`.
 - Request TCC access from `M3MCPApp`, which is the signed privacy principal, not from the bridge.
 - Read Mail only through the local Envelope Index and bounded `.emlx` parser. Do not silently fall back to Mail Automation when Full Disk Access is missing.
 - Use EventKit, Contacts.framework, and Photos.framework where Apple provides them. Keep optional Calendar writes separately enabled and approved per call.
 - PhotoKit requires the `.readWrite` authorization level to fetch existing assets; `.addOnly` cannot support reads. Keep the exposed Photos implementation non-mutating and disclose the framework-level permission accurately.
-- Use Apple Events only when there is no public read API. AppleMCP uses them for Notes and bounds every call with a timeout.
+- Use Apple Events only when there is no public read API. LocalMCP uses them for Notes and bounds every call with a timeout.
 - Keep Notes status checks passive: never launch Notes and never enable prompting from
   `permissions_status`. An explicit Notes read/search may launch a closed target hidden, retry with
   `prompt: false`, and must check cancellation again before both launch and script admission.

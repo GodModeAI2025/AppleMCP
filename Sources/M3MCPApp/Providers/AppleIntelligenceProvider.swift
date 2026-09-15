@@ -128,6 +128,13 @@ final class AppleIntelligenceProvider {
         }
     }
 
+    static var imageCreationStatusDescription: String {
+        if #available(macOS 27, *) {
+            return String(localized: "Automatische Bilderzeugung ist ab macOS 27 nicht verfügbar: Apple hat ImageCreator eingestellt. Kurzbefehle sind separat konfigurierbar.")
+        }
+        return String(localized: "Bilderzeugung wird bei der Anfrage geprüft; Kurzbefehle sind separat konfigurierbar.")
+    }
+
     // MARK: - Image Playground
 
     func imagePlayground(input: [String: JSONValue]) async -> ToolResponse {
@@ -147,6 +154,11 @@ final class AppleIntelligenceProvider {
             return ToolResponse(ok: false, source: "Apple Intelligence", message: "Image Playground API requires macOS 15.4 or later.")
         }
 
+        if #available(macOS 27, *) {
+            return ToolResponse(ok: false, source: "Apple Intelligence",
+                message: "Apple hat die automatische ImageCreator-API ab macOS 27 eingestellt. Nutze bei Bedarf den optionalen Apple-Cloud-Bilddialog auf der Seite Apple Intelligence. Dieses MCP-Werkzeug öffnet ihn nicht automatisch und führt keine Cloud- oder Kurzbefehl-Alternative aus.",
+                meta: ["reason": "image_creator_removed", "alternative": "native_optional_apple_cloud_dialog"])
+        }
         guard !Task.isCancelled else { return cancellationResponse("Image Playground") }
         return await generateImage(concept: concept, style: style)
     }

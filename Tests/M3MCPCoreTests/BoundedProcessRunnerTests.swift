@@ -116,14 +116,18 @@ final class BoundedProcessRunnerTests: XCTestCase {
 
         // The PID file proves cancellation happens after launch, rather than merely exercising the
         // pre-launch Task.checkCancellation path.
+        defer { task.cancel() }
         let launchDeadline = Date().addingTimeInterval(3)
-        while !FileManager.default.fileExists(atPath: pidURL.path), Date() < launchDeadline {
+        var launchedPID: Int32?
+        repeat {
+            if let text = try? String(contentsOf: pidURL, encoding: .utf8) {
+                launchedPID = Int32(text)
+            }
+            if launchedPID != nil { break }
             try await Task.sleep(nanoseconds: 10_000_000)
-        }
-        XCTAssertTrue(FileManager.default.fileExists(atPath: pidURL.path), "child process did not launch")
-
-        let pidText = try String(contentsOf: pidURL, encoding: .utf8)
-        let pid = try XCTUnwrap(Int32(pidText))
+        } while Date() < launchDeadline
+        // File creation precedes printf's write: wait for a complete PID, not just existence.
+        let pid = try XCTUnwrap(launchedPID, "child process did not publish its PID")
         let cancelledAt = Date()
         task.cancel()
 

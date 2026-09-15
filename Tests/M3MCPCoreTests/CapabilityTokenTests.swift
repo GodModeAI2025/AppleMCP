@@ -4,6 +4,18 @@ import XCTest
 @testable import M3MCPCore
 
 final class CapabilityTokenTests: XCTestCase {
+    func testSandboxQueriesCannotFallBackToLegacyKeychain() {
+        let query = CapabilityToken.keychainQuery(service: "test-isolation", account: "test")
+        #if LOCALMCP_SANDBOX
+        XCTAssertEqual(query[kSecUseDataProtectionKeychain as String] as? Bool, true)
+        #else
+        XCTAssertNil(query[kSecUseDataProtectionKeychain as String])
+        #endif
+        XCTAssertEqual(query[kSecAttrService as String] as? String, "test-isolation")
+        XCTAssertNil(query[kSecAttrSynchronizable as String], "Tokens must not sync to another Mac")
+        XCTAssertNil(query[kSecAttrAccessGroup as String], "Use this signed app's default group")
+    }
+
     // MARK: - Primitives
 
     func testGeneratedTokensAreDistinctAndSurviveAConfigFile() throws {

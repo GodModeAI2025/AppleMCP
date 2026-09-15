@@ -4,6 +4,13 @@ import SwiftUI
 struct OverviewView: View {
     @ObservedObject var model: AppModel
     private var granted: Int { model.permissionItems.filter { $0.metadata["state"] == "authorized" }.count }
+    private var storePermissionHint: LocalizedStringKey {
+        #if LOCALMCP_SANDBOX
+        "Wähle unter Freigaben die Ordner für Mail und Sprachmemos aus."
+        #else
+        "Mail und Sprachmemos benötigen Festplattenvollzugriff."
+        #endif
+    }
     var body: some View {
         VStack(alignment: .leading, spacing: 24) {
             PageHeading(title: "Alles verbunden. Alles im Blick.",
@@ -28,7 +35,7 @@ struct OverviewView: View {
             }
             Panel {
                 Text("Deine nächsten Schritte").font(.headline)
-                OverviewStep(number: "1", title: "Daten freigeben", detail: "Mail und Sprachmemos benötigen Festplattenvollzugriff.", action: { model.destination = .permissions })
+                OverviewStep(number: "1", title: "Daten freigeben", detail: storePermissionHint, action: { model.destination = .permissions })
                 Divider()
                 OverviewStep(number: "2", title: "Client verbinden", detail: "Die Konfiguration mit Token in deinem MCP-Client einfügen.", action: { model.destination = .connection })
                 Divider()
@@ -42,7 +49,7 @@ private struct WelcomePanel: View {
     var body: some View {
         HStack(spacing: 24) {
             VStack(alignment: .leading, spacing: 12) {
-                Label("M3MCP FÜR MAC", systemImage: "desktopcomputer").font(.caption.weight(.semibold)).opacity(0.8)
+                Label("LocalMCP FÜR MAC", systemImage: "desktopcomputer").font(.caption.weight(.semibold)).opacity(0.8)
                 Text("Ein guter Start.\nIn wenigen Schritten.").font(.largeTitle.weight(.bold))
                 Text("Der Assistent hilft dir bei Freigaben, Token und Verbindung.")
                     .font(.body).opacity(0.85).fixedSize(horizontal: false, vertical: true)
@@ -60,7 +67,7 @@ private struct WelcomePanel: View {
 }
 private struct MetricCard: View {
     let title: LocalizedStringKey
-    let value: String
+    let value: LocalizedStringKey
     let icon: String
     let note: LocalizedStringKey
     var body: some View {

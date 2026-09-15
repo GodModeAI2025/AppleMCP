@@ -148,7 +148,7 @@ final class LocalMCPServiceArgumentValidationTests: XCTestCase {
         line: UInt = #line
     ) {
         XCTAssertFalse(response.ok, file: file, line: line)
-        XCTAssertEqual(response.source, "M3MCP Argument Validation", file: file, line: line)
+        XCTAssertEqual(response.source, "LocalMCP Argument Validation", file: file, line: line)
         XCTAssertTrue(response.message?.contains("unknown key") == true ||
             response.message?.contains("Invalid arguments") == true, file: file, line: line)
         XCTAssertLessThanOrEqual(

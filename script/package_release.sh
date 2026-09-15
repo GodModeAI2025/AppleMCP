@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Builds the release artifact: M3MCP.app as a ZIP, plus its SHA256 checksum.
+# Builds the release artifact: LocalMCP.app as a ZIP, plus its SHA256 checksum.
 #
 #   script/package_release.sh <output-directory>
 #
@@ -17,10 +17,10 @@
 # intact, not that the binary can be reproduced from source.
 #
 # What goes in:
-#   M3MCP.app/Contents/MacOS/M3MCPApp      the SwiftUI app that holds the macOS privacy grants
-#   M3MCP.app/Contents/MacOS/M3MCPBridge   the stdio MCP bridge an MCP client launches
-#   M3MCP.app/Contents/Info.plist          source metadata, parity-checked against CHANGELOG.md
-#   M3MCP.app/Contents/Resources/          Apache-2.0 and retained third-party notices
+#   LocalMCP.app/Contents/MacOS/M3MCPApp      the SwiftUI app that holds the macOS privacy grants
+#   LocalMCP.app/Contents/MacOS/M3MCPBridge   the stdio MCP bridge an MCP client launches
+#   LocalMCP.app/Contents/Info.plist          source metadata, parity-checked against CHANGELOG.md
+#   LocalMCP.app/Contents/Resources/          Apache-2.0 and retained third-party notices
 #
 # The bridge ships inside the bundle on purpose. Without it the download is unusable: an MCP client
 # needs the bridge binary, and someone who takes the ZIP has no checkout to point at.
@@ -45,8 +45,8 @@ umask 022
 
 APP_NAME="M3MCPApp"
 BRIDGE_NAME="M3MCPBridge"
-BUNDLE_NAME="M3MCP"
-ZIP_NAME="M3MCP.app.zip"
+BUNDLE_NAME="LocalMCP"
+ZIP_NAME="LocalMCP.app.zip"
 CONFIGURATION="release"
 # Any fixed date after 1980 works; the ZIP format cannot store anything earlier.
 FIXED_TIMESTAMP="202001010000.00"
@@ -92,6 +92,10 @@ cp "$BIN_PATH/$BRIDGE_NAME" "$APP_BUNDLE/Contents/MacOS/$BRIDGE_NAME"
 chmod 755 "$APP_BUNDLE/Contents/MacOS/$APP_NAME" "$APP_BUNDLE/Contents/MacOS/$BRIDGE_NAME"
 cp "$ROOT_DIR/Sources/$APP_NAME/Resources/Info.plist" "$APP_BUNDLE/Contents/Info.plist"
 chmod 644 "$APP_BUNDLE/Contents/Info.plist"
+mkdir -p "$APP_BUNDLE/Contents/Resources"
+cp "$ROOT_DIR/Sources/M3MCPApp/Resources/AppIcon.icns" "$APP_BUNDLE/Contents/Resources/AppIcon.icns"
+python3 "$ROOT_DIR/script/compile_localizations.py" "$APP_BUNDLE/Contents/Resources"
+cp "$ROOT_DIR/Sources/M3MCPApp/Resources/PrivacyInfo.xcprivacy" "$APP_BUNDLE/Contents/Resources/PrivacyInfo.xcprivacy"
 cp "$ROOT_DIR/LICENSE" "$APP_BUNDLE/Contents/Resources/LICENSE"
 cp "$ROOT_DIR/docs/THIRD_PARTY.md" "$APP_BUNDLE/Contents/Resources/THIRD_PARTY.md"
 chmod 644 "$APP_BUNDLE/Contents/Resources/LICENSE" "$APP_BUNDLE/Contents/Resources/THIRD_PARTY.md"
@@ -171,7 +175,7 @@ find "$BUNDLE_NAME.app" | LC_ALL=C sort | zip -X -q -@ "$STAGE_DIR/$ZIP_NAME"
 
 mv -f "$STAGE_DIR/$ZIP_NAME" "$OUT_DIR/$ZIP_NAME"
 cd "$OUT_DIR"
-# Only the basename goes into the checksum file, so `shasum -a 256 -c M3MCP.app.zip.sha256` works
+# Only the basename goes into the checksum file, so `shasum -a 256 -c LocalMCP.app.zip.sha256` works
 # in whatever directory the user downloaded it to.
 shasum -a 256 "$ZIP_NAME" > "$ZIP_NAME.sha256"
 

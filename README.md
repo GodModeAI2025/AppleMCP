@@ -1,16 +1,30 @@
-# AppleMCP
+# LocalMCP
+
+Version 1.0.1: German and English macOS app; App Store review preparation is in progress.
+
+<img src="assets/branding/localmcp-icon.png" width="128" height="128" alt="LocalMCP app icon">
 
 [![CI](https://github.com/GodModeAI2025/AppleMCP/actions/workflows/ci.yml/badge.svg)](https://github.com/GodModeAI2025/AppleMCP/actions/workflows/ci.yml)
 
-AppleMCP is a native macOS 15+ MCP server for bounded access to local Apple data and selected Apple Intelligence APIs. It consists of a SwiftUI app that holds macOS privacy permissions and a `stdio` bridge used by MCP clients.
+LocalMCP is a native macOS 15+ MCP server for bounded access to local Apple data and selected Apple Intelligence APIs. It consists of a SwiftUI app that holds macOS privacy permissions and a `stdio` bridge used by MCP clients.
 
-Version 0.3.1 starts in a **default-safe profile**. The bridge advertises 21 observation or local-processing tools. Calendar mutations, permission UI, and user-created Shortcuts are absent unless the corresponding launch-time environment variable is explicitly enabled. Calendar mutations and Shortcut invocations also require a one-call approval in the native app.
+Version 1.0.1 starts in a **default-safe profile**. The bridge advertises 21 observation or local-processing tools. Calendar mutations, permission UI, and user-created Shortcuts are absent unless the corresponding launch-time environment variable is explicitly enabled. Calendar mutations and Shortcut invocations also require a one-call approval in the native app.
 
-AppleMCP is local-first, but it is not an isolation boundary for every process running as you. Read [Security model](docs/SECURITY_MODEL.md) before granting Full Disk Access or enabling optional tools.
+LocalMCP is local-first, but it is not an isolation boundary for every process running as you. Read [Security model](docs/SECURITY_MODEL.md) before granting Full Disk Access or enabling optional tools.
 
 [Product website](https://godmodeai2025.github.io/AppleMCP/) · [Original app screenshots](docs/SCREENSHOTS.md)
 
-![M3MCP native app overview](assets/screenshots/overview.jpg)
+![LocalMCP native app overview](assets/screenshots/overview.jpg)
+
+## Name and compatibility
+
+The app is now **LocalMCP** (formerly M3MCP). Its bundle is `LocalMCP.app`.
+The repository URL remains `GodModeAI2025/AppleMCP`. Existing bundle identifiers,
+keychain entries, preferences, Application Support paths, `M3MCP_TOKEN`,
+`M3MCP_ENABLE_*` variables, the `m3mcp` client entry and internal Swift module /
+bridge names are retained for compatibility. These are technical identifiers,
+not the displayed product name. For an existing client configuration, update the
+app path to `LocalMCP.app` while keeping its token and other settings.
 
 ## Access methods and permissions
 
@@ -21,7 +35,7 @@ AppleMCP is local-first, but it is not an isolation boundary for every process r
 | Contacts | Contacts.framework | Contacts |
 | Reminders | EventKit | Reminders |
 | Notes | Notes.app Apple Events | Automation for Notes |
-| Photos | Photos.framework | PhotoKit calls this `.readWrite`; AppleMCP's exposed Photos tools do not mutate the library |
+| Photos | Photos.framework | PhotoKit calls this `.readWrite`; LocalMCP's exposed Photos tools do not mutate the library |
 | Voice Memos | Local `CloudRecordings.db`, in-file transcripts, and on-device speech recognition | Full Disk Access; Speech Recognition only for the legacy recognizer fallback during a fresh transcription |
 | Foundation Models | Apple's on-device language model | Apple Intelligence availability on macOS 26 |
 | Image Playground | Native ImagePlayground API | Image Playground availability on macOS 15.4+ |
@@ -52,18 +66,18 @@ restarted.
 ## Downloadable release candidates
 
 After a maintainer reviews and publishes a draft candidate, its GitHub release can contain
-`M3MCP.app.zip` and `M3MCP.app.zip.sha256`. The archive contains the app, MCP bridge, Apache-2.0
+`LocalMCP.app.zip` and `LocalMCP.app.zip.sha256`. The archive contains the app, MCP bridge, Apache-2.0
 license, and retained third-party notices. The automated candidate is Apple Silicon (`arm64`) only,
 ad-hoc signed, and unnotarized; it is not a production-grade macOS distribution.
 
 ```bash
-curl -LO https://github.com/GodModeAI2025/AppleMCP/releases/latest/download/M3MCP.app.zip
-curl -LO https://github.com/GodModeAI2025/AppleMCP/releases/latest/download/M3MCP.app.zip.sha256
-shasum -a 256 -c M3MCP.app.zip.sha256
-gh attestation verify M3MCP.app.zip \
+curl -LO https://github.com/GodModeAI2025/AppleMCP/releases/latest/download/LocalMCP.app.zip
+curl -LO https://github.com/GodModeAI2025/AppleMCP/releases/latest/download/LocalMCP.app.zip.sha256
+shasum -a 256 -c LocalMCP.app.zip.sha256
+gh attestation verify LocalMCP.app.zip \
   --repo GodModeAI2025/AppleMCP \
   --signer-workflow GodModeAI2025/AppleMCP/.github/workflows/release.yml  # optional
-unzip M3MCP.app.zip
+unzip LocalMCP.app.zip
 ```
 
 The checksum detects a mismatch against the file recorded in that same GitHub release; by itself it
@@ -138,9 +152,9 @@ connections only from the `M3MCPBridge` beside its own executable, so:
 | The app you run | The bridge to configure |
 |---|---|
 | `swift build` plus `.build/<config>/M3MCPApp` | `.build/<config>/M3MCPBridge` |
-| `./script/build_and_run.sh` | `dist/M3MCP.app/Contents/MacOS/M3MCPBridge` |
-| `./script/install_local.sh` | `~/Applications/M3MCP.app/Contents/MacOS/M3MCPBridge` |
-| A downloaded release ZIP | `M3MCP.app/Contents/MacOS/M3MCPBridge` |
+| `./script/build_and_run.sh` | `dist/LocalMCP.app/Contents/MacOS/M3MCPBridge` |
+| `./script/install_local.sh` | `~/Applications/LocalMCP.app/Contents/MacOS/M3MCPBridge` |
+| A downloaded release ZIP | `LocalMCP.app/Contents/MacOS/M3MCPBridge` |
 
 After an install the copy in `.build/release/` is refused with `403`, even though it was built from
 the same source: the installer re-signs the staged bridge with your stable certificate, which changes
@@ -251,7 +265,7 @@ To launch a previously built app bundle with all three groups enabled:
   --env M3MCP_ENABLE_CALENDAR_MUTATIONS=1 \
   --env M3MCP_ENABLE_PERMISSION_UI=1 \
   --env M3MCP_ENABLE_USER_SHORTCUTS=1 \
-  /path/to/AppleMCP/dist/M3MCP.app
+  /path/to/AppleMCP/dist/LocalMCP.app
 ```
 
 For the persistent LaunchAgent installed by `script/install_local.sh`, prefix the installer command
@@ -288,7 +302,7 @@ Cancellation is best-effort, cooperative interruption, not rollback. A client ca
 
 ### User-created Shortcut contract
 
-The optional `ai_writing_tools` and `ai_translate` tools run Shortcuts named exactly `Writing Tools` and `Translate`. A Shortcut receives a versioned JSON document over standard input and must return non-empty UTF-8 plain text. Standard output and standard error are each limited to 1 MiB, and execution is limited to 60 seconds. A user-created Shortcut can make network requests, modify files, or perform any other action its author added; AppleMCP cannot constrain those actions.
+The optional `ai_writing_tools` and `ai_translate` tools run Shortcuts named exactly `Writing Tools` and `Translate`. A Shortcut receives a versioned JSON document and must return non-empty UTF-8 plain text. The direct-distribution build uses CLI standard input with 1 MiB output/error limits and a 60-second process timeout. The sandbox integration uses typed Shortcuts Events; its entitlement and runtime verification are still pending. A user-created Shortcut can make network requests, modify files, or perform any other action its author added; LocalMCP cannot constrain those actions.
 
 The complete input schemas and setup notes are in [User Shortcut contract](docs/SHORTCUTS.md).
 
@@ -363,7 +377,7 @@ rather than write into an account that syncs.
 
 ## Voice Memos and speech privacy
 
-Stored transcripts are read directly from a private `tsrp` atom inside each recording. For a fresh transcription, AppleMCP uses `SpeechAnalyzer` on macOS 26 when available and otherwise `SFSpeechRecognizer` with `requiresOnDeviceRecognition = true`.
+Stored transcripts are read directly from a private `tsrp` atom inside each recording. For a fresh transcription, LocalMCP uses `SpeechAnalyzer` on macOS 26 when available and otherwise `SFSpeechRecognizer` with `requiresOnDeviceRecognition = true`.
 
 The legacy recognizer is checked before a recognition task starts. If the selected locale does not advertise on-device recognition, the tool fails; there is no cloud-recognition fallback. Apple may still need to download an on-device language-model asset. That asset download is distinct from sending the recording for remote recognition.
 
@@ -428,4 +442,33 @@ threat model, network caveats, diagnostics, data retention, and release checklis
 
 Voice Memos support includes a Swift port derived from [jwulff/apple-voice-memo-mcp](https://github.com/jwulff/apple-voice-memo-mcp) (MIT). Exact provenance and the retained license are in [docs/THIRD_PARTY.md](docs/THIRD_PARTY.md).
 
-AppleMCP is licensed under Apache License 2.0; see [LICENSE](LICENSE). Release history is in [CHANGELOG.md](CHANGELOG.md).
+LocalMCP is licensed under Apache License 2.0; see [LICENSE](LICENSE). Release history is in [CHANGELOG.md](CHANGELOG.md).
+
+### Apple Intelligence capabilities
+
+`ai_summarize` runs directly on device and accepts `summary`, `actions`,
+`summary_and_actions`, `concise` (shorten), and `key_points` (bullet points).
+It does not silently fall back to a cloud model. Optional Writing Tools shortcuts
+remain separate. See [current capabilities and PCC requirements](docs/APPLE_INTELLIGENCE.md).
+
+### TestFlight build 10: permissions and token storage
+
+The native grouped setup walks through all eight sources, including explicit read-only folder
+selection for Mail and Voice Memos and Speech Recognition. Cancelling a folder picker preserves
+existing grants and continues to the next source. The progress indicator names the current step;
+stopping the sequence takes effect after the current macOS dialog. Denied permissions and Full
+Disk Access may still require System Settings; completing the sequence does not imply all rights
+were granted.
+
+Sandbox builds use the Data Protection keychain with the signed app's own access group. They do
+not read, migrate or delete old login-keychain tokens. The first update from build 9 creates a new
+token: copy the client configuration again from **Verbindung**. Subsequent updates retain it.
+The separate non-sandbox developer app retains its existing keychain backend.
+
+## App-Sprache / App language
+
+LocalMCP ist auf Deutsch und Englisch lokalisiert. Beim Start verwendet die App automatisch die von macOS bevorzugte unterstützte Sprache, einschließlich einer unter „Sprache & Region → Apps“ festgelegten Sprache. Nach einer Änderung die App neu öffnen. Die Oberfläche, Einrichtung, Freigabestatus, nativen Bestätigungen und Berechtigungsbeschreibungen sind übersetzt. Eigene Daten, MCP-Werkzeugnamen, Konfigurationen und technische Protokollantworten bleiben im Original. Die Textbearbeitung verwendet weiterhin die Sprache des Eingabetextes.
+
+LocalMCP is available in German and English. At launch, the app automatically uses the supported language preferred by macOS, including any language set under Language & Region → Applications. Reopen the app after changing it. The interface, setup, permission status, native confirmations and permission descriptions are translated. Your data, MCP tool names, configurations and technical protocol responses retain their original form. Text processing continues to use the input language.
+
+Translations live in `Sources/M3MCPApp/Localization/*.xcstrings`. Xcode compiles them into the app; the local installer and release scripts compile the same catalogs with `script/compile_localizations.py`. Run `python3 script/check_localizations.py` to check coverage and format arguments, or pass a built `.app` path to check its packaged resources as well.

@@ -44,7 +44,7 @@ final class LocalMCPService {
                 // reason is the useful part, and source_status is where a caller looks for it.
                 state: SpeechTranscription.statusDescription
             ),
-            ServiceHealth(name: "Apple Intelligence", endpoint: "macos://intelligence", mode: "ImageCreator + explicitly enabled user Shortcuts", state: "on-demand"),
+            ServiceHealth(name: "Apple Intelligence", endpoint: "macos://intelligence", mode: "ImageCreator + explicitly enabled user Shortcuts", state: AppleIntelligenceProvider.imageCreationStatusDescription),
             ServiceHealth(
                 name: "Foundation Models",
                 endpoint: "macos://foundationmodels",
@@ -62,7 +62,7 @@ final class LocalMCPService {
         }
 
         guard let toolName = M3MCPToolName(rawValue: tool) else {
-            return ToolResponse(ok: false, source: "M3MCP", message: "Unknown tool: \(tool)")
+            return ToolResponse(ok: false, source: "LocalMCP", message: "Unknown tool: \(tool)")
         }
 
         // The app service is an independent authorization boundary: trusted in-process callers and
@@ -73,7 +73,7 @@ final class LocalMCPService {
             .validationError(for: input, tool: toolName) {
             return ToolResponse(
                 ok: false,
-                source: "M3MCP Argument Validation",
+                source: "LocalMCP Argument Validation",
                 message: validationError.clientMessage
             )
         }
@@ -83,8 +83,8 @@ final class LocalMCPService {
                 ?? "an explicit launch policy"
             return ToolResponse(
                 ok: false,
-                source: "M3MCP Security Policy",
-                message: "Tool '\(tool)' is disabled by the default-safe policy. Set \(variable)=1 before launching M3MCP to opt in."
+                source: "LocalMCP Security Policy",
+                message: "Tool '\(tool)' is disabled by the default-safe policy. Set \(variable)=1 before launching LocalMCP to opt in."
             )
         }
 
@@ -97,7 +97,7 @@ final class LocalMCPService {
             guard let approvalHandler else {
                 return ToolResponse(
                     ok: false,
-                    source: "M3MCP Interactive Approval",
+                    source: "LocalMCP Interactive Approval",
                     message: "Tool '\(tool)' requires explicit local approval for every call, but no approval UI is available. Request denied."
                 )
             }
@@ -126,8 +126,8 @@ final class LocalMCPService {
             guard approved else {
                 return ToolResponse(
                     ok: false,
-                    source: "M3MCP Interactive Approval",
-                    message: "Tool '\(tool)' was not approved in the M3MCP app. No action was performed."
+                    source: "LocalMCP Interactive Approval",
+                    message: "Tool '\(tool)' was not approved in the LocalMCP app. No action was performed."
                 )
             }
         }
@@ -143,7 +143,7 @@ final class LocalMCPService {
         case .sourceStatus:
             response = ToolResponse(
                 ok: true,
-                source: "M3MCP",
+                source: "LocalMCP",
                 items: services.map {
                     DataItem(
                         id: $0.name,
@@ -224,7 +224,7 @@ final class LocalMCPService {
     private func cancellationResponse(tool: String) -> ToolResponse {
         ToolResponse(
             ok: false,
-            source: "M3MCP Cancellation",
+            source: "LocalMCP Cancellation",
             message: "Tool '\(tool)' was cancelled because its client disconnected. No new action was started after cancellation."
         )
     }

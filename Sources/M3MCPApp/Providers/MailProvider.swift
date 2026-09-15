@@ -1716,9 +1716,17 @@ final class MailProvider {
         try checkCancellation(.requestBoundary)
         let override = ProcessInfo.processInfo.environment[Self.mailRootEnvironmentKey]?
             .trimmingCharacters(in: .whitespacesAndNewlines)
-        let mailRoot = (override.flatMap { $0.isEmpty ? nil : URL(fileURLWithPath: $0, isDirectory: true) })
-            ?? fileManager.homeDirectoryForCurrentUser
+        let mailRoot: URL
+        if let override, !override.isEmpty {
+            mailRoot = URL(fileURLWithPath: override, isDirectory: true)
+        } else {
+            #if LOCALMCP_SANDBOX
+            mailRoot = try SandboxStoreAccess.shared.url(for: .mail)
+            #else
+            mailRoot = fileManager.homeDirectoryForCurrentUser
                 .appendingPathComponent("Library/Mail", isDirectory: true)
+            #endif
+        }
 
         guard fileManager.fileExists(atPath: mailRoot.path) else {
             throw MailStoreFailure("Local Mail store was not found at \(mailRoot.path).")
@@ -1732,7 +1740,7 @@ final class MailProvider {
                 options: [.skipsHiddenFiles]
             )
         } catch {
-            throw MailStoreFailure("Cannot inspect the local Mail store at \(mailRoot.path). Grant Full Disk Access to M3MCP, then restart the app. Detail: \(error.localizedDescription)")
+            throw MailStoreFailure("Cannot inspect the local Mail store at \(mailRoot.path). Grant Full Disk Access to LocalMCP, then restart the app. Detail: \(error.localizedDescription)")
         }
         try checkCancellation(.requestBoundary)
 
@@ -2203,7 +2211,7 @@ final class MailProvider {
             if let database {
                 sqlite3_close(database)
             }
-            throw MailStoreFailure("Cannot read the local Mail index. Grant Full Disk Access to M3MCP, then restart the app. Detail: \(message)")
+            throw MailStoreFailure("Cannot read the local Mail index. Grant Full Disk Access to LocalMCP, then restart the app. Detail: \(message)")
         }
 
         defer { sqlite3_close(database) }

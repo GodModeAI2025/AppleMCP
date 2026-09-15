@@ -1088,7 +1088,7 @@ final class VoiceMemosProvider {
                 return ToolResponse(
                     ok: false,
                     source: sourceName,
-                    message: "Cannot read \(fileURL.path). Grant Full Disk Access to M3MCP, then restart the app."
+                    message: "Cannot read \(fileURL.path). Grant Full Disk Access to LocalMCP, then restart the app."
                 )
             }
 
@@ -1558,6 +1558,14 @@ final class VoiceMemosProvider {
         if let storeOverrideForTesting {
             return storeOverrideForTesting
         }
+        #if LOCALMCP_SANDBOX
+        let recordings = try SandboxStoreAccess.shared.url(for: .voiceMemos)
+        let database = recordings.appendingPathComponent(databaseName)
+        guard fileManager.fileExists(atPath: database.path) else {
+            throw VoiceMemoStoreFailure("Im freigegebenen Sprachmemo-Ordner fehlt CloudRecordings.db. Bitte den Ordner Recordings mit der Datenbank auswählen.")
+        }
+        return RecordingStore(recordings: recordings, database: database)
+        #else
         let home = fileManager.homeDirectoryForCurrentUser
 
         for relativePath in libraryPaths {
@@ -1573,7 +1581,8 @@ final class VoiceMemosProvider {
             throw VoiceMemoStoreFailure("The Voice Memos recordings folder exists, but \(databaseName) is missing. Open Voice Memos once so macOS creates its store.")
         }
 
-        throw VoiceMemoStoreFailure("The Voice Memos store was not found below \(primary.path). Open Voice Memos at least once, and grant Full Disk Access to M3MCP if the folder is protected.")
+        throw VoiceMemoStoreFailure("The Voice Memos store was not found below \(primary.path). Open Voice Memos at least once, and grant Full Disk Access to LocalMCP if the folder is protected.")
+        #endif
     }
 
     private func loadRecording(id: String) throws -> RecordingRow {
@@ -1911,7 +1920,7 @@ final class VoiceMemosProvider {
             if let database {
                 sqlite3_close(database)
             }
-            throw VoiceMemoStoreFailure("Cannot read the Voice Memos store. Grant Full Disk Access to M3MCP, then restart the app. Detail: \(message)")
+            throw VoiceMemoStoreFailure("Cannot read the Voice Memos store. Grant Full Disk Access to LocalMCP, then restart the app. Detail: \(message)")
         }
 
         defer { sqlite3_close(database) }
@@ -1974,7 +1983,7 @@ final class VoiceMemosProvider {
         } catch {
             throw VoiceMemoStoreFailure(
                 "Cannot prepare a safe temporary copy of the Voice Memos store at \(url.path). "
-                    + "Grant Full Disk Access to M3MCP, then restart the app. "
+                    + "Grant Full Disk Access to LocalMCP, then restart the app. "
                     + "Detail: \(error.localizedDescription)"
             )
         }

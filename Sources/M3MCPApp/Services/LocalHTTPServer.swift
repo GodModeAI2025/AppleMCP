@@ -567,7 +567,7 @@ final class LocalHTTPServer {
             throw StartFailure("Refusing to replace a non-socket path at \(path)")
         }
         if try socketAcceptsConnections(at: path) {
-            throw StartFailure("Another M3MCP-compatible server is already listening at \(path)")
+            throw StartFailure("Another LocalMCP-compatible server is already listening at \(path)")
         }
 
         // The probe can release the CPU while polling. Even inside the cooperative start lock,
@@ -626,7 +626,7 @@ final class LocalHTTPServer {
             Darwin.close(descriptor)
             if code == EWOULDBLOCK || code == EAGAIN {
                 throw StartFailure(
-                    "Another M3MCP server is starting or running for endpoint \(socketURL.path)"
+                    "Another LocalMCP server is starting or running for endpoint \(socketURL.path)"
                 )
             }
             throw StartFailure("Cannot acquire endpoint start lock at \(lockPath)", errno: code)
@@ -1315,7 +1315,7 @@ final class LocalHTTPServer {
         if path.hasPrefix("/tools/") {
             send(
                 status: status,
-                codable: ToolResponse(ok: false, source: "M3MCP Server", message: refusal),
+                codable: ToolResponse(ok: false, source: "LocalMCP Server", message: refusal),
                 to: client,
                 cancellation: cancellation
             )

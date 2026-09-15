@@ -27,14 +27,33 @@ public enum M3MCPEndpoint {
     /// Both the app and the bridge read it, so they must be given the same value.
     public static let directoryEnvironmentKey = "M3MCP_SOCKET_DIR"
 
+    public static var configurationError: String? {
+        #if LOCALMCP_SANDBOX
+        guard FileManager.default.containerURL(
+            forSecurityApplicationGroupIdentifier: "SP73Z8JWXM.localmcp") != nil else {
+            return "Der gemeinsame App-Container ist nicht verfügbar. Bitte die Signierung und App-Group-Freigabe dieser Installation prüfen."
+        }
+        #endif
+        return nil
+    }
+
     public static var directoryURL: URL {
         if let override = ProcessInfo.processInfo.environment[directoryEnvironmentKey],
            !override.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
             return URL(fileURLWithPath: override, isDirectory: true)
         }
 
+        #if LOCALMCP_SANDBOX
+        // Both independently sandboxed apps have this team-scoped App Group entitlement.
+        // Never fall back to a public temporary directory when group access is unavailable.
+        let root = FileManager.default.containerURL(
+            forSecurityApplicationGroupIdentifier: "SP73Z8JWXM.localmcp"
+        ) ?? FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent("UnavailableAppGroup")
+        return root.appendingPathComponent("s", isDirectory: true)
+        #else
         return FileManager.default.homeDirectoryForCurrentUser
             .appendingPathComponent("Library/Application Support/M3MCP", isDirectory: true)
+        #endif
     }
 
     public static var socketURL: URL {

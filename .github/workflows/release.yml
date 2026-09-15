@@ -40,7 +40,7 @@ jobs:
       - name: Attest ZIP provenance
         uses: actions/attest-build-provenance@977bb373ede98d70efdf65b84cb5f73e068dcc2a # v3.0.0
         with:
-          subject-path: ${{ runner.temp }}/release-payload/M3MCP.app.zip
+          subject-path: ${{ runner.temp }}/release-payload/LocalMCP.app.zip
 
   draft-release:
     needs: [verify, attest]
@@ -60,7 +60,7 @@ jobs:
 
       - name: Verify transferred checksum
         working-directory: ${{ runner.temp }}/release-payload
-        run: sha256sum -c M3MCP.app.zip.sha256
+        run: sha256sum -c LocalMCP.app.zip.sha256
 
       # This is the only job with a repository write token. It has no checkout and does not execute
       # the candidate or a repository script. Re-runs replace assets only while the release is a draft.
@@ -82,13 +82,13 @@ jobs:
               --title "$title" \
               --notes-file "$payload/release-notes.md"
             gh release upload "$GITHUB_REF_NAME" \
-              "$payload/M3MCP.app.zip" \
-              "$payload/M3MCP.app.zip.sha256" \
+              "$payload/LocalMCP.app.zip" \
+              "$payload/LocalMCP.app.zip.sha256" \
               --clobber
           else
             gh release create "$GITHUB_REF_NAME" \
-              "$payload/M3MCP.app.zip" \
-              "$payload/M3MCP.app.zip.sha256" \
+              "$payload/LocalMCP.app.zip" \
+              "$payload/LocalMCP.app.zip.sha256" \
               --draft \
               --verify-tag \
               --title "$title" \

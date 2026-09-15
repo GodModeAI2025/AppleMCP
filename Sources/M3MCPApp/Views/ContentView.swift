@@ -48,7 +48,7 @@ private struct DestinationView: View {
             case .connection: ConnectionView(model: model)
             case .permissions: PermissionsView(model: model)
             case .activity: ActivityPage(activity: model.activity)
-            case .source(let name): SourcePage(name: name, model: model)
+            case .source(let name): SourcePage(name: name, model: model).id(name)
             }
         }
     }

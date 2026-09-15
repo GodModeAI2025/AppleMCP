@@ -13,7 +13,9 @@ import Security
 /// the peer's code identity, which forces a thief through the bundled bridge rather than a client of
 /// their own. Both halves are needed and neither is sufficient.
 ///
-/// Where it lives: the login keychain, as a generic password. That is a deliberate choice over a
+/// Sandbox releases use the Data Protection keychain and their signed app access group. They
+/// never migrate legacy items. The following ACL details apply only to non-sandbox builds.
+/// Where those builds store it: the login keychain, as a generic password. That is chosen over a
 /// `0600` file next to the socket. Such a file would be readable by exactly the set of processes
 /// that can already open the socket, so it would add nothing. A keychain item is bound by its ACL to
 /// the binary that created it, and reaching it from anywhere else takes the user's say-so.
@@ -36,7 +38,11 @@ public enum CapabilityToken {
     /// Lets a test — or a second installation — use its own keychain item instead of the real one.
     public static let serviceEnvironmentKey = "M3MCP_TOKEN_KEYCHAIN_SERVICE"
 
+    #if LOCALMCP_SANDBOX
+    public static let defaultService = "de.mobilebox.LocalMCP.capability-token"
+    #else
     public static let defaultService = "de.markzimmermann.m3mcp.capability-token"
+    #endif
     public static let defaultAccount = "default"
 
     /// A token plus where it came from, so the app can say so in its UI and the bridge in its errors.
@@ -184,6 +190,20 @@ public enum CapabilityToken {
 
     // MARK: - Keychain
 
+    /// Sandbox releases deliberately never search or migrate the legacy login-keychain item.
+    /// Data Protection binds access to the signed application identity across app updates.
+    static func keychainQuery(service: String, account: String) -> [String: Any] {
+        var query: [String: Any] = [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrService as String: service,
+            kSecAttrAccount as String: account
+        ]
+        #if LOCALMCP_SANDBOX
+        query[kSecUseDataProtectionKeychain as String] = true
+        #endif
+        return query
+    }
+
     /// `allowingInteraction: false` is what keeps a read bounded.
     ///
     /// Without it `SecItemCopyMatching` waits for the authorization panel with no deadline of its
@@ -204,18 +224,19 @@ public enum CapabilityToken {
         account: String,
         allowingInteraction: Bool = true
     ) throws -> String? {
-        let query: [String: Any] = [
-            kSecClass as String: kSecClassGenericPassword,
-            kSecAttrService as String: service,
-            kSecAttrAccount as String: account,
-            kSecReturnData as String: true,
-            kSecMatchLimit as String: kSecMatchLimitOne
-        ]
-
+        var query = keychainQuery(service: service, account: account)
+        query[kSecReturnData as String] = true
+        query[kSecMatchLimit as String] = kSecMatchLimitOne
         var item: CFTypeRef?
+        #if LOCALMCP_SANDBOX
+        // Never let server startup or a headless client display a keychain authorization panel.
+        query[kSecUseAuthenticationUI as String] = kSecUseAuthenticationUIFail
+        let status = SecItemCopyMatching(query as CFDictionary, &item)
+        #else
         let status = allowingInteraction
             ? SecItemCopyMatching(query as CFDictionary, &item)
             : copyWithoutInteraction(query, into: &item)
+        #endif
         switch status {
         case errSecSuccess:
             guard let data = item as? Data, let token = String(data: data, encoding: .utf8) else {
@@ -231,16 +252,12 @@ public enum CapabilityToken {
 
     public static func write(token: String, service: String, account: String) throws {
         let data = Data(token.utf8)
-        let query: [String: Any] = [
-            kSecClass as String: kSecClassGenericPassword,
-            kSecAttrService as String: service,
-            kSecAttrAccount as String: account
-        ]
+        let query = keychainQuery(service: service, account: account)
 
         var attributes = query
         attributes[kSecValueData as String] = data
-        attributes[kSecAttrLabel as String] = "M3MCP capability token"
-        attributes[kSecAttrDescription as String] = "Authenticates an MCP client against the local M3MCP socket"
+        attributes[kSecAttrLabel as String] = "LocalMCP capability token"
+        attributes[kSecAttrDescription as String] = "Authenticates an MCP client against the local LocalMCP server"
         attributes[kSecAttrAccessible as String] = kSecAttrAccessibleWhenUnlocked
 
         let status = SecItemAdd(attributes as CFDictionary, nil)
@@ -258,11 +275,7 @@ public enum CapabilityToken {
     }
 
     public static func delete(service: String, account: String) throws {
-        let query: [String: Any] = [
-            kSecClass as String: kSecClassGenericPassword,
-            kSecAttrService as String: service,
-            kSecAttrAccount as String: account
-        ]
+        let query = keychainQuery(service: service, account: account)
 
         let status = SecItemDelete(query as CFDictionary)
         guard status == errSecSuccess || status == errSecItemNotFound else {
