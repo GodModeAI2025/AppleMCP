@@ -197,6 +197,14 @@ access explicitly. Automatic startup does not display a blocking keychain panel.
 are retained; do not delete a token merely to make installation finish. A stable signing identity
 is necessary for updates, but preserved privacy permissions alone do not prove keychain access.
 
+**Self-signed local builds:** native testing found that macOS can add a `cdhash` partition to
+the token's legacy-keychain access rules. This binds access to the particular executable build,
+even when its certificate and bundle identifier remain unchanged. A separately built update can
+therefore require explicit keychain authorization again. Silent access across self-signed rebuilds
+is not guaranteed. The installer retains the token and reports pending access; it does not remove
+keychain restrictions or rotate the token to conceal this condition. This finding concerns the
+local legacy-keychain path. TestFlight uses the separate sandbox Data Protection keychain.
+
 The local LaunchAgent starts at login and restarts unsuccessful exits. Deliberately quitting the
 app leaves it stopped until you reopen it or log in again; unconditional KeepAlive is not enabled.
 Use the health check above to verify the listener, rather than relying on a process ID. A bridge
