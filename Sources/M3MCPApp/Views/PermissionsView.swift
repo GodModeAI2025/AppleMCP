@@ -19,22 +19,15 @@ struct PermissionsView: View {
                     VStack(alignment: .leading, spacing: 10) {
                         Text("Mail & Sprachmemos").font(.title3.weight(.semibold))
                         if model.requiresStoreSelection {
-                            Text("Wähle die beiden Datenordner ausdrücklich aus. LocalMCP speichert eine Lesefreigabe für diese App. macOS kann zusätzlich Festplattenvollzugriff verlangen.")
+                            Text("Wähle nur Datenordner aus, auf die dein Benutzer bereits zugreifen kann. LocalMCP speichert eine Lesefreigabe für die ausgewählten Ordner.")
                                 .foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
                             HStack {
                                 Button("Mail-Ordner auswählen") { selectedStore = .mail; showsStoreImporter = true }
                                 Button("Sprachmemo-Ordner auswählen") { selectedStore = .voiceMemos; showsStoreImporter = true }
                             }.buttonStyle(.borderedProminent).disabled(model.permissionBusy)
                         }
-                        Text(model.requiresStoreSelection
-                             ? "Falls macOS den ausgewählten Datenordner weiterhin schützt, erlaube zusätzlich Festplattenvollzugriff für diese App und starte sie neu."
-                             : "Für diese Quellen benötigt LocalMCP Festplattenvollzugriff. Öffne die Systemeinstellungen, füge diese App über + hinzu und aktiviere den Schalter. Danach LocalMCP mit ⌘Q beenden und erneut öffnen.")
+                        Text("Die Auswahl ist optional. Wenn macOS den Zugriff verweigert, bleibt die Quelle nicht verfügbar. Du kannst die Einrichtung ohne diese Quelle fortsetzen.")
                             .foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
-                        HStack {
-                            Button("Festplattenvollzugriff öffnen") { model.openPermissionSettings(pane: "full_disk_access") }
-                                .buttonStyle(.borderedProminent)
-                            Button("App im Finder zeigen", action: model.revealApplication)
-                        }
                     }
                 }
             }
@@ -42,7 +35,7 @@ struct PermissionsView: View {
                 Text("Datenfreigaben gemeinsam einrichten").font(.headline)
                 Text("Führt durch Kalender, Kontakte, Erinnerungen, Mail, Notizen, Fotos, Sprachmemos und Spracherkennung. Du kannst jeden Dialog ablehnen oder die Ordnerauswahl abbrechen. Bereits entschiedene Freigaben zeigt macOS nicht erneut an.")
                     .foregroundStyle(.secondary)
-                Button("Datenfreigaben nacheinander anfragen") {
+                Button("Weiter") {
                     Task { await model.requestDataPermissions() }
                 }.disabled(model.permissionBusy)
                 if let progress = model.permissionProgress {
@@ -172,7 +165,7 @@ private struct PermissionAccessRow: View {
             if let chooseFolder {
                 Button("Ordner auswählen", action: chooseFolder).disabled(busy)
             } else if !granted && !manual && (state == "not_determined" || state == "error") {
-                Button("Zugriff erlauben", action: request).disabled(busy)
+                Button("Weiter", action: request).disabled(busy)
             } else {
                 Button("Einstellungen") { openSettings(pane) }.disabled(busy)
             }

@@ -100,6 +100,12 @@ final class PermissionProvider {
             )
         }
         let pane = input.string("pane", default: "privacy")
+        #if LOCALMCP_SANDBOX
+        // Store builds never direct users to an administrator-protected privacy setting.
+        if ["mail", "files", "full_disk_access", "voice_memos", "voicememos"].contains(pane) {
+            return ToolResponse(ok: false, source: "Permissions", message: String(localized: "Wähle unter Freigaben einen bereits zugänglichen Datenordner aus. Diese Quelle ist optional."))
+        }
+        #endif
         let urlString: String
 
         switch pane {
