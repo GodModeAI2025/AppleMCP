@@ -83,7 +83,7 @@ private struct TokenPanel: View {
                     Label("MCP-Token kopieren", systemImage: "doc.on.doc.fill")
                 }.buttonStyle(.borderedProminent).controlSize(.large).disabled(!model.hasCapabilityToken)
                 if !model.hasCapabilityToken {
-                    Button("Server starten", action: model.startIfNeeded)
+                    Button("Server starten") { model.startIfNeeded(allowingKeychainInteraction: true) }
                 }
             }
             if let message = model.copyMessage {

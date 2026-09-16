@@ -69,7 +69,7 @@ private struct AppHeader: View {
                 Label("Einrichten", systemImage: "wand.and.stars")
             }
             Menu {
-                Button("Server starten", action: model.startIfNeeded).disabled(model.serverState == "running")
+                Button("Server starten") { model.startIfNeeded(allowingKeychainInteraction: true) }.disabled(model.serverState == "running")
                 Button("Server neu starten", action: model.restart)
                 Button("Server stoppen", action: model.stop).disabled(model.serverState == "stopped")
             } label: { Image(systemName: "ellipsis.circle") }

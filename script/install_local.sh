@@ -54,6 +54,9 @@ NEW_AGENT_INSTALLED=0
 SERVICE_WAS_LOADED=0
 SERVICE_STOPPED=0
 INSTALL_COMPLETE=0
+INSTALL_RECEIPT_ROOT=""
+INSTALL_ATTEMPT=""
+INSTALL_RESULT="running"
 HEALTH_SOCKET="$HOME/Library/Application Support/M3MCP/mcp.sock"
 READINESS_ATTEMPTS=40
 READINESS_DELAY_SECONDS="0.25"
@@ -91,10 +94,26 @@ service_is_ready() {
   [[ "$health_ok" == "true" ]]
 }
 
+setup_is_pending() {
+  local receipt="$INSTALL_RECEIPT_ROOT/status.json"
+  local attempt state pid executable live_pid
+  [[ -f "$receipt" && ! -L "$receipt" ]] || return 1
+  attempt="$(/usr/bin/plutil -extract attempt raw -o - "$receipt" 2>/dev/null)" || return 1
+  state="$(/usr/bin/plutil -extract state raw -o - "$receipt" 2>/dev/null)" || return 1
+  pid="$(/usr/bin/plutil -extract pid raw -o - "$receipt" 2>/dev/null)" || return 1
+  executable="$(/usr/bin/plutil -extract executable raw -o - "$receipt" 2>/dev/null)" || return 1
+  [[ "$attempt" == "$INSTALL_ATTEMPT" && ( "$state" == "setup_required" || "$state" == "keychain_required" ) \
+     && "$executable" == "$APP_BINARY" && "$pid" =~ ^[1-9][0-9]*$ ]] || return 1
+  live_pid="$(launchctl print "gui/$UID/$BUNDLE_ID" 2>/dev/null | awk '$1 == "pid" && $2 == "=" {print $3; exit}')"
+  [[ "$pid" == "$live_pid" ]] || return 1
+  kill -0 "$pid" 2>/dev/null || return 1
+  INSTALL_RESULT="$state"
+}
+
 wait_for_service_readiness() {
   local attempt
   for ((attempt = 1; attempt <= READINESS_ATTEMPTS; attempt++)); do
-    if service_is_ready; then
+    if service_is_ready || setup_is_pending; then
       return 0
     fi
     if ((attempt < READINESS_ATTEMPTS)); then
@@ -195,6 +214,7 @@ rollback_and_cleanup() {
     fi
   fi
 
+  remove_created_tree "$INSTALL_RECEIPT_ROOT" "$AGENT_DIR" ".$BUNDLE_ID.receipt." || true
   remove_created_file "$STAGED_AGENT_PLIST" "$AGENT_DIR" ".$BUNDLE_ID.install." || true
   remove_created_tree "$STAGING_ROOT" "$INSTALL_DIR" ".$BUNDLE_NAME.install." || true
 
@@ -357,6 +377,14 @@ m3mcp_reject_expired_or_revoked_signature "$STAGED_APP" "$IDENTITY"
 # Render and lint the launch agent off its live path as well. This keeps a failed plist update from
 # damaging an otherwise working installation.
 mkdir -p "$AGENT_DIR"
+INSTALL_RECEIPT_ROOT="$(mktemp -d "$AGENT_DIR/.$BUNDLE_ID.receipt.XXXXXX")"
+INSTALL_ATTEMPT="$(/usr/bin/uuidgen)"
+RECEIPT_XML="$(printf '%s' "$INSTALL_RECEIPT_ROOT/status.json" | xml_escape)"
+POLICY_ENV_BLOCK="  <key>EnvironmentVariables</key>
+  <dict>$POLICY_ENV_ENTRIES
+    <key>LOCALMCP_INSTALL_RECEIPT</key><string>$RECEIPT_XML</string>
+    <key>LOCALMCP_INSTALL_ATTEMPT</key><string>$INSTALL_ATTEMPT</string>
+  </dict>"
 STAGED_AGENT_PLIST="$(mktemp "$AGENT_DIR/.$BUNDLE_ID.install.XXXXXX")"
 cat > "$STAGED_AGENT_PLIST" <<EOF
 <?xml version="1.0" encoding="UTF-8"?>
@@ -442,7 +470,15 @@ fi
 INSTALL_COMPLETE=1
 
 echo
-echo "Installed and started."
+if [[ "$INSTALL_RESULT" == "setup_required" ]]; then
+  echo "Installed; setup is pending in the LocalMCP window. The server is not ready yet."
+  echo "Read and decide on the usage-risk notice in the installed app; no consent was assumed."
+elif [[ "$INSTALL_RESULT" == "keychain_required" ]]; then
+  echo "Installed; keychain access is pending. The server is not ready yet."
+  echo "Open the installed app and choose Server > Start to authorize access. Existing tokens were retained."
+else
+  echo "Installed and started."
+fi
 echo
 echo "Grant Full Disk Access once, to this bundle:"
 echo "  System Settings -> Privacy & Security -> Full Disk Access -> +"

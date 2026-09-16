@@ -67,6 +67,14 @@ cat > "$MOCK_BIN/openssl" <<'MOCK'
 #!/usr/bin/env bash
 set -euo pipefail
 
+if [[ "${1:-}" == "rand" ]]; then
+  printf 'test-only-nonempty-transport-password\n'
+  exit 0
+fi
+if [[ "${1:-}" == "pkcs12" ]]; then
+  [[ "$*" != *"-legacy"* ]] || exit 98
+  [[ "$*" == *"-passout file:"* ]] || exit 97
+fi
 previous=""
 for argument in "$@"; do
   if [[ "$previous" == "-out" || "$previous" == "-keyout" ]]; then

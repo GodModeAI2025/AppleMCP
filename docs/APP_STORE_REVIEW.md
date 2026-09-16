@@ -40,3 +40,26 @@ Evidence includes source/configuration inspection, the real signed universal arc
 - `script/check_docs.py`, localisation checks, shell syntax and `git diff --check` pass. The direct-distribution package checker now verifies the manifest against its source; a fresh complete direct ZIP release is a separate deliverable from this store archive.
 
 Before final submission: publish the app-specific privacy details, finish remaining material runtime acceptance, select the latest corrected processed build, and rerun App Store Connect validation. Do not mark this assessment as “all green” while those items are open.
+
+## Review remediation — 16 September 2026, build 15
+
+Apple reviewed build 14 and cited 5.2.5 (Mac in subtitle), 2.4.5(v)
+(administrator access during setup), and 5.1.1(iv) (Allow Access pre-prompt button).
+
+Build 15 removes Full Disk Access instructions/settings links from the permissions
+screen and denies corresponding settings actions in the sandbox distribution.
+Mail and Voice Memos are optional and require already accessible selected data
+folders. Provider errors no longer recommend elevated access. Native permission
+pre-prompt buttons use Weiter / Continue; denial does not block setup.
+
+Store subtitles now read “KI-Agenten mit lokalen Daten” and
+“Connect AI to your local data”. Descriptions disclose the optional folder access.
+Obsolete permissions screenshots were removed from both localizations; originals
+remain in local release evidence.
+
+Validation: six existing setup/cancellation tests passed; sandbox build passed
+seven including refusal of all five Full Disk Access settings aliases while
+retaining ordinary Calendar settings. Universal Release archive and strict deep
+signature verification passed. Native permissions UI inspected and local bridge
+connection succeeded. Existing-install runtime check does not establish a fresh
+macOS permission-reset test. Apple acceptance remains pending.

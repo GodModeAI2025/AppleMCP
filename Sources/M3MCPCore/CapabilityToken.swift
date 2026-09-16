@@ -23,8 +23,8 @@ import Security
 /// The cost changed for the better on this branch's base. `script/install_local.sh` and
 /// `script/package_release.sh` both sign with a stable certificate and say why: an ad-hoc signature
 /// puts the binary hash into the designated requirement, so every rebuild would silently invalidate
-/// the Full Disk Access grant. The keychain ACL is bound the same way, so it survives a rebuild for
-/// the same reason the TCC grant does. What does not change is that the bridge is a second binary:
+/// the Full Disk Access grant. Legacy keychain ACL continuity must be verified independently;
+/// a stable TCC grant does not prove that a rebuilt binary can read an existing token. What does not change is that the bridge is a second binary:
 /// it does not prompt, because the panel would appear in a session an MCP client has not got — see
 /// `read(service:account:allowingInteraction:)`. So the fallback reaches an item already on this
 /// bridge's ACL and no other, and a client that is not that has to be given `M3MCP_TOKEN`.
@@ -79,13 +79,13 @@ public enum CapabilityToken {
     // MARK: - App side
 
     /// The token the server enforces. Generated and stored on first start.
-    public static func loadOrCreate(service: String? = nil, account: String = defaultAccount) throws -> Resolution {
+    public static func loadOrCreate(service: String? = nil, account: String = defaultAccount, allowingInteraction: Bool = false) throws -> Resolution {
         if let fromEnvironment = environmentToken() {
             return Resolution(token: fromEnvironment, origin: "\(environmentKey) environment variable")
         }
 
         let service = service ?? self.service
-        if let stored = try read(service: service, account: account) {
+        if let stored = try read(service: service, account: account, allowingInteraction: allowingInteraction) {
             return Resolution(token: stored, origin: "keychain item \(service)")
         }
 

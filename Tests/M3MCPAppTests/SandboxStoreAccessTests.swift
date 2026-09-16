@@ -10,7 +10,8 @@ final class SandboxStoreAccessTests: XCTestCase {
         let access = SandboxStoreAccess(preferences: preferences)
         for store in SandboxStoreAccess.Store.allCases {
             XCTAssertThrowsError(try access.url(for: store)) { error in
-                XCTAssertTrue(error.localizedDescription.contains("Ordnerfreigabe"))
+                XCTAssertTrue(error is SandboxStoreAccess.AccessError)
+                XCTAssertFalse(error.localizedDescription.isEmpty)
             }
         }
     }

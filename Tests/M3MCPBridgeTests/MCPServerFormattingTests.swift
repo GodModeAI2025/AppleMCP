@@ -5,6 +5,23 @@ import XCTest
 @testable import M3MCPCore
 
 final class MCPServerFormattingTests: XCTestCase {
+    func testStoppedServerIsAnMCPErrorRatherThanAnEmptySearch() async throws {
+        let socket = URL(fileURLWithPath: "/tmp/localmcp-absent-\(UUID().uuidString).sock")
+        let client = LocalAppClient(socketURL: socket, capabilityToken: "synthetic-test-token")
+        let unavailable = await client.call(tool: "source_status", arguments: [:])
+        XCTAssertFalse(unavailable.ok)
+        XCTAssertTrue(unavailable.message?.contains("not reachable") == true)
+        let failed = MCPServer.makeToolResultObject(id: .integer(1), response: unavailable,
+                                                    includeStructuredContent: true)
+        let empty = MCPServer.makeToolResultObject(id: .integer(2),
+            response: ToolResponse(ok: true, source: "Synthetic search", items: []),
+            includeStructuredContent: true)
+        let failedResult = try XCTUnwrap(failed["result"] as? [String: Any])
+        let emptyResult = try XCTUnwrap(empty["result"] as? [String: Any])
+        XCTAssertEqual(failedResult["isError"] as? Bool, true)
+        XCTAssertEqual(emptyResult["isError"] as? Bool, false)
+    }
+
     func testAnnotationsAreOnlyEmittedWhenNegotiated() throws {
         let tool = try XCTUnwrap(ToolCatalog.tools.first)
 

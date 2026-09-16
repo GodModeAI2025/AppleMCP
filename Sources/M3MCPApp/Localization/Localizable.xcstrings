@@ -4860,6 +4860,134 @@
           }
         }
       }
+    },
+    "Die Auswahl ist optional. Wenn macOS den Zugriff verweigert, bleibt die Quelle nicht verfügbar. Du kannst die Einrichtung ohne diese Quelle fortsetzen.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Die Auswahl ist optional. Wenn macOS den Zugriff verweigert, bleibt die Quelle nicht verfügbar. Du kannst die Einrichtung ohne diese Quelle fortsetzen."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Selection is optional. If macOS denies access, this source remains unavailable. You can continue setup without it."
+          }
+        }
+      }
+    },
+    "Wähle nur Datenordner aus, auf die dein Benutzer bereits zugreifen kann. LocalMCP speichert eine Lesefreigabe für die ausgewählten Ordner.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Wähle nur Datenordner aus, auf die dein Benutzer bereits zugreifen kann. LocalMCP speichert eine Lesefreigabe für die ausgewählten Ordner."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Select only data folders your user can already access. LocalMCP saves read-only access to the selected folders."
+          }
+        }
+      }
+    },
+    "Alle acht Quellen durchlaufen. Prüfe unten die Ergebnisse. Nicht freigegebene Quellen bleiben deaktiviert; du kannst die Einrichtung fortsetzen.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Alle acht Quellen durchlaufen. Prüfe unten die Ergebnisse. Nicht freigegebene Quellen bleiben deaktiviert; du kannst die Einrichtung fortsetzen."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "All eight sources checked. Review the results below. Sources without permission remain disabled; you can continue setup."
+          }
+        }
+      }
+    },
+    "Wähle einen bereits zugänglichen Mail-Datenordner mit Envelope Index und Nachrichten. Diese Quelle ist optional; du kannst die Auswahl abbrechen.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Wähle einen bereits zugänglichen Mail-Datenordner mit Envelope Index und Nachrichten. Diese Quelle ist optional; du kannst die Auswahl abbrechen."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Select an accessible Mail data folder containing Envelope Index and messages. This source is optional; you can cancel selection."
+          }
+        }
+      }
+    },
+    "Wähle einen bereits zugänglichen Datenordner mit CloudRecordings.db und Aufnahmen. Diese Quelle ist optional; du kannst die Auswahl abbrechen.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Wähle einen bereits zugänglichen Datenordner mit CloudRecordings.db und Aufnahmen. Diese Quelle ist optional; du kannst die Auswahl abbrechen."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Select an accessible data folder containing CloudRecordings.db and recordings. This source is optional; you can cancel selection."
+          }
+        }
+      }
+    },
+    "Bitte zuerst unter Freigaben den %@ auswählen. Es werden nur ausdrücklich ausgewählte, bereits zugängliche Ordner gelesen.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Bitte zuerst unter Freigaben den %@ auswählen. Es werden nur ausdrücklich ausgewählte, bereits zugängliche Ordner gelesen."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "First select the %@ in Permissions. Only explicitly selected, already accessible folders are read."
+          }
+        }
+      }
+    },
+    "Wähle unter Freigaben einen bereits zugänglichen Datenordner aus. Diese Quelle ist optional.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Wähle unter Freigaben einen bereits zugänglichen Datenordner aus. Diese Quelle ist optional."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Select an already accessible data folder in Permissions. This source is optional."
+          }
+        }
+      }
+    },
+    "Schlüsselbundzugriff ausstehend. Wähle im Menü Server > Starten, um den Zugriff bewusst zu bestätigen. Vorhandene Tokens bleiben erhalten.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Schlüsselbundzugriff ausstehend. Wähle im Menü Server > Starten, um den Zugriff bewusst zu bestätigen. Vorhandene Tokens bleiben erhalten."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Keychain access is pending. Choose Server > Start from the menu to explicitly authorize access. Existing tokens are preserved."
+          }
+        }
+      }
     }
   },
   "version": "1.0"

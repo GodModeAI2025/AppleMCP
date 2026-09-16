@@ -1088,7 +1088,7 @@ final class VoiceMemosProvider {
                 return ToolResponse(
                     ok: false,
                     source: sourceName,
-                    message: "Cannot read \(fileURL.path). Grant Full Disk Access to LocalMCP, then restart the app."
+                    message: "Cannot read \(fileURL.path). Select an accessible data folder in Permissions, or leave this optional source disabled."
                 )
             }
 
@@ -1581,7 +1581,7 @@ final class VoiceMemosProvider {
             throw VoiceMemoStoreFailure("The Voice Memos recordings folder exists, but \(databaseName) is missing. Open Voice Memos once so macOS creates its store.")
         }
 
-        throw VoiceMemoStoreFailure("The Voice Memos store was not found below \(primary.path). Open Voice Memos at least once, and grant Full Disk Access to LocalMCP if the folder is protected.")
+        throw VoiceMemoStoreFailure("The Voice Memos store was not found below \(primary.path). Select an accessible data folder in Permissions, or leave this optional source disabled.")
         #endif
     }
 
@@ -1920,7 +1920,7 @@ final class VoiceMemosProvider {
             if let database {
                 sqlite3_close(database)
             }
-            throw VoiceMemoStoreFailure("Cannot read the Voice Memos store. Grant Full Disk Access to LocalMCP, then restart the app. Detail: \(message)")
+            throw VoiceMemoStoreFailure("Cannot read the Voice Memos store. Select an accessible data folder in Permissions, or leave this optional source disabled. Detail: \(message)")
         }
 
         defer { sqlite3_close(database) }
@@ -1983,7 +1983,7 @@ final class VoiceMemosProvider {
         } catch {
             throw VoiceMemoStoreFailure(
                 "Cannot prepare a safe temporary copy of the Voice Memos store at \(url.path). "
-                    + "Grant Full Disk Access to LocalMCP, then restart the app. "
+                    + "Select an accessible data folder in Permissions, or leave this optional source disabled. "
                     + "Detail: \(error.localizedDescription)"
             )
         }
