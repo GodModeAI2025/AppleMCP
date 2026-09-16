@@ -4972,6 +4972,22 @@
           }
         }
       }
+    },
+    "Schlüsselbundzugriff ausstehend. Wähle im Menü Server > Starten, um den Zugriff bewusst zu bestätigen. Vorhandene Tokens bleiben erhalten.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Schlüsselbundzugriff ausstehend. Wähle im Menü Server > Starten, um den Zugriff bewusst zu bestätigen. Vorhandene Tokens bleiben erhalten."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Keychain access is pending. Choose Server > Start from the menu to explicitly authorize access. Existing tokens are preserved."
+          }
+        }
+      }
     }
   },
   "version": "1.0"

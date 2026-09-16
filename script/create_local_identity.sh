@@ -56,23 +56,36 @@ if [[ -n "$MATCHING_IDENTITIES" ]]; then
   exit 1
 fi
 
+umask 077
 WORK_DIR="$(mktemp -d)"
 trap 'rm -rf "$WORK_DIR"' EXIT
 
 echo "Generating a self-signed code-signing certificate…"
-openssl req -x509 -newkey rsa:2048 -sha256 -days 3650 -nodes \
+if ! openssl req -x509 -newkey rsa:2048 -sha256 -days 3650 -nodes \
   -keyout "$WORK_DIR/key.pem" -out "$WORK_DIR/cert.pem" \
   -subj "/CN=$IDENTITY_NAME/O=M3MCP Local/C=DE" \
   -addext "basicConstraints=critical,CA:false" \
   -addext "keyUsage=critical,digitalSignature" \
-  -addext "extendedKeyUsage=critical,codeSigning" >/dev/null 2>&1
+  -addext "extendedKeyUsage=critical,codeSigning" > /dev/null 2>"$WORK_DIR/certificate-error"; then
+  echo "Code-signing certificate generation failed with $(openssl version)." >&2
+  cat "$WORK_DIR/certificate-error" >&2
+  exit 1
+fi
 
-# -legacy plus the SHA-1 algorithms are required: OpenSSL 3 defaults to a PKCS#12 MAC that the macOS
-# keychain cannot read, and the import fails with "MAC verification failed".
-openssl pkcs12 -export -legacy -macalg sha1 \
+# Use explicit, macOS-compatible algorithms with both LibreSSL and OpenSSL 3.
+# A nonempty transport password is required by some macOS security import versions.
+# Keep it out of OpenSSL's command line and never print it.
+openssl rand -hex 24 > "$WORK_DIR/password"
+P12_PASSWORD="$(cat "$WORK_DIR/password")"
+[[ -n "$P12_PASSWORD" ]] || { echo "Could not generate PKCS#12 transport password." >&2; exit 1; }
+if ! openssl pkcs12 -export -macalg sha1 \
   -certpbe PBE-SHA1-3DES -keypbe PBE-SHA1-3DES \
   -out "$WORK_DIR/identity.p12" -inkey "$WORK_DIR/key.pem" -in "$WORK_DIR/cert.pem" \
-  -name "$IDENTITY_NAME" -passout pass: >/dev/null 2>&1
+  -name "$IDENTITY_NAME" -passout "file:$WORK_DIR/password" 2>"$WORK_DIR/export-error"; then
+  echo "PKCS#12 export failed with $(openssl version)." >&2
+  cat "$WORK_DIR/export-error" >&2
+  exit 1
+fi
 
 # This certificate is a privilege, not just a build convenience: anything able to sign with it can
 # produce a binary satisfying the app's designated requirement — bundle identifier plus this
@@ -94,10 +107,14 @@ fi
 # bash 3.2 — the shell macOS actually ships — treats "${arr[@]}" as an unbound variable under
 # `set -u` when the array is empty, so the default path (no extra args) aborted here. The
 # ${arr[@]+...} guard expands to nothing when unset and is portable back to 3.2.
-# The P12 has an empty transport password by design. Its confidentiality comes from mktemp's 0700
-# directory and immediate cleanup, not from a predictable or command-line-visible pseudo-secret.
-# The imported private key is protected by the keychain access control configured above.
-security import "$WORK_DIR/identity.p12" -k "$KEYCHAIN" -P "" ${IMPORT_ARGS[@]+"${IMPORT_ARGS[@]}"} >/dev/null
+# security import accepts the transport password through -P. Unlike OpenSSL it
+# has no password-file argument. The short-lived random value is not a user secret;
+# the private key remains protected by the restrictive keychain ACL below.
+if ! security import "$WORK_DIR/identity.p12" -k "$KEYCHAIN" -P "$P12_PASSWORD" ${IMPORT_ARGS[@]+"${IMPORT_ARGS[@]}"} > /dev/null; then
+  echo "Keychain import failed; no signing access was broadened." >&2
+  exit 1
+fi
+unset P12_PASSWORD
 
 IMPORTED_IDENTITIES="$(security find-identity -p codesigning 2>/dev/null \
   | identity_lines_named || true)"

@@ -42,7 +42,7 @@ struct M3MCPApp: App {
                 Divider()
 
                 Button("Starten") {
-                    model.startIfNeeded()
+                    model.startIfNeeded(allowingKeychainInteraction: true)
                 }
                 .keyboardShortcut("s", modifiers: [.command, .shift])
 

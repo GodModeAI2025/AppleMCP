@@ -185,6 +185,24 @@ curl --unix-socket "$HOME/Library/Application Support/M3MCP/mcp.sock" \
   http://localhost/tools/source_status
 ```
 
+### Local installation and service lifecycle
+
+The local installer distinguishes a healthy server from an installed app awaiting setup.
+“Installed; setup is pending” means you should open the installed app and review its risk notice
+at your own pace. No server or tools are enabled before consent. Do not run a development copy
+first as an installation workaround. Genuine startup failures still roll back the installation.
+
+If keychain access is pending, open the installed app and choose **Server > Start** to authorize
+access explicitly. Automatic startup does not display a blocking keychain panel. Existing tokens
+are retained; do not delete a token merely to make installation finish. A stable signing identity
+is necessary for updates, but preserved privacy permissions alone do not prove keychain access.
+
+The local LaunchAgent starts at login and restarts unsuccessful exits. Deliberately quitting the
+app leaves it stopped until you reopen it or log in again; unconditional KeepAlive is not enabled.
+Use the health check above to verify the listener, rather than relying on a process ID. A bridge
+call to a stopped server returns an MCP tool error (`isError: true`); a successful search with no
+matches remains a successful empty result.
+
 ### Connect an MCP client
 
 Claude Desktop example:
