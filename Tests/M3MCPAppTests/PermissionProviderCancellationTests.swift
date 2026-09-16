@@ -3,6 +3,25 @@ import XCTest
 @testable import M3MCPApp
 
 final class PermissionProviderCancellationTests: XCTestCase {
+    #if LOCALMCP_SANDBOX
+    func testStoreBuildNeverOpensFullDiskAccessSettings() async {
+        let effects = PermissionUISideEffectLog()
+        let provider = PermissionProvider(settingsOpener: { url in
+            effects.record(url.absoluteString)
+            return true
+        })
+        for pane in ["mail", "files", "full_disk_access", "voice_memos", "voicememos"] {
+            let response = await provider.openSettings(input: ["pane": .string(pane)])
+            XCTAssertFalse(response.ok)
+        }
+        XCTAssertEqual(effects.values, [])
+        let calendar = await provider.openSettings(input: ["pane": .string("calendar")])
+        XCTAssertTrue(calendar.ok)
+        XCTAssertEqual(effects.values.count, 1)
+        XCTAssertTrue(effects.values[0].contains("Privacy_Calendars"))
+    }
+    #endif
+
     func testPrecancelledMainActorBoundariesDoNotActivateAppOrOpenSettings() async {
         let effects = PermissionUISideEffectLog()
         let provider = PermissionProvider(

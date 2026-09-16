@@ -8,8 +8,8 @@ final class SandboxStoreAccess: @unchecked Sendable {
         var title: String { self == .mail ? String(localized: "Mail-Ordner") : String(localized: "Sprachmemo-Ordner") }
         var instruction: LocalizedStringResource {
             self == .mail
-                ? "Wähle den Ordner Library/Mail in deinem Benutzerordner. Mit ⌘⇧G kannst du ~/Library/Mail eingeben."
-                : "Wähle den Ordner Recordings, der CloudRecordings.db und die lokalen Sprachmemos enthält."
+                ? "Wähle einen bereits zugänglichen Mail-Datenordner mit Envelope Index und Nachrichten. Diese Quelle ist optional; du kannst die Auswahl abbrechen."
+                : "Wähle einen bereits zugänglichen Datenordner mit CloudRecordings.db und Aufnahmen. Diese Quelle ist optional; du kannst die Auswahl abbrechen."
         }
     }
 
@@ -56,7 +56,7 @@ final class SandboxStoreAccess: @unchecked Sendable {
         lock.lock()
         defer { lock.unlock() }
         guard let url = active[store] else {
-            throw AccessError(message: String(localized: "Bitte zuerst unter Freigaben den \(store.title) auswählen. Die Sandbox benötigt eine eigene Ordnerfreigabe; Festplattenvollzugriff allein reicht nicht."))
+            throw AccessError(message: String(localized: "Bitte zuerst unter Freigaben den \(store.title) auswählen. Es werden nur ausdrücklich ausgewählte, bereits zugängliche Ordner gelesen."))
         }
         return url
     }

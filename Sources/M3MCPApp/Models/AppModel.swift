@@ -372,7 +372,7 @@ final class AppModel: ObservableObject {
         await refresh()
         permissionProgress = stopPermissionSequence || Task.isCancelled
             ? String(localized: "Ablauf beendet. Bereits erteilte Freigaben bleiben erhalten.")
-            : String(localized: "Alle acht Quellen durchlaufen. Prüfe unten die Ergebnisse. Fehlende Freigaben und Festplattenvollzugriff müssen gegebenenfalls in den Systemeinstellungen aktiviert werden.")
+            : String(localized: "Alle acht Quellen durchlaufen. Prüfe unten die Ergebnisse. Nicht freigegebene Quellen bleiben deaktiviert; du kannst die Einrichtung fortsetzen.")
     }
 
     func cancelPermissionSequence() {

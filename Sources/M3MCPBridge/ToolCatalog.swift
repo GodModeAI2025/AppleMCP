@@ -282,7 +282,7 @@ enum ToolCatalog {
         ),
         MCPTool(
             name: .mailSearch,
-            description: "Read/search messages across every inspected mailbox in the local Apple Mail index — Sent, Archive and user folders included — without driving Mail.app. Always read the response's `meta`: when `total_exact` is true, `total` is the exact match count; otherwise it is a lower bound. `has_more`/`truncated` say whether this is the whole set, and `recipients_searchable` says whether recipient matching was available. Page with `offset`. Requires Full Disk Access if the Mail store is protected.",
+            description: "Read/search messages across every inspected mailbox in the local Apple Mail index — Sent, Archive and user folders included — without driving Mail.app. Always read the response's `meta`: when `total_exact` is true, `total` is the exact match count; otherwise it is a lower bound. `has_more`/`truncated` say whether this is the whole set, and `recipients_searchable` says whether recipient matching was available. Page with `offset`. Requires read access to the selected data folder; inaccessible sources remain unavailable.",
             schema: querySchema(extra: [
                 "offset": ["type": "integer", "description": "Number of matches to skip, for paging. Default 0. Compare with meta.total to know when to stop."],
                 "mailbox": [
@@ -320,7 +320,7 @@ enum ToolCatalog {
         ),
         MCPTool(
             name: .mailRead,
-            description: "Read one email by its canonical numeric id from mail_search. Reads at most 4 MiB from the local .emlx source and returns at most 8,000 characters of extracted body text, with truncation markers when a bound is reached. There is no AppleScript fallback. Requires Full Disk Access.",
+            description: "Read one email by its canonical numeric id from mail_search. Reads at most 4 MiB from the local .emlx source and returns at most 8,000 characters of extracted body text, with truncation markers when a bound is reached. There is no AppleScript fallback. Requires read access to the selected data folder.",
             schema: objectSchema(properties: [
                 "id": ["type": "string", "description": "Message id returned by mail_search."]
             ], required: ["id"])
