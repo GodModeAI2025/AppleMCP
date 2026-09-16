@@ -16,7 +16,8 @@
   "Mail flag metadata (marker colors)" for the mapping table and the re-verification SQL.
   `meta.flagged_only` reports the predicate that ran, so a colour filter shows `true`.
   Two caveats of the data source are documented alongside: a newly received message can take
-  minutes to be indexed, and a colour can read as red for a while after it is set.
+  minutes to be indexed, and gray flags on Exchange accounts can read as red because
+  Exchange follow-up flags have no gray.
 
 ## 1.0.1 — 2026-09-13
 

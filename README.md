@@ -319,11 +319,14 @@ Two caveats of the data source itself, observed on macOS 26 and not fixable here
   written; a message that arrived moments ago needs its whole row indexed first. Verified
   on 2026-09-14: flags set on older messages were visible on the first query, a message
   received nine minutes earlier took several more minutes.
-- **A colour can appear as red for a while after it is set.** Flagging in Mail is red first
-  and the colour is a second step, and a flag that round-trips through a server may come
-  back without its colour. A filter on one colour can therefore miss a message that was
-  just marked. When freshness matters, search `flag_color=purple,red` rather than one
-  colour alone.
+- **Gray flags on Exchange accounts can read as red.** Mail offers seven flag colours;
+  Exchange follow-up flags carry six, and gray is the one with no counterpart. A gray flag
+  synchronised to an Exchange server comes back as a flag without a colour, and a flag
+  without a colour is red, code 0. Observed on 2026-09-14 on Exchange but not on IMAP, and
+  only for gray: the other six colours round-trip unchanged. The
+  effect is transient, the local colour reasserts itself, but a query during that window
+  reports red. If you rely on gray under Exchange, either search `flag_color=gray,red` or
+  use one of the six colours Exchange represents.
 
 Because Apple can change the bit layout in a future macOS version, the mapping can be
 re-verified against the live index with read-only SQL:
