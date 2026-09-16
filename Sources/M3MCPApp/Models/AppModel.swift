@@ -1,6 +1,7 @@
 import AppKit
 import Foundation
 import M3MCPCore
+import Security
 
 @MainActor
 final class AppModel: ObservableObject {
@@ -90,19 +91,24 @@ final class AppModel: ObservableObject {
         usageRiskAccepted = true
     }
 
-    func startIfNeeded() {
+    func startIfNeeded() { startIfNeeded(allowingKeychainInteraction: false) }
+
+    func startIfNeeded(allowingKeychainInteraction: Bool) {
         guard usageRiskAccepted else {
             showsSetup = true
+            InstallationStartupReceipt.report("setup_required")
             return
         }
         guard server == nil else { return }
         if let message = M3MCPEndpoint.configurationError {
+            InstallationStartupReceipt.report("failed")
             serverState = "failed"
             authenticationSummary = "unavailable"
             record(tool: "server_start", response: ToolResponse(ok: false,
                 source: "LocalMCP Server", message: message), durationMilliseconds: 0)
             return
         }
+        InstallationStartupReceipt.report("starting")
         serverState = "starting"
 
         // Fail closed. If the token cannot be read or created the server does not come up at all:
@@ -110,10 +116,15 @@ final class AppModel: ObservableObject {
         // reachable by every process of the user.
         let credentials: CapabilityToken.Resolution
         do {
-            credentials = try CapabilityToken.loadOrCreate()
+            credentials = try CapabilityToken.loadOrCreate(allowingInteraction: allowingKeychainInteraction)
         } catch {
+            let needsKeychain: Bool
+            if case CapabilityToken.Failure.keychain(let status, _) = error {
+                needsKeychain = [errSecInteractionNotAllowed, errSecAuthFailed, errSecUserCanceled].contains(status)
+            } else { needsKeychain = false }
+            InstallationStartupReceipt.report(needsKeychain ? "keychain_required" : "failed")
             serverState = "failed"
-            let message = String(localized: "Der Server bleibt ohne MCP-Token geschlossen: \(error.localizedDescription). Bitte den Mac entsperren und die App erneut starten. Bleibt der Fehler bestehen, prüfe die installierte App-Version und ihre Signatur.")
+            let message = (needsKeychain ? String(localized: "Schlüsselbundzugriff ausstehend. Wähle im Menü Server > Starten, um den Zugriff bewusst zu bestätigen. Vorhandene Tokens bleiben erhalten.") + "\n" : "") + String(localized: "Der Server bleibt ohne MCP-Token geschlossen: \(error.localizedDescription). Bitte den Mac entsperren und die App erneut starten. Bleibt der Fehler bestehen, prüfe die installierte App-Version und ihre Signatur.")
             authenticationSummary = "unavailable"
             AppLogger.log(message)
             record(
@@ -192,6 +203,7 @@ final class AppModel: ObservableObject {
         do {
             try server.start()
             self.server = server
+            InstallationStartupReceipt.report("running")
             serverState = "running"
             AppLogger.log("Local server listening on \(M3MCPEndpoint.socketURL.path)")
             services = service.services + [authenticationService(authorizer)]
@@ -201,6 +213,7 @@ final class AppModel: ObservableObject {
                 durationMilliseconds: 0
             )
         } catch {
+            InstallationStartupReceipt.report("failed")
             serverState = "failed"
             AppLogger.log("Local server failed: \(error.localizedDescription)")
             record(

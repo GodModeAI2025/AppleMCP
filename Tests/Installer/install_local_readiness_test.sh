@@ -62,7 +62,7 @@ case "$command_name" in
     count=$((count + 1))
     printf '%s\n' "$count" > "$MOCK_CURL_COUNT_FILE"
     case "$MOCK_HEALTH_MODE" in
-      unhealthy)
+      unhealthy|setup_pending|keychain_pending|stale_receipt|dead_receipt|wrong_executable)
         # HTTP transport succeeds, but the app reports that it is not operational.
         printf '{"ok":false,"endpoint":"mock"}'
         ;;
@@ -89,7 +89,24 @@ case "$command_name" in
     printf '  1) %s "Apple Development: M3MCP Test (TESTTEAM01)"\n' \
       "$MOCK_IDENTITY_FINGERPRINT"
     ;;
-  launchctl|pkill|sleep|spctl|xattr)
+  launchctl)
+    if [[ "${1:-}" == "print" ]]; then
+      printf 'pid = %s\n' "$MOCK_PROCESS_PID"
+    elif [[ "${1:-}" == "bootstrap" && "$MOCK_HEALTH_MODE" != unhealthy && "$MOCK_HEALTH_MODE" != healthy_after_two ]]; then
+      plist="${3:-}"
+      receipt="$(/usr/bin/plutil -extract EnvironmentVariables.LOCALMCP_INSTALL_RECEIPT raw -o - "$plist" 2>/dev/null)" || exit 0
+      attempt="$(/usr/bin/plutil -extract EnvironmentVariables.LOCALMCP_INSTALL_ATTEMPT raw -o - "$plist")"
+      executable="$(/usr/bin/plutil -extract ProgramArguments.0 raw -o - "$plist")"
+      pid="$MOCK_PROCESS_PID"
+      state=setup_required
+      [[ "$MOCK_HEALTH_MODE" != keychain_pending ]] || state=keychain_required
+      [[ "$MOCK_HEALTH_MODE" != stale_receipt ]] || attempt="old-attempt"
+      [[ "$MOCK_HEALTH_MODE" != dead_receipt ]] || pid=99999999
+      [[ "$MOCK_HEALTH_MODE" != wrong_executable ]] || executable=/wrong/app
+      printf '{"attempt":"%s","pid":%s,"executable":"%s","state":"%s"}' "$attempt" "$pid" "$executable" "$state" > "$receipt"
+    fi
+    ;;
+  pkill|sleep|spctl|xattr)
     ;;
   *)
     echo "unexpected mocked command: $command_name" >&2
@@ -114,6 +131,7 @@ run_installer() {
     PATH="$CASE_MOCK_BIN:/usr/bin:/bin:/usr/sbin:/sbin" \
     M3MCP_CODESIGN_IDENTITY="$MOCK_IDENTITY_FINGERPRINT" \
     M3MCP_INSTALL_DIR="$CASE_INSTALL_DIR" \
+    MOCK_PROCESS_PID="$$" \
     MOCK_BUILD_DIR="$CASE_BUILD_DIR" \
     MOCK_COMMAND_LOG="$CASE_COMMAND_LOG" \
     MOCK_CURL_COUNT_FILE="$CASE_CURL_COUNT" \
@@ -205,6 +223,25 @@ test_health_success_commits_after_retry() {
   assert_no_transaction_leftovers
 }
 
+test_pending_setup_and_invalid_receipts() {
+  local mode
+  for mode in setup_pending keychain_pending stale_receipt dead_receipt wrong_executable; do
+    setup_case "$mode"
+    run_installer "$mode"
+    if [[ "$mode" == setup_pending || "$mode" == keychain_pending ]]; then
+      [[ "$CASE_STATUS" -eq 0 ]] || fail "pending setup rolled back"
+      grep -Eq 'Installed; (setup is|keychain access is) pending' "$CASE_OUTPUT" || fail "missing pending setup message"
+      ! grep -Fq 'Installed and started.' "$CASE_OUTPUT" || fail "pending setup claimed health"
+    else
+      [[ "$CASE_STATUS" -ne 0 ]] || fail "invalid receipt accepted: $mode"
+      [[ "$(<"$CASE_INSTALL_DIR/LocalMCP.app/Contents/MacOS/M3MCPApp")" == "old-app" ]] || fail "invalid receipt lost prior app"
+    fi
+    [[ -z "$(find "$CASE_HOME/Library/LaunchAgents" -name '*.receipt.*' -print)" ]] || fail "receipt directory retained"
+    assert_no_transaction_leftovers
+  done
+}
+
+test_pending_setup_and_invalid_receipts
 test_unhealthy_response_rolls_back
 test_health_success_commits_after_retry
 test_live_path_verification_failure_stops_replacement_before_rollback
