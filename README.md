@@ -274,6 +274,71 @@ Resource bounds that affect results:
 - Voice Memo transcription accepts `timeout_seconds` from 10 through 1,800 (default 300). Analyzer and legacy fallback share that one monotonic budget; fallback receives only the remainder, including authorization/capability and audio-metadata preflight. Each native path is single-flight, and its slot plus verified input descriptor remain retained until cancellation-ignoring framework work actually exits. Legacy cleanup specifically waits for both serialized PCM feeder shutdown and `SFSpeechRecognitionTask.state == .completed`; `.canceling` does not release the slot. The bridge applies one absolute 1,830-second monotonic deadline across connect, request delivery, provider wait, and incremental response framing, preserving a 30-second delivery margin beyond the maximum provider deadline.
 - Local HTTP requests are bounded to 32 KiB of headers, 1,048,576 body bytes (1 MiB), and a 15-second absolute receive deadline. A persistent owner-only per-endpoint start lock serializes stale-socket handling and bind across competing app processes. An existing socket is probed nonblocking under one 250 ms monotonic deadline; timeout or an ambiguous error preserves the endpoint and aborts startup. App-to-bridge response bodies are capped at 8 MiB; an oversized provider result becomes a small HTTP 413 response rather than an unreadable success. A blocked response write has its own 15-second absolute deadline. If JSON-string escaping would still expand an otherwise valid result beyond the bridge's separate 16 MiB stdout limit, the bridge returns a small normal tool error for that request ID and keeps the writer usable.
 
+### Mail flag metadata (marker colors)
+
+`mail_search` reads the marker colors Apple Mail stores in the `flags` bitmask of the Envelope
+Index and exposes them as item metadata; `mail_read` returns the same metadata for one message.
+Two parameters extend the search:
+
+- `flagged_only` (boolean, default false): only return flagged (marked) messages.
+- `flag_color` (string, maximum 256 characters): filter flagged messages by marker color.
+  Accepts a comma-separated list of names or codes — `red/rot=0`, `orange=1`, `yellow/gelb=2`,
+  `green/grün=3`, `blue/blau=4`, `purple/lila=5`, `gray/grau=6`. Setting `flag_color` implies
+  `flagged_only`. Invalid input, including input that consists only of separators (`","`),
+  is rejected with a clear error instead of returning an empty result.
+
+Per item, `metadata.flagged` reports the marked state; only for flagged messages do
+`metadata.flag_color` (raw code) and `metadata.flag_color_name` appear. An unknown code is
+reported as `unknown`, never as a failure.
+
+The color lives in bits 39–41 of `flags` (`((flags >> 39) & 7)`), verified against the real
+Mail index on 2026-09-13 (macOS 26, Index V10):
+
+| Code | Colour | Canonical name | German alias |
+|---|---|---|---|
+| 0 | Red | red | rot |
+| 1 | Orange | orange | orange |
+| 2 | Yellow | yellow | gelb |
+| 3 | Green | green | grün / gruen |
+| 4 | Blue | blue | blau |
+| 5 | Purple | purple | lila |
+| 6 | Gray | gray | grau |
+| 7 | invalid | unknown | — |
+
+Caveats baked into the implementation: the `flag_color` database column is unreliable and
+ignored; unmarked messages can still carry leftover color codes in the bits (Mail does not
+clear them when unmarking), so filters and metadata always combine `flagged = 1` with the
+code; code 7 is invalid and reported as `unknown`. Because a colour filter implies
+`flagged = 1`, `meta.flagged_only` reports the predicate that ran, not only the explicit
+parameter.
+
+Two caveats of the data source itself, observed on macOS 26 and not fixable here:
+
+- **A newly received message can take minutes to appear**, flag and all. Flagging a message
+  that is already in the index is visible immediately, because only the flag has to be
+  written; a message that arrived moments ago needs its whole row indexed first. Verified
+  on 2026-09-14: flags set on older messages were visible on the first query, a message
+  received nine minutes earlier took several more minutes.
+- **Gray flags on Exchange accounts can read as red.** Mail offers seven flag colours;
+  Exchange follow-up flags carry six, and gray is the one with no counterpart. A gray flag
+  synchronised to an Exchange server comes back as a flag without a colour, and a flag
+  without a colour is red, code 0. Observed on 2026-09-14 on Exchange but not on IMAP, and
+  only for gray: the other six colours round-trip unchanged. The
+  effect is transient, the local colour reasserts itself, but a query during that window
+  reports red. If you rely on gray under Exchange, either search `flag_color=gray,red` or
+  use one of the six colours Exchange represents.
+
+Because Apple can change the bit layout in a future macOS version, the mapping can be
+re-verified against the live index with read-only SQL:
+
+```sql
+SELECT ROWID, flagged, ((flags >> 39) & 7) FROM messages WHERE ROWID IN (…);
+```
+
+Re-verification procedure: mark seven fresh test messages, one in each of the seven colors,
+read their codes with the SQL above, and compare against the table. If the codes diverge,
+treat this documentation and the provider mapping as stale.
+
 ## Optional tool groups
 
 Each group is disabled when its variable is absent, empty, malformed, or false. Accepted true values are `1`, `true`, `yes`, and `on` (case-insensitive).

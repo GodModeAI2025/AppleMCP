@@ -306,6 +306,14 @@ enum ToolCatalog {
                     "type": "boolean",
                     "description": "When true (default), words like 'unread', 'ungelesen', 'today' or '24h' in the query also set the matching filter. Set false to search those words literally; meta.query_rewritten reports whether it fired."
                 ],
+                "flagged_only": [
+                    "type": "boolean",
+                    "description": "When true, only return flagged (marked) messages. Default false."
+                ],
+                "flag_color": [
+                    "type": "string",
+                    "description": "Filter flagged messages by marker color. Accepts comma-separated names or codes: red/rot=0, orange=1, yellow/gelb=2, green/grün=3, blue/blau=4, purple/lila=5, gray/grau=6. Implies flagged_only. Colors are read from the flags bitmask (bits 39-41); the flag_color DB column is unreliable and ignored. Maximum 256 characters."
+                ],
                 "since_hours": ["type": "integer", "description": "Only return messages received within the last N hours, e.g. 24. Applied in the query, not after the page was cut."],
                 "max_candidates": ["type": "integer", "description": "Upper bound on messages inspected when body matching is requested. Default 500. meta.scan_capped says whether the bound was reached."]
             ])
