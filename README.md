@@ -12,6 +12,27 @@ Version 1.0.1 starts in a **default-safe profile**. The bridge advertises 21 obs
 
 LocalMCP is local-first, but it is not an isolation boundary for every process running as you. Read [Security model](docs/SECURITY_MODEL.md) before granting Full Disk Access or enabling optional tools.
 
+## Your MCP clients and your data
+
+LocalMCP implements the Model Context Protocol (MCP) standard. You configure the
+connection in each compatible client you choose; LocalMCP does not select an AI
+provider. Examples include Claude Code, Claude Cowork and other MCP-compatible
+applications. These examples are not endorsements.
+
+Clients can also use locally running LLMs. With a fully local configuration, your
+data can be processed on your Mac without cloud transfer. Actual processing
+depends on the client's features and settings.
+
+Requested, permitted tool results go to the requesting client. That client may
+forward them to its own models or cloud services. LocalMCP cannot reliably identify
+or control that subsequent processing. Connect only clients you trust, review
+their privacy policies and settings, and keep connection tokens confidential.
+
+The German/English setup notice explains this before server startup. Its separate
+sharing acknowledgement and the existing risk acknowledgement must both be
+selected. Existing users must accept the updated notice too. This does not grant
+macOS permissions or enable restricted tools.
+
 [Product website](https://godmodeai2025.github.io/AppleMCP/) · [Original app screenshots](docs/SCREENSHOTS.md)
 
 ![LocalMCP native app overview](assets/screenshots/overview.jpg)
