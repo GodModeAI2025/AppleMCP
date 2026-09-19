@@ -104,3 +104,19 @@ Build 17 was an intermediate upload before the local-LLM wording was added and i
 superseded by build 18. The privacy website is maintained separately by the owner
 and was not changed or newly verified in this remediation. Apple's acceptance of
 the revised disclosure remains pending.
+
+
+## Stable toolchain rebuild — build 19
+
+Build 18 became available to all four existing internal testers with bilingual
+notes, and PR #31 was merged after successful CI. App Store Connect nevertheless
+rejected the submission update because its archive was built with Xcode 27.1 beta
+(`27A9269`). TestFlight acceptance does not imply Store toolchain acceptance.
+
+Build 19 uses the installed stable Xcode 27.0 (`27A266a`). It preserves the build-18
+app functionality and sharing disclosure; only the build number changes.
+
+The native macOS Contacts prompt authorizes local access to the Contacts source;
+it is not itself a transfer to an AI provider. The local server returns requested,
+permitted results through the authenticated bridge to the user-configured client.
+Server startup alone does not require Contacts permission or send Contacts data.
