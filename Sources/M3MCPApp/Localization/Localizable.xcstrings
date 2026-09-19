@@ -5196,6 +5196,38 @@
           }
         }
       }
+    },
+    "LocalMCP implementiert den MCP-Standard und ist nicht an einen bestimmten KI-Anbieter gebunden.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "LocalMCP implementiert den MCP-Standard und ist nicht an einen bestimmten KI-Anbieter gebunden."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "LocalMCP implements the MCP standard and is not tied to any particular AI provider."
+          }
+        }
+      }
+    },
+    "Du kannst auch lokale KI-Clients mit lokal ausgeführten LLMs (großen Sprachmodellen) verbinden. Bei einer vollständig lokalen Konfiguration können die Daten auf deinem Mac verarbeitet werden, ohne sie an Cloud-Dienste zu übertragen. Entscheidend sind die Funktionen und Einstellungen deines Clients.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Du kannst auch lokale KI-Clients mit lokal ausgeführten LLMs (großen Sprachmodellen) verbinden. Bei einer vollständig lokalen Konfiguration können die Daten auf deinem Mac verarbeitet werden, ohne sie an Cloud-Dienste zu übertragen. Entscheidend sind die Funktionen und Einstellungen deines Clients."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "You can also connect local AI clients using locally running LLMs (large language models). With a fully local configuration, data can be processed on your Mac without sending it to cloud services. This depends on your client’s features and settings."
+          }
+        }
+      }
     }
   },
   "version": "1.0"
