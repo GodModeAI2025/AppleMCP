@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Build 20: include the Mail flag metadata and filters in the next TestFlight candidate.
+
 - Build 19: rebuild the reviewed disclosure with stable Xcode 27.0 (`27A266a`) after App Store Connect rejected the Xcode 27.1 beta archive.
 
 - Build 18: explain the MCP standard, user-selected clients, local LLMs and optional
