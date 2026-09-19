@@ -8,7 +8,8 @@ final class UsageRiskConsentTests: XCTestCase {
         let suite = "M3MCP.UsageRiskTests.\(UUID().uuidString)"
         let preferences = try XCTUnwrap(UserDefaults(suiteName: suite))
         defer { preferences.removePersistentDomain(forName: suite) }
-        // Completing the old wizard must not bypass the newly introduced notice.
+        // Existing users must explicitly accept the new MCP sharing disclosure.
+        preferences.set(1, forKey: "m3mcp.setup.usageRisk.acceptedVersion")
         preferences.set(true, forKey: "m3mcp.setup.v1.completed")
         let model = AppModel(preferences: preferences)
         model.startIfNeeded()
