@@ -67,6 +67,27 @@ final class ToolArgumentPolicyTests: XCTestCase {
         )?.clientMessage.contains("array of strings") == true)
     }
 
+    func testMailSearchPolicyAcceptsFlagArguments() {
+        let policy = M3MCPToolArgumentPolicy.forTool(.mailSearch)
+        XCTAssertNil(policy.validationError(
+            for: [
+                "flagged_only": .bool(true),
+                "flag_color": .string("lila")
+            ],
+            tool: .mailSearch
+        ))
+    }
+
+    func testMailSearchPolicyStillRejectsUnknownKeys() {
+        let policy = M3MCPToolArgumentPolicy.forTool(.mailSearch)
+        let error = policy.validationError(
+            for: ["flagged_onlyx": .bool(true)],
+            tool: .mailSearch
+        )
+        XCTAssertNotNil(error)
+        XCTAssertTrue(error?.clientMessage.contains("unknown key") == true)
+    }
+
     func testVoiceMemoTimeoutRuntimeRangeMatchesAdvertisedContract() {
         let policy = M3MCPToolArgumentPolicy.forTool(.voiceMemosTranscribe)
         let minimum = VoiceMemoTranscriptionTimeoutPolicy.minimumSeconds

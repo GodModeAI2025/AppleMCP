@@ -214,6 +214,226 @@ final class MailProviderSearchSemanticsTests: XCTestCase {
         XCTAssertEqual(unmatched.meta?["mailbox_filter_matched"], "0")
     }
 
+    // MARK: - Flag metadata and filters
+
+    func testFlagMetadataInSearchResults() async {
+        let lila = await search([
+            "query": .string("quarterly"),
+            "fields": .array([.string("subject")])
+        ])
+        XCTAssertTrue(lila.ok, lila.message ?? "")
+        XCTAssertEqual(lila.items.map(\.id), ["1"])
+        XCTAssertEqual(lila.items.first?.metadata["flagged"], "true")
+        XCTAssertEqual(lila.items.first?.metadata["flag_color"], "5")
+        XCTAssertEqual(lila.items.first?.metadata["flag_color_name"], "purple")
+
+        // Leftover-code caveat: the row still carries a former colour code in the bits but is
+        // not marked, so flag_color metadata must only appear when flagged = 1.
+        let restCode = await search([
+            "query": .string("rechnung"),
+            "fields": .array([.string("subject")])
+        ])
+        XCTAssertTrue(restCode.ok, restCode.message ?? "")
+        XCTAssertEqual(restCode.items.map(\.id), ["2"])
+        XCTAssertEqual(restCode.items.first?.metadata["flagged"], "false")
+        XCTAssertNil(restCode.items.first?.metadata["flag_color"])
+        XCTAssertNil(restCode.items.first?.metadata["flag_color_name"])
+    }
+
+    func testFlaggedOnlyFilter() async {
+        let flaggedOnly = await search(["flagged_only": .bool(true)])
+        XCTAssertTrue(flaggedOnly.ok, flaggedOnly.message ?? "")
+        XCTAssertEqual(Set(flaggedOnly.items.map(\.id)), ["1", "3", "4"])
+        XCTAssertEqual(flaggedOnly.meta?["flagged_only"], "true")
+
+        // The leftover-code row (flagged = 0, code 5) stays excluded even without a colour filter.
+        XCTAssertFalse(flaggedOnly.items.contains { $0.id == "2" })
+
+        let withQuery = await search([
+            "query": .string("newsletter"),
+            "fields": .array([.string("subject")]),
+            "flagged_only": .bool(true)
+        ])
+        XCTAssertTrue(withQuery.ok, withQuery.message ?? "")
+        XCTAssertEqual(withQuery.items.map(\.id), ["4"])
+    }
+
+    /// Core regression: the colour filter must actually find the marked purple row, not merely
+    /// run without raising an error. Binding the codes as text would pass the latter bar.
+    func testFlagColorFilterFindsLilaRow() async {
+        let lila = await search(["flag_color": .string("lila")])
+        XCTAssertTrue(lila.ok, lila.message ?? "")
+        XCTAssertEqual(lila.items.map(\.id), ["1"])
+        XCTAssertEqual(lila.meta?["flag_color_codes"], "5")
+
+        // The unmarked row with leftover code 5 must not come along: the filter always
+        // combines flagged = 1 with the code.
+        let byCode = await search(["flag_color": .string("5")])
+        XCTAssertTrue(byCode.ok, byCode.message ?? "")
+        XCTAssertEqual(byCode.items.map(\.id), ["1"])
+    }
+
+    func testFlagColorFilterListAndAliases() async {
+        let list = await search(["flag_color": .string("lila, rot")])
+        XCTAssertTrue(list.ok, list.message ?? "")
+        XCTAssertEqual(Set(list.items.map(\.id)), ["1", "4"])
+        XCTAssertEqual(list.meta?["flag_color_codes"], "0,5")
+
+        let canonical = await search(["flag_color": .string("purple")])
+        XCTAssertTrue(canonical.ok, canonical.message ?? "")
+        XCTAssertEqual(Set(canonical.items.map(\.id)), ["1"])
+
+        let german = await search(["flag_color": .string("rot")])
+        XCTAssertTrue(german.ok, german.message ?? "")
+        XCTAssertEqual(german.items.map(\.id), ["4"])
+        XCTAssertEqual(german.meta?["flag_color_codes"], "0")
+    }
+
+    func testFlagColorFilterRejectsInvalidInput() async {
+        let response = await search(["flag_color": .string("rosa")])
+        XCTAssertFalse(response.ok)
+        XCTAssertTrue(
+            response.message?.contains("Mail flag_color must be one of") == true,
+            response.message ?? ""
+        )
+    }
+
+    /// A colour filter implies flagged = 1, and the metadata must say so. A caller reading
+    /// flagged_only: false would otherwise have to assume unflagged messages could be present.
+    func testFlagColorImpliesFlaggedOnlyInMetadata() async {
+        let response = await search(["flag_color": .string("lila")])
+        XCTAssertTrue(response.ok, response.message ?? "")
+        XCTAssertEqual(response.meta?["flagged_only"], "true")
+        XCTAssertEqual(response.meta?["flag_color_codes"], "5")
+    }
+
+    /// limit and offset must reach the SQL and come back in the metadata. Worth its own test
+    /// because a client that serialises them as strings gets a type error instead, and from the
+    /// response alone "rejected" and "silently ignored" look the same.
+    func testLimitAndOffsetAreAppliedAndReported() async {
+        let wide = await search(["limit": .number(50)])
+        XCTAssertTrue(wide.ok, wide.message ?? "")
+        XCTAssertEqual(wide.meta?["limit"], "50")
+        let total = Int(wide.meta?["total"] ?? "0") ?? 0
+        XCTAssertGreaterThan(total, 3, "the fixture must hold enough rows to page through")
+
+        let first = await search(["limit": .number(2), "offset": .number(0)])
+        XCTAssertEqual(first.meta?["limit"], "2")
+        XCTAssertEqual(first.meta?["offset"], "0")
+        XCTAssertEqual(first.items.count, 2)
+        XCTAssertEqual(first.meta?["has_more"], "true")
+
+        let second = await search(["limit": .number(2), "offset": .number(2)])
+        XCTAssertEqual(second.meta?["offset"], "2")
+        XCTAssertEqual(second.items.count, 2)
+        XCTAssertTrue(
+            Set(first.items.map(\.id)).isDisjoint(with: second.items.map(\.id)),
+            "a second page must not repeat the first"
+        )
+    }
+
+    /// Regression: separator-only input must produce the parse error, not a silent empty
+    /// result by way of `IN ()`.
+    func testFlagColorFilterRejectsSeparatorOnlyInput() async {
+        for raw in [",", " , "] {
+            let response = await search(["flag_color": .string(raw)])
+            XCTAssertFalse(response.ok, "flag_color \(raw) must fail closed, not return nothing")
+            XCTAssertTrue(
+                response.message?.contains("Mail flag_color must be one of") == true,
+                response.message ?? ""
+            )
+        }
+    }
+
+    func testMissingFlagColumnsFailClosed() async throws {
+        let plain = try MailFixture(withFlagColumns: false)
+        defer { plain.tearDown() }
+
+        // Without a filter the search keeps working; the flag metadata is simply omitted.
+        let unfiltered = await plain.withMailRoot {
+            await MailProvider().search(input: [
+                "query": .string("quarterly"),
+                "fields": .array([.string("subject")])
+            ])
+        }
+        XCTAssertTrue(unfiltered.ok, unfiltered.message ?? "")
+        XCTAssertEqual(unfiltered.items.map(\.id), ["1"])
+        XCTAssertNil(unfiltered.items.first?.metadata["flagged"])
+
+        // With a filter requested the columns are missing, so a clear error is required,
+        // not a silent fallback to an unfiltered search.
+        let flaggedOnly = await plain.withMailRoot {
+            await MailProvider().search(input: ["flagged_only": .bool(true)])
+        }
+        XCTAssertFalse(flaggedOnly.ok)
+        XCTAssertTrue(
+            flaggedOnly.message?.contains("Flag filtering is not available") == true,
+            flaggedOnly.message ?? ""
+        )
+
+        let flagColor = await plain.withMailRoot {
+            await MailProvider().search(input: ["flag_color": .string("lila")])
+        }
+        XCTAssertFalse(flagColor.ok)
+        // Both columns are missing. The flagged guard fires first by construction; what matters
+        // is that a clear MailStoreFailure message comes back, not which of the two produced it.
+        XCTAssertTrue(
+            flagColor.message?.contains("not available in this Mail index schema") == true,
+            flagColor.message ?? ""
+        )
+    }
+
+    func testUnknownCodeReportedAsUnknown() async {
+        let response = await search([
+            "query": .string("travel"),
+            "fields": .array([.string("subject")])
+        ])
+        XCTAssertTrue(response.ok, response.message ?? "")
+        XCTAssertEqual(response.items.map(\.id), ["3"])
+        XCTAssertEqual(response.items.first?.metadata["flagged"], "true")
+        XCTAssertEqual(response.items.first?.metadata["flag_color"], "7")
+        XCTAssertEqual(response.items.first?.metadata["flag_color_name"], "unknown")
+    }
+
+    /// Exercises `MailFlagColor.resolve` through its only public entry point, the flag_color
+    /// parameter of mail_search: valid tokens show up resolved in meta.flag_color_codes, invalid
+    /// ones produce the parse message. Kept as a table so a rewrite cannot quietly narrow it.
+    func testFlagColorResolveMatchesTheVerifiedVectorTable() async {
+        let cases: [(token: String, expected: Int?)] = [
+            ("red", 0), ("RED", 0), ("Rot", 0), ("rot", 0),
+            ("orange", 1), ("ORANGE", 1),
+            ("yellow", 2), ("gelb", 2), ("Gelb", 2),
+            ("green", 3), ("grün", 3), ("GRÜN", 3), ("gruen", 3), ("Grün", 3),
+            ("blue", 4), ("blau", 4),
+            ("purple", 5), ("lila", 5), ("LILA", 5),
+            ("gray", 6), ("grey", 6), ("grau", 6),
+            ("0", 0), ("1", 1), ("2", 2), ("3", 3), ("4", 4), ("5", 5), ("6", 6),
+            ("7", nil), ("8", nil), ("10", nil),
+            ("05", nil), ("+5", nil), ("-1", nil),
+            ("", nil),
+            ("rosa", nil), ("pink", nil), ("redd", nil), ("5x", nil),
+            ("\u{0665}", nil),
+            ("gru\u{0308}n", 3)
+        ]
+        for (token, expected) in cases {
+            let response = await search(["flag_color": .string(token)])
+            if let expected {
+                XCTAssertTrue(response.ok, "\(token): \(response.message ?? "")")
+                XCTAssertEqual(response.meta?["flag_color_codes"], String(expected), token)
+            } else if token.isEmpty {
+                // Empty token means .none: no filter requested, no codes, no error.
+                XCTAssertTrue(response.ok, "\(token): \(response.message ?? "")")
+                XCTAssertEqual(response.meta?["flag_color_codes"], "", token)
+            } else {
+                XCTAssertFalse(response.ok, "\(token) must fail closed")
+                XCTAssertTrue(
+                    response.message?.contains("Mail flag_color must be one of") == true,
+                    "\(token): \(response.message ?? "")"
+                )
+            }
+        }
+    }
+
     // MARK: - Reading one message
 
     func testReadingAMessageReturnsTheTextPartOfAMultipartBody() async {
@@ -293,7 +513,7 @@ private final class MailFixture {
     let root: URL
     private let outside: URL
 
-    init() throws {
+    init(withFlagColumns: Bool = true) throws {
         let unique = UUID().uuidString
         root = URL(fileURLWithPath: "/private/tmp/m3mail-semantics-\(unique)", isDirectory: true)
         outside = URL(fileURLWithPath: "/private/tmp/m3mail-outside-\(unique)", isDirectory: true)
@@ -332,7 +552,7 @@ private final class MailFixture {
             throw Self.error("could not create the synthetic Envelope Index")
         }
         defer { sqlite3_close(database) }
-        try Self.populate(database)
+        try Self.populate(database, withFlagColumns: withFlagColumns)
     }
 
     func tearDown() {
@@ -381,7 +601,7 @@ private final class MailFixture {
         try Data("\(email.utf8.count)\n\(email)".utf8).write(to: url)
     }
 
-    private static func populate(_ database: OpaquePointer) throws {
+    private static func populate(_ database: OpaquePointer, withFlagColumns: Bool) throws {
         let epochNow = Date().timeIntervalSince1970
         let referenceNow = Date().timeIntervalSinceReferenceDate
 
@@ -413,7 +633,11 @@ private final class MailFixture {
                 (1, 'anna.beispiel@example.test', 'Anna Beispiel'),
                 (2, 'bob@example.test', 'Bob'),
                 (3, 'carla@example.test', NULL);
+            """,
+            on: database
+        )
 
+        var messagesSchema = """
             CREATE TABLE messages (
                 message_id TEXT,
                 subject INTEGER,
@@ -423,13 +647,32 @@ private final class MailFixture {
                 deleted INTEGER,
                 junk INTEGER,
                 mailbox INTEGER
-            );
+            """
+        if withFlagColumns {
+            messagesSchema += ",\n                flagged INTEGER,\n                flags INTEGER"
+        }
+        messagesSchema += "\n            );"
+        try execute(messagesSchema, on: database)
 
+        try execute(
+            """
             CREATE TABLE recipients (message INTEGER, address INTEGER);
             INSERT INTO recipients (message, address) VALUES (2, 3), (1, 2);
             """,
             on: database
         )
+
+        // (rowid, flagged, flags), only populated when the flag columns exist.
+        // Row 1: purple (code 5) and marked, the main case for the colour filter.
+        // Row 2: leftover code 5 with flagged = 0, since Mail keeps the bits when unmarking.
+        // Row 3: code 7, invalid, must be reported as unknown.
+        // Row 4: red (code 0) and marked, for the list filter "purple, red".
+        let flagRows: [Int: (flagged: Int, flags: Int)] = [
+            1: (1, 5 << 39),
+            2: (0, 5 << 39),
+            3: (1, 7 << 39),
+            4: (1, 0)
+        ]
 
         // (rowid, subject, sender, date, read, deleted, junk, mailbox)
         let rows: [(Int, Int, Int, Double, Int, Int, Int, Int)] = [
@@ -447,11 +690,16 @@ private final class MailFixture {
             (12, 12, 2, epochNow - 800, 0, 0, 0, 3)
         ]
         for (id, subject, sender, date, read, deleted, junk, mailbox) in rows {
+            let flag: (flagged: Int, flags: Int) = withFlagColumns
+                ? (flagRows[id] ?? (flagged: 0, flags: 0))
+                : (flagged: 0, flags: 0)
+            let flagColumns = withFlagColumns ? ", flagged, flags" : ""
+            let flagValues = withFlagColumns ? ", \(flag.flagged), \(flag.flags)" : ""
             try execute(
                 """
                 INSERT INTO messages
-                    (ROWID, message_id, subject, sender, date_received, read, deleted, junk, mailbox)
-                VALUES (\(id), 'm\(id)', \(subject), \(sender), \(date), \(read), \(deleted), \(junk), \(mailbox));
+                    (ROWID, message_id, subject, sender, date_received, read, deleted, junk, mailbox\(flagColumns))
+                VALUES (\(id), 'm\(id)', \(subject), \(sender), \(date), \(read), \(deleted), \(junk), \(mailbox)\(flagValues));
                 """,
                 on: database
             )
