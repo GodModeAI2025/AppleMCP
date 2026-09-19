@@ -17,7 +17,7 @@ final class AppModel: ObservableObject {
     @Published var showsSetup = false
     @Published private(set) var usageRiskAccepted: Bool
     private let preferences: UserDefaults
-    private static let usageRiskVersion = 1
+    private static let usageRiskVersion = 2
     private static let usageRiskKey = "m3mcp.setup.usageRisk.acceptedVersion"
     @Published private(set) var copyMessage: String?
     @Published private(set) var checkingConnection = false

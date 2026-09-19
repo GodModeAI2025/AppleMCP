@@ -100,6 +100,7 @@ private struct UsageRiskDialog: View {
     let accept: () -> Void
     let cancel: () -> Void
     @State private var understood = false
+    @State private var sharingUnderstood = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -116,6 +117,8 @@ private struct UsageRiskDialog: View {
             Divider()
             ScrollView {
                 VStack(alignment: .leading, spacing: 18) {
+                    MCPDataSharingNotice()
+                    Divider()
                     PrivacyLinks()
                     Text("LocalMCP ermöglicht verbundenen KI- und MCP-Clients den Zugriff auf deine Daten. Je nach erteilten Freigaben, aktivierten Werkzeugen und ausgeführten Kurzbefehlen können Daten gelesen, weitergegeben, erstellt, verändert, überschrieben oder gelöscht werden.")
                     Text("Fehlerhafte Anweisungen, Softwarefehler oder missbräuchliche Zugriffe können zum Verlust sämtlicher Daten führen, auf die die aktivierten Funktionen zugreifen können. Änderungen und Löschungen können über iCloud auch andere Geräte betreffen. Eine Wiederherstellung ist nicht garantiert.")
@@ -127,6 +130,9 @@ private struct UsageRiskDialog: View {
             }
             Divider()
             VStack(alignment: .leading, spacing: 20) {
+                Toggle("Ich verstehe, dass verbundene KI-Clients die freigegebenen Daten erhalten und gegebenenfalls extern verarbeiten. Ich verbinde nur Clients, denen ich vertraue.", isOn: $sharingUnderstood)
+                    .toggleStyle(.checkbox)
+                    .fixedSize(horizontal: false, vertical: true)
                 Toggle("Ich habe die Risiken einschließlich möglicher Datenänderungen und Datenverluste verstanden und möchte LocalMCP auf eigene Gefahr nutzen.", isOn: $understood)
                     .toggleStyle(.checkbox)
                     .fixedSize(horizontal: false, vertical: true)
@@ -135,11 +141,11 @@ private struct UsageRiskDialog: View {
                     Spacer()
                     Button("Bestätigen und fortfahren", action: accept)
                         .buttonStyle(.borderedProminent)
-                        .disabled(!understood)
+                        .disabled(!understood || !sharingUnderstood)
                 }
             }.padding(28)
         }
-        .frame(width: 720, height: 680)
+        .frame(width: 760, height: 780)
         .tint(.indigo)
     }
 }
@@ -173,5 +179,27 @@ private struct SetupBenefit: View {
                 Text(detail).foregroundStyle(.secondary)
             }
         }
+    }
+}
+
+private struct MCPDataSharingNotice: View {
+    var body: some View {
+        VStack(alignment: .leading, spacing: 20) {
+            Text("Deine Daten mit deinen KI-Systemen verbinden").font(.title2.bold())
+            Text("Was ist MCP?").font(.headline)
+            Text("MCP (Model Context Protocol) ist ein Standard, über den KI-Clients auf bereitgestellte Werkzeuge und Daten zugreifen können.")
+            Text("LocalMCP implementiert den MCP-Standard und ist nicht an einen bestimmten KI-Anbieter gebunden.")
+            Text("LocalMCP stellt solche Werkzeuge lokal auf deinem Mac bereit – beispielsweise für Kontakte, Kalender oder E-Mails, soweit du den Zugriff erlaubst.")
+            Text("Du entscheidest, welche KI-Clients du verbindest").font(.headline)
+            Text("Du richtest die Verbindung selbst in deinem jeweiligen KI-Client ein. Beispiele sind Claude Code, Claude Cowork oder andere MCP-kompatible Anwendungen. Diese offene Beispielliste ist keine Empfehlung.")
+            Text("Du kannst auch lokale KI-Clients mit lokal ausgeführten LLMs (großen Sprachmodellen) verbinden. Bei einer vollständig lokalen Konfiguration können die Daten auf deinem Mac verarbeitet werden, ohne sie an Cloud-Dienste zu übertragen. Entscheidend sind die Funktionen und Einstellungen deines Clients.")
+            Text("Welche Daten werden weitergegeben?").font(.headline)
+            Text("Wenn ein verbundener KI-Client ein Werkzeug aufruft, erhält er die angeforderten, freigegebenen Daten.")
+            Text("Abhängig von seinen Einstellungen kann er diese auch an externe KI-Modelle oder Cloud-Dienste weitergeben. LocalMCP kann nicht zuverlässig feststellen oder kontrollieren, wie dein KI-Client die erhaltenen Daten anschließend verarbeitet.")
+            Text("Verbinde nur Systeme, denen du vertraust").font(.headline)
+            Text("Trage die LocalMCP-Verbindungsdaten ausschließlich in vertrauenswürdige KI-Clients ein. Prüfe vorher deren Datenschutzbedingungen und Einstellungen.")
+            Text("Behandle Zugangstoken vertraulich: Sie ermöglichen zusammen mit einer erreichbaren Verbindung den Zugriff auf die bereitgestellten Werkzeuge.")
+        }
+        .fixedSize(horizontal: false, vertical: true)
     }
 }

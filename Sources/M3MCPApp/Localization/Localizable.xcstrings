@@ -4988,6 +4988,246 @@
           }
         }
       }
+    },
+    "Abhängig von seinen Einstellungen kann er diese auch an externe KI-Modelle oder Cloud-Dienste weitergeben. LocalMCP kann nicht zuverlässig feststellen oder kontrollieren, wie dein KI-Client die erhaltenen Daten anschließend verarbeitet.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Abhängig von seinen Einstellungen kann er diese auch an externe KI-Modelle oder Cloud-Dienste weitergeben. LocalMCP kann nicht zuverlässig feststellen oder kontrollieren, wie dein KI-Client die erhaltenen Daten anschließend verarbeitet."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Depending on its settings, the client may also forward this data to external AI models or cloud services. LocalMCP cannot reliably determine or control how your AI client subsequently processes the data it receives."
+          }
+        }
+      }
+    },
+    "Behandle Zugangstoken vertraulich: Sie ermöglichen zusammen mit einer erreichbaren Verbindung den Zugriff auf die bereitgestellten Werkzeuge.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Behandle Zugangstoken vertraulich: Sie ermöglichen zusammen mit einer erreichbaren Verbindung den Zugriff auf die bereitgestellten Werkzeuge."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Keep access tokens confidential: together with a reachable connection, they enable access to the tools provided."
+          }
+        }
+      }
+    },
+    "Deine Daten mit deinen KI-Systemen verbinden": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Deine Daten mit deinen KI-Systemen verbinden"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Connect your data to your AI systems"
+          }
+        }
+      }
+    },
+    "Du entscheidest, welche KI-Clients du verbindest": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Du entscheidest, welche KI-Clients du verbindest"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "You decide which AI clients to connect"
+          }
+        }
+      }
+    },
+    "Du richtest die Verbindung selbst in deinem jeweiligen KI-Client ein. Beispiele sind Claude Code, Claude Cowork oder andere MCP-kompatible Anwendungen. Diese offene Beispielliste ist keine Empfehlung.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Du richtest die Verbindung selbst in deinem jeweiligen KI-Client ein. Beispiele sind Claude Code, Claude Cowork oder andere MCP-kompatible Anwendungen. Diese offene Beispielliste ist keine Empfehlung."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "You configure the connection yourself in each AI client you choose. Examples include Claude Code, Claude Cowork and other MCP-compatible applications. This non-exhaustive list is not an endorsement."
+          }
+        }
+      }
+    },
+    "Ich verstehe, dass verbundene KI-Clients die freigegebenen Daten erhalten und gegebenenfalls extern verarbeiten. Ich verbinde nur Clients, denen ich vertraue.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ich verstehe, dass verbundene KI-Clients die freigegebenen Daten erhalten und gegebenenfalls extern verarbeiten. Ich verbinde nur Clients, denen ich vertraue."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "I understand that connected AI clients receive the data I allow access to and may process it externally. I connect only clients I trust."
+          }
+        }
+      }
+    },
+    "LocalMCP stellt solche Werkzeuge lokal auf deinem Mac bereit – beispielsweise für Kontakte, Kalender oder E-Mails, soweit du den Zugriff erlaubst.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "LocalMCP stellt solche Werkzeuge lokal auf deinem Mac bereit – beispielsweise für Kontakte, Kalender oder E-Mails, soweit du den Zugriff erlaubst."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "LocalMCP provides these tools locally on your Mac — for example for contacts, calendars or emails, to the extent that you allow access."
+          }
+        }
+      }
+    },
+    "MCP (Model Context Protocol) ist ein Standard, über den KI-Clients auf bereitgestellte Werkzeuge und Daten zugreifen können.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "MCP (Model Context Protocol) ist ein Standard, über den KI-Clients auf bereitgestellte Werkzeuge und Daten zugreifen können."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "MCP (Model Context Protocol) is a standard that allows AI clients to access tools and data made available to them."
+          }
+        }
+      }
+    },
+    "Trage die LocalMCP-Verbindungsdaten ausschließlich in vertrauenswürdige KI-Clients ein. Prüfe vorher deren Datenschutzbedingungen und Einstellungen.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Trage die LocalMCP-Verbindungsdaten ausschließlich in vertrauenswürdige KI-Clients ein. Prüfe vorher deren Datenschutzbedingungen und Einstellungen."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Enter your LocalMCP connection details only in AI clients you trust. Review their privacy policies and settings first."
+          }
+        }
+      }
+    },
+    "Verbinde nur Systeme, denen du vertraust": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Verbinde nur Systeme, denen du vertraust"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Connect only systems you trust"
+          }
+        }
+      }
+    },
+    "Was ist MCP?": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Was ist MCP?"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "What is MCP?"
+          }
+        }
+      }
+    },
+    "Welche Daten werden weitergegeben?": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Welche Daten werden weitergegeben?"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "What data is shared?"
+          }
+        }
+      }
+    },
+    "Wenn ein verbundener KI-Client ein Werkzeug aufruft, erhält er die angeforderten, freigegebenen Daten.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Wenn ein verbundener KI-Client ein Werkzeug aufruft, erhält er die angeforderten, freigegebenen Daten."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "When a connected AI client calls a tool, it receives the requested data that you have allowed access to."
+          }
+        }
+      }
+    },
+    "LocalMCP implementiert den MCP-Standard und ist nicht an einen bestimmten KI-Anbieter gebunden.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "LocalMCP implementiert den MCP-Standard und ist nicht an einen bestimmten KI-Anbieter gebunden."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "LocalMCP implements the MCP standard and is not tied to any particular AI provider."
+          }
+        }
+      }
+    },
+    "Du kannst auch lokale KI-Clients mit lokal ausgeführten LLMs (großen Sprachmodellen) verbinden. Bei einer vollständig lokalen Konfiguration können die Daten auf deinem Mac verarbeitet werden, ohne sie an Cloud-Dienste zu übertragen. Entscheidend sind die Funktionen und Einstellungen deines Clients.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Du kannst auch lokale KI-Clients mit lokal ausgeführten LLMs (großen Sprachmodellen) verbinden. Bei einer vollständig lokalen Konfiguration können die Daten auf deinem Mac verarbeitet werden, ohne sie an Cloud-Dienste zu übertragen. Entscheidend sind die Funktionen und Einstellungen deines Clients."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "You can also connect local AI clients using locally running LLMs (large language models). With a fully local configuration, data can be processed on your Mac without sending it to cloud services. This depends on your client’s features and settings."
+          }
+        }
+      }
     }
   },
   "version": "1.0"
