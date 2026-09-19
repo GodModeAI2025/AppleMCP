@@ -63,3 +63,44 @@ retaining ordinary Calendar settings. Universal Release archive and strict deep
 signature verification passed. Native permissions UI inspected and local bridge
 connection succeeded. Existing-install runtime check does not establish a fresh
 macOS permission-reset test. Apple acceptance remains pending.
+
+
+## Review remediation — 19 September 2026, build 18
+
+Apple reviewed build 15 and requested five clarifications about Contacts access,
+server uploads, third-party sharing, data use and protection (2.1). Its privacy
+finding (5.1.1/5.1.2) concerned identifying recipients before sharing. Both attached
+screenshots were inspected: the native Contacts prompt and the generic risk notice.
+
+LocalMCP implements the MCP server side. Users configure each receiving client;
+there can be multiple clients, including clients using local LLMs. A fully local
+configuration does not require cloud transfer. LocalMCP does not choose a downstream
+AI provider and cannot reliably determine or control what a client does with its
+results. The response explicitly acknowledges that third-party clients can receive
+Contacts results and may forward them externally; it does not claim that all use
+is local or that independently selected clients have verified protection policies.
+
+Build 18 adds the agreed explanation to setup in German and English, including
+non-exhaustive client examples, trusted-client guidance and token confidentiality.
+A separate unchecked sharing acknowledgement is required alongside the existing
+risk acknowledgement. Consent version 2 invalidates old acknowledgements; server
+startup remains blocked until the new notice is accepted. macOS permissions and
+restricted-tool opt-ins remain separate.
+
+Detailed answers were sent to Apple on September 19 at 20:06, with a clarification
+about local LLM clients and MCP interoperability at 20:08 (Europe/Berlin). Both
+messages were verified in the review conversation. App Review Information was
+updated with build-18 instructions and the same architecture explanation.
+
+Validation: three consent tests passed, including migration from the old notice;
+321 catalog entries are complete in German and English; documentation checks,
+universal Xcode archive and strict signature verification passed. Native German
+and English first-page layouts were visually inspected. This does not establish
+full fresh-install or external-client runtime acceptance.
+
+Build 18 uploaded successfully at 20:11:38. The last verified TestFlight state was
+“Processing”; group availability and renewed Store submission were not yet verified.
+Build 17 was an intermediate upload before the local-LLM wording was added and is
+superseded by build 18. The privacy website is maintained separately by the owner
+and was not changed or newly verified in this remediation. Apple's acceptance of
+the revised disclosure remains pending.

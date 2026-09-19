@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Build 18: explain the MCP standard, user-selected clients, local LLMs and optional
+  downstream cloud processing in German and English, with headings and paragraph spacing.
+- Add a separate, initially unchecked data-sharing acknowledgement to setup and
+  renew consent for existing installations before the server can start.
+- Document the September 19 Apple review response and its verification limits.
+
 ## 1.0.1 — 2026-09-13
 
 - Prepare the German and English Mac App Store release using Xcode 27 RC.
