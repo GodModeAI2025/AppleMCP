@@ -10,6 +10,23 @@
   renew consent for existing installations before the server can start.
 - Document the September 19 Apple review response and its verification limits.
 
+- **Mail flag metadata and filters.** `mail_search` and `mail_read` now expose Apple Mail's
+  marker colors: `metadata.flagged`, and for flagged messages `metadata.flag_color` (raw code
+  from bits 39–41 of the `flags` bitmask) plus `metadata.flag_color_name` (`unknown` for
+  invalid codes). `mail_search` gains `flagged_only` and `flag_color` (comma-separated names
+  or codes 0–6, English canonical names and German aliases, maximum 256 characters); a color
+  filter implies `flagged_only`, and filters always combine `flagged = 1` with the code,
+  because unmarked messages can carry leftover color bits. The unreliable `flag_color` database
+  column is ignored. Invalid or separator-only `flag_color` input fails closed with a clear
+  message instead of a silent empty result; a schema without the `flagged`/`flags` columns
+  keeps unfiltered searches working and rejects requested flag filters with a clear message.
+  Read-only throughout: no write operations, no new permissions. See the README section
+  "Mail flag metadata (marker colors)" for the mapping table and the re-verification SQL.
+  `meta.flagged_only` reports the predicate that ran, so a colour filter shows `true`.
+  Two caveats of the data source are documented alongside: a newly received message can take
+  minutes to be indexed, and gray flags on Exchange accounts can read as red because
+  Exchange follow-up flags have no gray.
+
 ## 1.0.1 — 2026-09-13
 
 - Prepare the German and English Mac App Store release using Xcode 27 RC.

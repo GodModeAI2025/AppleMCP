@@ -130,6 +130,17 @@ final class LocalMCPServiceArgumentValidationTests: XCTestCase {
         XCTAssertEqual(approvalCount, 0)
     }
 
+    func testMailSearchFlagArgumentsPassArgumentValidation() async {
+        let service = LocalMCPService(securityPolicy: M3MCPSecurityPolicy(configuration: .init()))
+        let response = await service.handle(
+            tool: M3MCPToolName.mailSearch.rawValue,
+            input: ["flagged_only": .bool(true), "flag_color": .string("lila")]
+        )
+        // The point of this test: whatever comes back, it must NOT be "unknown key(s)",
+        // which is what the argument policy returns for an undeclared parameter.
+        XCTAssertFalse(response.message?.contains("unknown key") == true)
+    }
+
     private func paddedInput() -> [String: JSONValue] {
         var input: [String: JSONValue] = [:]
         for index in 0..<40 {
