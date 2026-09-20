@@ -176,7 +176,7 @@ public struct M3MCPToolArgumentPolicy: Equatable, Sendable {
 
         case .mailSearch:
             return queryPolicy(
-                strings: ["mailbox", "match", "flag_color"],
+                strings: ["mailbox", "match", "flag_color", "date_from", "date_to"],
                 integers: ["offset", "since_hours", "max_candidates"],
                 booleans: [
                     "unread_only", "include_junk", "include_body", "include_recipients",

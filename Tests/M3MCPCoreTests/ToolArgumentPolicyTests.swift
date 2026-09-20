@@ -88,6 +88,24 @@ final class ToolArgumentPolicyTests: XCTestCase {
         XCTAssertTrue(error?.clientMessage.contains("unknown key") == true)
     }
 
+    /// Both date range keys are strings and must be accepted; an invented key is still refused.
+    /// Worth its own test because some models serialise every tool argument as a string, so a
+    /// policy that expected integers here would make the parameter unreachable from them.
+    func testMailSearchPolicyAcceptsDateRangeArguments() {
+        let policy = M3MCPToolArgumentPolicy.forTool(.mailSearch)
+        XCTAssertNil(policy.validationError(
+            for: [
+                "date_from": .string("2025"),
+                "date_to": .string("2025")
+            ],
+            tool: .mailSearch
+        ))
+        XCTAssertNotNil(policy.validationError(
+            for: ["date_fromx": .string("2025")],
+            tool: .mailSearch
+        ))
+    }
+
     func testVoiceMemoTimeoutRuntimeRangeMatchesAdvertisedContract() {
         let policy = M3MCPToolArgumentPolicy.forTool(.voiceMemosTranscribe)
         let minimum = VoiceMemoTranscriptionTimeoutPolicy.minimumSeconds
